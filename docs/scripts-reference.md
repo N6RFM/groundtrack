@@ -190,6 +190,29 @@ python3 edit_satellite.py GEOSCAN-1 --enabled
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 ```
 
+## suggest_extra_outputs.py
+
+Scans a satellite's real `.grc` for network-facing blocks
+(`network_socket_pdu`, `zeromq_pub_msg_sink`) not yet claimed by an
+`extra_outputs` entry, and drives `edit_satellite.py` to add them - using
+the block's actual name, port, and address read straight from the file,
+never hand-typed. Correctly excludes the satellite's primary relay
+connection (`producer_port`), if it has one, since that's not an
+"extra" output. The only things it ever asks for are a name and, for
+`tcp_bridge`, a `bridge_port` - the two things that genuinely can't be
+read from the `.grc` itself:
+```
+python3 suggest_extra_outputs.py ASRTU-1_HYBRID
+python3 suggest_extra_outputs.py ASRTU-1_HYBRID --dry-run   # print the
+    # edit_satellite.py commands it would run, without running them
+```
+Run this after building or editing a `.grc` with a new network-facing
+block, before hand-writing any `edit_satellite.py --extra-output-*`
+command - every `extra_outputs` bug found in one real session (a typo'd
+address, a block name that didn't match, two entries sharing one name,
+a port that didn't match the `.grc`) came from transcribing these
+values by hand, which this tool exists specifically to eliminate.
+
 ## run_passes.py
 
 The actual execution engine - waits for each approved pass in

@@ -129,9 +129,16 @@ its port (for `tcp_server`/`tcp_client`/`tcp_bridge`) or address (for
 that `bridge_port` is set, plus fleet-wide uniqueness across every
 `bridge_port` and `producer_port`/`consumer_port` (so two satellites
 can *intentionally* share one, but never *accidentally* collide with
-something else). `add_satellite.py` doesn't create these for you - use
-`edit_satellite.py` (below) or the GUI's Edit dialog, which manage this
-list properly in `satellites.yaml`, including copying an existing
+something else). `add_satellite.py` doesn't create these for you -
+once the `.grc` is built, run
+[`suggest_extra_outputs.py`](scripts-reference.md#suggest_extra_outputspy)
+NAME: it scans the real `.grc` for network-facing blocks not yet
+claimed by an extra_output, and drives `edit_satellite.py` with the
+port/address/block-name read directly from the file - the only things
+it asks for are a name and, for `tcp_bridge`, a `bridge_port`, since
+those are genuine decisions rather than facts the `.grc` already
+contains. `edit_satellite.py` (below) or the GUI's Edit dialog remain
+the way to adjust or remove an entry afterward, or to copy an existing
 satellite's outputs as a starting point when a new satellite shares the
 same downstream app (as ASRTU-1_SSDV and BY70-4 both do).
 Either way, the `.grc`'s actual block - its name, port, or address -

@@ -134,8 +134,10 @@ def main():
         print(f"  3. Point its decoder file at a real *.yml (or clear it to rely on "
               f"norad auto-lookup), and its network_socket_pdu at port {producer_port}, "
               f"type TCP_CLIENT")
-    print(f"  {'4' if not args.record_only else '3'}. If it needs extra_outputs, add "
-          f"those with edit_satellite.py or the GUI's Edit dialog")
+    print(f"  {'4' if not args.record_only else '3'}. If it needs extra_outputs, run "
+          f"python3 suggest_extra_outputs.py {args.name} - it scans the .grc you just "
+          f"built and generates the edit_satellite.py commands directly from the real "
+          f"block ports/addresses, so nothing needs to be typed by hand")
     print(f"  {'5' if not args.record_only else '4'}. python3 preflight.py")
 
 
