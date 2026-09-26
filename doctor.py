@@ -261,13 +261,33 @@ def check_stray_compiled_files(fix=False):
             found_any = True
             correct_path = f"flowgraphs/{slug}.py"
             if os.path.exists(correct_path):
+                # don't just assume the existing copy is fine - if the
+                # stray is actually NEWER (a fresh compile that landed at
+                # cwd right after editing the .grc), blindly deleting it
+                # would silently keep the STALE copy in place instead,
+                # exactly the kind of thing that produces a confusing
+                # ".py is out of date with .grc" failure that persists
+                # even after "cleaning up" the stray
+                stray_is_newer = os.path.getmtime(stray_main) > os.path.getmtime(correct_path)
                 if fix:
-                    os.remove(stray_main)
-                    print(f"  removed {stray_main} ({correct_path} already exists correctly)")
+                    if stray_is_newer:
+                        shutil.move(stray_main, correct_path)
+                        print(f"  moved {stray_main} -> {correct_path} (the stray was "
+                              f"actually newer - a fresh compile that landed at cwd; "
+                              f"keeping it, not the older copy)")
+                    else:
+                        os.remove(stray_main)
+                        print(f"  removed {stray_main} ({correct_path} is already "
+                              f"current or newer)")
                 else:
-                    print(f"  {stray_main} - stray duplicate, {correct_path} already "
-                          f"exists correctly. Safe to remove:")
-                    print(f"    rm {stray_main}")
+                    if stray_is_newer:
+                        print(f"  {stray_main} - newer than {correct_path}! This is "
+                              f"the fresh compile, not a redundant duplicate. Move it:")
+                        print(f"    mv {stray_main} {correct_path}")
+                    else:
+                        print(f"  {stray_main} - stray duplicate, {correct_path} already "
+                              f"exists correctly. Safe to remove:")
+                        print(f"    rm {stray_main}")
             else:
                 if fix:
                     shutil.move(stray_main, correct_path)
