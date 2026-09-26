@@ -31,12 +31,25 @@ CHECKS_PASSED = 0
 CHECKS_FAILED = 0
 CHECKS_WARNED = 0
 
-SHOULD_BE_SINGULAR = {
+NAMING_HYGIENE_TYPES = {
     "network_socket_pdu", "satellites_satellite_decoder",
     "satellites_telemetry_submit", "satellites_kiss_file_sink",
     "satellites_print_timestamp", "satellites_hexdump_sink",
     "analog_sig_source_x", "blocks_multiply_xx", "osmosdr_source",
     "low_pass_filter", "filerepeater_AdvFileSink",
+}
+
+# these two types are the only ones with a genuinely universal constraint:
+# two blocks can never share the same port or address, in any design,
+# because that's an OS-level bind conflict, not a style choice. Everything
+# else in NAMING_HYGIENE_TYPES is pure internal plumbing with no
+# satellites.yaml representation - a satellite with more than one downlink
+# frequency legitimately needs its own decoder/filter/file-sink per chain,
+# so counting instances of those and demanding exactly one was simply
+# wrong, not just strict - it doesn't reflect anything actually invalid.
+NETWORK_FACING_KEY = {
+    "network_socket_pdu": "port",
+    "zeromq_pub_msg_sink": "address",
 }
 
 
@@ -56,7 +69,7 @@ def check(label, ok, detail="", level="fail"):
 def find_double_suffixed(blocks):
     found = []
     for b in blocks:
-        if b["id"] not in SHOULD_BE_SINGULAR:
+        if b["id"] not in NAMING_HYGIENE_TYPES:
             continue
         suffix = b["name"][len(b["id"]):]
         numeric_parts = [p for p in suffix.split("_") if p.isdigit()]
@@ -72,20 +85,23 @@ def vet(path, grc=None):
             grc = yaml.safe_load(f)
     blocks = grc.get("blocks", [])
 
-    type_names = {}
-    for b in blocks:
-        if b["id"] in SHOULD_BE_SINGULAR:
-            type_names.setdefault(b["id"], []).append(b["name"])
-    any_duplicates = False
-    for block_id, names in type_names.items():
-        if len(names) > 1:
-            any_duplicates = True
-            check(f"exactly one '{block_id}' block", False,
-                  f"found {len(names)}: {names} - this needs a human decision in "
-                  f"GRC about which one to keep and how its wiring should look; "
-                  f"--fix won't touch this")
-    if not any_duplicates:
-        check("no duplicate instances of any block type that should be singular", True)
+    any_collision = False
+    for block_id, key in NETWORK_FACING_KEY.items():
+        by_value = {}
+        for b in blocks:
+            if b["id"] != block_id:
+                continue
+            value = b["parameters"].get(key)
+            by_value.setdefault(value, []).append(b["name"])
+        for value, names in by_value.items():
+            if len(names) > 1:
+                any_collision = True
+                check(f"no two '{block_id}' blocks share the same {key}", False,
+                      f"{names} all use {key}={value!r} - two blocks can never "
+                      f"bind the same {key} in one process, regardless of how "
+                      f"many decode chains this satellite legitimately has")
+    if not any_collision:
+        check("no network-facing blocks share a port or address", True)
 
     double_suffixed = find_double_suffixed(blocks)
     if double_suffixed:
