@@ -29,9 +29,17 @@ GNU Radio flowgraph
         |-- direct-connection satellites (ASRTU-1_SSDV, BY70-4) -----------
         |     |
         |     v
-        |   extra_outputs: TCP/ZeroMQ straight to whatever app is
-        |   listening (an SSDV image viewer, a telemetry upload agent) -
-        |   relay.py never involved at all
+        |   extra_outputs, two genuinely different shapes:
+        |     - zeromq_pub: flowgraph publishes, app subscribes whenever
+        |       it wants - fire-and-forget, nothing in between, relay.py
+        |       never involved (untracked in satellites.yaml entirely -
+        |       see Adding a Satellite)
+        |     - tcp_bridge: flowgraph's own TCP_SERVER, but the real app
+        |       (an SSDV image viewer) needs to stay "connected" across
+        |       every pass, not reconnect at each AOS - tcp_bridge.py
+        |       sits in between for exactly this, connecting out to the
+        |       flowgraph as a client while listening persistently for
+        |       the real app (see below)
         |
         |-- recording-only satellites (SCIONX) -----------------------------
               |
