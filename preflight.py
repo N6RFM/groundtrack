@@ -272,10 +272,14 @@ def check_extra_outputs(name, blocks, sat):
 
         protocol = extra.get("protocol")
         if protocol == "zeromq_pub":
-            grc_addr = block["parameters"].get("address")
-            check(f"{name}: extra_output '{out_name}' address matches satellites.yaml",
-                  grc_addr == extra.get("address"),
-                  f".grc={grc_addr}  yaml={extra.get('address')}")
+            # not a bug - just nothing to validate. PUB/SUB is
+            # fire-and-forget with no listener-side infrastructure to
+            # configure, so nothing in this toolkit ever reads this
+            # address at runtime; it's pure documentation with no
+            # functional payoff. Existing entries like this are harmless
+            # leftovers, not something to flag - but suggest_extra_outputs.py
+            # won't offer to create new ones, since there's no reason to.
+            continue
         elif protocol in ("tcp_server", "tcp_client", "tcp_bridge"):
             grc_port = block["parameters"].get("port")
             try:
@@ -299,8 +303,8 @@ def check_extra_outputs(name, blocks, sat):
                       "sits between it and the flowgraph's own TCP_SERVER")
         else:
             check(f"{name}: extra_output '{out_name}' has a recognized protocol",
-                  False, f"unknown protocol {protocol!r} - expected zeromq_pub, "
-                         f"tcp_server, tcp_client, or tcp_bridge")
+                  False, f"unknown protocol {protocol!r} - expected tcp_server, "
+                         f"tcp_client, tcp_bridge, or zeromq_pub")
 
 
 def live_check(cfg, only=None, duration=8):

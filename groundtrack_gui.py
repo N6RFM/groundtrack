@@ -571,9 +571,7 @@ class GroundtrackGUI(tk.Tk):
         templates = []  # (display_string, entry_dict)
         for s in load_satellites():
             for e in s.get("extra_outputs", []):
-                if e.get("protocol") == "zeromq_pub":
-                    detail = e.get("address")
-                elif e.get("protocol") == "tcp_bridge":
+                if e.get("protocol") == "tcp_bridge":
                     detail = f"port {e.get('port')}, bridge {e.get('bridge_port')}"
                 else:
                     detail = f"port {e.get('port')}"
@@ -596,7 +594,7 @@ class GroundtrackGUI(tk.Tk):
                                                padx=(10, 4), pady=4)
         protocol_var = tk.StringVar(value="tcp_server")
         protocol_menu = ttk.OptionMenu(win, protocol_var, "tcp_server",
-                                        "tcp_server", "tcp_client", "tcp_bridge", "zeromq_pub")
+                                        "tcp_server", "tcp_client", "tcp_bridge")
         protocol_menu.grid(row=2, column=1, padx=(0, 10), pady=4, sticky="w")
 
         ttk.Label(win, text="Block name in .grc:").grid(
@@ -622,14 +620,7 @@ class GroundtrackGUI(tk.Tk):
                 bridge_port_entry.grid_remove()
 
         def on_protocol_change(*_):
-            if protocol_var.get() == "zeromq_pub":
-                value_label.config(text="Address:")
-                value_entry.delete(0, tk.END)
-                value_entry.insert(0, "tcp://127.0.0.1:5556")
-                block_entry.delete(0, tk.END)
-                block_entry.insert(0, "zeromq_pub_msg_sink_0")
-                show_bridge_port_field(False)
-            elif protocol_var.get() == "tcp_bridge":
+            if protocol_var.get() == "tcp_bridge":
                 value_label.config(text="Port (the flowgraph's own TCP_SERVER):")
                 value_entry.delete(0, tk.END)
                 block_entry.delete(0, tk.END)
@@ -655,10 +646,7 @@ class GroundtrackGUI(tk.Tk):
             block_entry.delete(0, tk.END)
             block_entry.insert(0, match.get("block", ""))
             value_entry.delete(0, tk.END)
-            if match.get("protocol") == "zeromq_pub":
-                value_entry.insert(0, match.get("address", ""))
-            else:
-                value_entry.insert(0, str(match.get("port", "")))
+            value_entry.insert(0, str(match.get("port", "")))
             if match.get("protocol") == "tcp_bridge":
                 bridge_port_entry.delete(0, tk.END)
                 bridge_port_entry.insert(0, str(match.get("bridge_port", "")))
@@ -680,10 +668,7 @@ class GroundtrackGUI(tk.Tk):
             result["name"] = name
             result["protocol"] = protocol_var.get()
             result["block"] = block
-            if protocol_var.get() == "zeromq_pub":
-                result["address"] = value
-            else:
-                result["port"] = value
+            result["port"] = value
             if protocol_var.get() == "tcp_bridge":
                 result["bridge_port"] = bridge_port_entry.get().strip()
             win.destroy()
@@ -848,9 +833,7 @@ class GroundtrackGUI(tk.Tk):
         def refresh_extra_list():
             extra_list.delete(0, tk.END)
             for e in sat.get("extra_outputs", []):
-                if e.get("protocol") == "zeromq_pub":
-                    detail = e.get("address", "?")
-                elif e.get("protocol") == "tcp_bridge":
+                if e.get("protocol") == "tcp_bridge":
                     detail = f"port {e.get('port', '?')}, bridge {e.get('bridge_port', '?')}"
                 else:
                     detail = f"port {e.get('port', '?')}"
@@ -869,11 +852,8 @@ class GroundtrackGUI(tk.Tk):
             args = [sys.executable, "edit_satellite.py", name,
                     "--extra-output-name", result["name"],
                     "--extra-output-protocol", result["protocol"],
-                    "--extra-output-block", result["block"]]
-            if result["protocol"] == "zeromq_pub":
-                args += ["--extra-output-address", result["address"]]
-            else:
-                args += ["--extra-output-port", result["port"]]
+                    "--extra-output-block", result["block"],
+                    "--extra-output-port", result["port"]]
             if result["protocol"] == "tcp_bridge":
                 args += ["--extra-output-bridge-port", result["bridge_port"]]
             returncode, output = self.run_cmd(args)

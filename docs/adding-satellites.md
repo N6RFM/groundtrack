@@ -64,21 +64,13 @@ working example to copy from.
 
 **Direct-connection outputs** (`extra_outputs`) - for a satellite with a
 second live output that a specific downstream app connects to, separate
-from `relay.py`'s normal KISS path. There are three shapes this takes,
-and which one applies depends entirely on which side is doing the
+from `relay.py`'s normal KISS path. Only two shapes are actually tracked
+here, and which one applies depends entirely on which side is doing the
 listening:
 
-- **`zeromq_pub`** - the flowgraph publishes, the downstream app
-  subscribes whenever it wants. Genuinely bypasses `relay.py` with
-  nothing else needed: ZeroMQ PUB/SUB already solves the
-  decouple-short-lived-producer-from-long-lived-consumer problem
-  natively (a SUB socket connects, disconnects, and reconnects
-  independently at any time), so routing it through `relay.py` - a plain
-  TCP byte-forwarder with no protocol awareness of its own - would be
-  solving a problem that protocol doesn't actually have.
 - **`tcp_client`** - the flowgraph connects out, same direction
   `relay.py` itself expects, just to a different destination than
-  `SatsDecoder`. Also a genuine direct bypass, no extra tooling needed.
+  `SatsDecoder`. A genuine direct bypass, no extra tooling needed.
 - **`tcp_bridge`** - the flowgraph runs its own `TCP_SERVER` and waits
   for the downstream app to connect in. This is **not** a simple bypass
   - raw TCP has none of ZeroMQ's reconnection robustness, so without
@@ -90,10 +82,30 @@ listening:
   persistently for the real downstream consumer - giving it one stable
   address for the life of a session.
 
-`asrtussdv.grc` and `by704.grc` are the working examples - both flowgraphs
-run a `network_socket_pdu` block as `TCP_SERVER` (an SSDV image viewer
-needs to connect in) and a `zeromq_pub_msg_sink` block (a telemetry
-upload agent subscribes independently):
+**`zeromq_pub` blocks are deliberately *not* tracked here at all** - a
+`.grc` can have as many `zeromq_pub_msg_sink` blocks as it needs with
+nothing in `satellites.yaml` referencing them. ZeroMQ PUB/SUB already
+solves the decouple-short-lived-producer-from-long-lived-consumer
+problem natively (a SUB socket connects, disconnects, and reconnects
+independently at any time, and the publisher neither knows nor cares
+whether anything's listening), so there's no listener-side
+infrastructure to configure and nothing in this toolkit ever reads a
+`zeromq_pub` address at runtime. Tracking it would be pure
+documentation with zero functional payoff - worse, `preflight.py`
+validated it with the same `[FAIL]`-level severity as a genuine
+`tcp_bridge` mismatch, which actually *does* break a real pass, making
+a harmless documentation drift look just as alarming as something that
+would actually fail. If an existing `.grc` still has old `zeromq_pub`
+entries in its `satellites.yaml` record from before this, they're
+harmless leftovers, not bugs - `preflight.py` skips them silently
+rather than flagging them, though there's no reason to keep them either;
+[`edit_satellite.py --remove-extra-output`](scripts-reference.md) clears
+one out.
+
+`asrtussdv.grc` and `by704.grc` are the working examples - both run a
+`network_socket_pdu` block as `TCP_SERVER` (an SSDV image viewer needs
+to connect in). Each also has a `zeromq_pub_msg_sink` block for its
+telemetry upload agent, but that block needs no entry here at all -
 ```yaml
   - name: ASRTU-1_SSDV
     norad: 61781
@@ -106,10 +118,6 @@ upload agent subscribes independently):
         block: network_socket_pdu_0
         port: 9985           # the flowgraph's own TCP_SERVER
         bridge_port: 19985    # what the SSDV Viewer app actually connects to
-      - name: telemetry_upload_agent
-        protocol: zeromq_pub
-        block: zeromq_pub_msg_sink_0
-        address: "tcp://127.0.0.1:5556"
 ```
 Multiple satellites feeding the *same* downstream app can share one
 `bridge_port` - `tcp_bridge.py` runs one shared listener per distinct
@@ -123,10 +131,9 @@ settings changed depending on which satellite is about to pass.
 19985` for the same SSDV viewer.
 
 `preflight.py` validates each entry against the real `.grc` the same way
-it validates `producer_port` - confirming the named block exists, that
-its port (for `tcp_server`/`tcp_client`/`tcp_bridge`) or address (for
-`zeromq_pub`) actually matches, and - for `tcp_bridge` specifically -
-that `bridge_port` is set, plus fleet-wide uniqueness across every
+it validates `producer_port` - confirming the named block exists and its
+port actually matches, and - for `tcp_bridge` specifically - that
+`bridge_port` is set, plus fleet-wide uniqueness across every
 `bridge_port` and `producer_port`/`consumer_port` (so two satellites
 can *intentionally* share one, but never *accidentally* collide with
 something else). `add_satellite.py` doesn't create these for you -

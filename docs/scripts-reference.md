@@ -192,15 +192,16 @@ python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 
 ## suggest_extra_outputs.py
 
-Scans a satellite's real `.grc` for network-facing blocks
-(`network_socket_pdu`, `zeromq_pub_msg_sink`) not yet claimed by an
-`extra_outputs` entry, and drives `edit_satellite.py` to add them - using
-the block's actual name, port, and address read straight from the file,
-never hand-typed. Correctly excludes the satellite's primary relay
-connection (`producer_port`), if it has one, since that's not an
-"extra" output. The only things it ever asks for are a name and, for
-`tcp_bridge`, a `bridge_port` - the two things that genuinely can't be
-read from the `.grc` itself:
+Scans a satellite's real `.grc` for `network_socket_pdu` blocks not yet
+claimed by an `extra_outputs` entry, and drives `edit_satellite.py` to
+add them - using the block's actual name and port read straight from
+the file, never hand-typed. Correctly excludes the satellite's primary
+relay connection (`producer_port`), if it has one, since that's not an
+"extra" output. `zeromq_pub_msg_sink` blocks are never suggested here -
+see [Adding a satellite](adding-satellites.md) for why they don't need
+tracking in `satellites.yaml` at all. The only things this ever asks
+for are a name and, for `tcp_bridge`, a `bridge_port` - the two things
+that genuinely can't be read from the `.grc` itself:
 ```
 python3 suggest_extra_outputs.py ASRTU-1_HYBRID
 python3 suggest_extra_outputs.py ASRTU-1_HYBRID --dry-run   # print the
