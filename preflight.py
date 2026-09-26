@@ -165,8 +165,10 @@ def static_checks(cfg_path):
         check(f"{name}: {grc_path} exists", grc_exists)
         check(f"{name}: {script} exists (compiled)", py_exists,
               "" if py_exists else f"run: grcc {grc_path}")
-        if py_exists and grc_exists and os.path.getmtime(grc_path) > os.path.getmtime(script):
-            check(f"{name}: .py is up to date with .grc", False,
+        if py_exists and grc_exists:
+            grc_is_stale = os.path.getmtime(grc_path) <= os.path.getmtime(script)
+            check(f"{name}: .py is up to date with .grc", grc_is_stale,
+                  "" if grc_is_stale else
                   f"{grc_path} was edited after {script} was generated - re-run grcc")
 
         if grc_exists:
