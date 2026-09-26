@@ -26,7 +26,7 @@ GNU Radio flowgraph
         |                                     since relay.py is protocol-
         |                                     agnostic - see below)
         |
-        |-- direct-connection satellites (ASRTU-1_SSDV, BY70-4) -----------
+        |-- extra_outputs satellites (ASRTU-1_SSDV, BY70-4) -----------
         |     |
         |     v
         |   extra_outputs, two genuinely different shapes:
@@ -186,7 +186,7 @@ groundtrack/
 │   ├── geoscan5.grc / .py
 │   ├── geoscan6.grc / .py
 │   ├── scionx.grc / .py    (recording-only satellite - no decoder, no relay, see below)
-│   └── asrtussdv.grc / .py (recording-only, with extra_outputs - two direct-connection
+│   └── asrtussdv.grc / .py (recording-only, with extra_outputs - two
 │                             consumers bypassing relay.py entirely, see below)
 ├── groundtrack_gui.py     # optional GUI over the CLI tools - see GUI.md
 ├── delete_satellite.py     # removes a satellite's config entry (files untouched)

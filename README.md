@@ -54,7 +54,7 @@ split by what you're actually trying to do:
 |---|---|
 | [Setup](docs/setup.md) | One-time setup, from a fresh clone to a passing `doctor.py` |
 | [Daily Workflow](docs/daily-workflow.md) | The actual session-to-session routine: TLE refresh, preflight, planning, execution |
-| [Adding a Satellite](docs/adding-satellites.md) | Decode-and-relay vs. recording-only vs. direct-connection (`extra_outputs` - a satellite output that bypasses the relay and connects straight to its own downstream app), editing, enabling/disabling |
+| [Adding a Satellite](docs/adding-satellites.md) | Decode-and-relay vs. recording-only vs. `extra_outputs` (a satellite output that bypasses the relay and connects straight to its own downstream app), editing, enabling/disabling |
 | [Architecture](docs/architecture.md) | How the pieces fit together, the relay, the tcp_bridge, Doppler control, antenna control, folder layout |
 | [Scripts Reference](docs/scripts-reference.md) | What every script does, including `doctor.py` in depth |
 | [Testing](docs/testing.md) | The full end-to-end test recipe, sending test frames, verifying Doppler/rotor without a real pass |
@@ -72,7 +72,7 @@ flags documented here, so the CLI tools work identically whether or not
 you ever open the GUI. See [GUI.md](GUI.md) for the full picture,
 including why a few buttons open their own terminal window instead of
 running inline, and how to manage `extra_outputs` (a satellite's
-direct-connection outputs, bypassing the relay - see [Adding a
+second output, bypassing the relay - see [Adding a
 Satellite](docs/adding-satellites.md)) through the Edit dialog rather
 than by hand-editing YAML.
 

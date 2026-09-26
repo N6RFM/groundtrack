@@ -62,7 +62,7 @@ itself - no decoder, no KISS sink, no network block, `recordOnStart:
 True`, no waterfall - is still yours to build in GRC; `scionx.grc` is a
 working example to copy from.
 
-**Direct-connection outputs** (`extra_outputs`) - for a satellite with a
+**extra_outputs** - for a satellite with a
 second live output that a specific downstream app connects to, separate
 from `relay.py`'s normal KISS path. Only two shapes are actually tracked
 here, and which one applies depends entirely on which side is doing the
