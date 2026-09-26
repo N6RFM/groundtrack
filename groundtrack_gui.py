@@ -153,8 +153,11 @@ class GroundtrackGUI(tk.Tk):
         canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))   # Linux
 
     def _build_table(self):
+        table_frame = ttk.Frame(self.content)
+        table_frame.pack(fill="x", padx=8, pady=8)
+
         columns = ("name", "norad", "freq", "enabled", "mode", "gaps")
-        self.tree = ttk.Treeview(self.content, columns=columns, show="headings", height=10)
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
         headings = {
             "name": "Satellite", "norad": "NORAD", "freq": "Freq (Hz)",
             "enabled": "Enabled", "mode": "Mode", "gaps": "Gaps found",
@@ -166,7 +169,11 @@ class GroundtrackGUI(tk.Tk):
             self.tree.column(col, width=widths[col], anchor="w")
         self.tree.tag_configure("hasgaps", background="#ffe4e4")
         self.tree.tag_configure("disabled", foreground="#888888")
-        self.tree.pack(fill="x", padx=8, pady=8)
+
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
 
     def _build_actions(self):
         row1 = ttk.LabelFrame(self.content, text="Satellite management")
@@ -192,6 +199,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.vet_selected).pack(side="left", padx=4)
         ttk.Button(row1b, text="Vet --fix selected .grc",
                    command=self.vet_fix_selected).pack(side="left")
+        ttk.Button(row1b, text="Suggest extra_outputs (new window)",
+                   command=self.suggest_extra_outputs_selected).pack(side="left", padx=4)
         ttk.Separator(row1b, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Button(row1b, text="Delete selected",
                    command=self.delete_selected).pack(side="left")
@@ -405,6 +414,16 @@ class GroundtrackGUI(tk.Tk):
         if not confirmed:
             return
         self.run_cmd([sys.executable, "vet_grc.py", "--fix", grc_path])
+
+    def suggest_extra_outputs_selected(self):
+        """Interactive (prompts for a name, and for tcp_bridge candidates a
+        bridge_port) - needs a real terminal, same reasoning as
+        relay.py/tcp_bridge.py/run_passes.py: the captured output pane
+        can't feed it stdin."""
+        name, grc_path = self._grc_path_for_selected()
+        if not grc_path:
+            return
+        self.spawn_in_terminal([sys.executable, "suggest_extra_outputs.py", name])
 
     def delete_selected(self):
         name = self.selected_name()
