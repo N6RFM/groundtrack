@@ -415,6 +415,106 @@ Same as `relay.py`, `tcp_bridge.py` is one-directional and has zero
 protocol awareness - it doesn't parse or care what's inside the bytes,
 whether that's SSDV image data or anything else.
 
+## Which one does a satellite actually use?
+
+Not always obvious from just looking at `satellites.yaml`, so here's
+the actual decision, with every real satellite in this fleet as an
+example:
+
+| Satellite has... | Uses `relay.py`? | Uses `tcp_bridge.py`? | Real example |
+|---|---|---|---|
+| `producer_port`/`consumer_port` set (feeds a live decoder like `SatsDecoder`) | Yes | No | `GEOSCAN-1..6` |
+| No `producer_port`; `extra_outputs` with `protocol: tcp_bridge` | No | Yes | `ASRTU-1_SSDV`, `BY70-4`, `ASRTU-1_HYBRID` |
+| No `producer_port`; `extra_outputs` are all `zeromq_pub` (or none at all) | No | No | `SCIONX` (recording-only) |
+| `producer_port` set **and** a `tcp_bridge` extra_output | Yes | Yes | not in this fleet yet, but architecturally valid - e.g. a decode-and-relay satellite that *also* feeds a live SSDV viewer |
+
+The two are completely independent - a satellite's `producer_port`
+decides `relay.py`, and each individual `extra_outputs` entry decides
+`tcp_bridge.py` for itself, so any combination is possible. `zeromq_pub`
+never triggers either one, since nothing needs to bridge or relay it
+(see [Adding a Satellite](adding-satellites.md) for why).
+
+### Port numbering conventions
+
+Not enforced by any tool - these are just the patterns this fleet has
+settled on, worth following for anything new so ports stay predictable
+at a glance:
+
+| Piece | Pattern | Real examples |
+|---|---|---|
+| `producer_port` (`relay.py`, flowgraph's own `TCP_SERVER`) | `91xx`, one per satellite | `GEOSCAN-1..6`: `9101`-`9106` |
+| `consumer_port` (`relay.py`, decoder connects here) | `81xx`, matching `producer_port`'s last two digits | `GEOSCAN-1..6`: `8101`-`8106` |
+| `tcp_bridge`'s flowgraph-side port (`network_socket_pdu`, `TCP_SERVER`) | `99xx` | `ASRTU-1_SSDV`/`ASRTU-1_HYBRID`'s `ssdv_viewer`: `9986`; `ASRTU-1_HYBRID`'s `telemetry_decoder`: `9985` |
+| `tcp_bridge`'s `bridge_port` (what the real downstream app connects to) | flowgraph-side port **+ 10000** | `9986` → `19986`; `9985` → `19985` |
+| `zeromq_pub` address (untracked in `satellites.yaml` - see above) | `tcp://127.0.0.1:55xx` | `ASRTU-1_SSDV`: `5556`; `BY70-4`: `5555` |
+
+The `+10000` pattern for `bridge_port` isn't a rule any tool checks -
+it's just convenient, since the relationship between a flowgraph's own
+port and what the downstream app actually connects to is visible at a
+glance rather than needing to look it up.
+
+### What each piece actually looks like in the `.grc`
+
+A `relay.py`-fed `network_socket_pdu` and a `tcp_bridge`-fed one are
+**visually identical blocks** - both `TCP_SERVER`, both connected to the
+rest of the flowgraph the same way. The only thing that decides which
+script actually uses a given block is which key in `satellites.yaml`
+points at it - `producer_port` for `relay.py`, an `extra_outputs` entry
+for `tcp_bridge.py`. There's nothing in the `.grc` itself that marks a
+block as "the relay one" versus "the bridge one":
+
+```yaml
+# GEOSCAN-1's producer connection - relay.py reads producer_port: 9101
+# to know this is the one it should connect to
+- name: network_socket_pdu_0
+  id: network_socket_pdu
+  parameters:
+    type: TCP_SERVER
+    port: '9101'
+    host: 127.0.0.1
+```
+
+```yaml
+# ASRTU-1_HYBRID's ssdv_viewer connection - same block shape, but
+# nothing here says "tcp_bridge" - that's purely a satellites.yaml
+# extra_outputs entry pointing at this block by name
+- name: network_socket_pdu_0
+  id: network_socket_pdu
+  parameters:
+    type: TCP_SERVER
+    port: '9986'
+    host: 127.0.0.1
+```
+
+```yaml
+# ASRTU-1_SSDV's telemetry output - a zeromq_pub_msg_sink instead,
+# fire-and-forget, no satellites.yaml entry needed at all
+- name: zeromq_pub_msg_sink_0
+  id: zeromq_pub_msg_sink
+  parameters:
+    address: tcp://127.0.0.1:5556
+    timeout: '1000'
+```
+
+And the two downstream pieces that actually read these values:
+
+```yaml
+# satellites.yaml - GEOSCAN-1, decode-and-relay
+- name: GEOSCAN-1
+  producer_port: 9101   # relay.py connects here as a client
+  consumer_port: 8101   # SatsDecoder connects here
+```
+
+```yaml
+# satellites.yaml - ASRTU-1_HYBRID, tcp_bridge
+extra_outputs:
+  - name: ssdv_viewer
+    protocol: tcp_bridge
+    block: network_socket_pdu_0   # matches the .grc block's name above
+    port: 9986                    # matches the .grc block's own port
+    bridge_port: 19985            # what the SSDV Viewer app connects to
+```
+
 ## How Doppler control works
 
 - `run_passes.py` starts **one** `rigctld -m 1 -t <rig_port>` (Hamlib's
