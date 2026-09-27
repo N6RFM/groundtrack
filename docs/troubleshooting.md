@@ -133,17 +133,23 @@ config-only checks can't see.
   `run_passes.py` against a known pass before trusting a real recording.
 - **Rotor update behavior**: `find_lead_ahead_target()`/`maybe_update_rotor()`
   (ported from [N6RFM/Gpredict_K4KDR_N6RFM](https://github.com/N6RFM/Gpredict_K4KDR_N6RFM))
-  only send a new position once the satellite has drifted `threshold_deg`
-  (default `5.0`) from wherever the rotor was last commanded, and when
-  they do, they send a predicted future point, not the satellite's
-  instantaneous position - see [Architecture](architecture.md) for the
-  full explanation. There is no time-based forced send at all anymore; a
-  long quiet stretch during a slow-moving part of a pass is correct, not
-  a sign anything's stuck. `threshold_deg` is a keyword default on
-  `maybe_update_rotor()` if your rotor's actual slew rate calls for a
-  different value. `test_rotor_leadahead.py` exercises this directly
-  against your real rotctld with synthetic, predictable motion if you
-  want to verify it independently.
+  only send a new position once the satellite has drifted `rot_threshold_deg`
+  (set in `satellites.yaml`'s top level, default `5.0` if unset) from
+  wherever the rotor was last commanded, and when they do, they send a
+  predicted future point, not the satellite's instantaneous position -
+  see [Architecture](architecture.md) for the full explanation. There is
+  no time-based forced send at all anymore; a long quiet stretch during a
+  slow-moving part of a pass is correct, not a sign anything's stuck.
+  Comparisons use the rotor's own live, polled position
+  (`Rotctld.get_pos()`), not the last-commanded value - measure your
+  rotor's actual capability with `measure_rotor_speed.py` before assuming
+  a tighter threshold is safe; that same tool also reveals a real,
+  separate thing worth knowing: many rotors have an inherent position
+  precision limit (this project's own test rotor sits around 1 degree)
+  that a too-tight tolerance will mistake for the rotor being stuck.
+  `test_rotor_leadahead.py` exercises the tracking logic directly against
+  your real rotctld with synthetic, predictable motion if you want to
+  verify it independently.
 - Hand-authored `.grc` blocks (`epy_block`s, `network_socket_pdu`) were
   written outside GNU Radio Companion - open each block's properties
   dialog once after import to let GRC regenerate anything it flags.

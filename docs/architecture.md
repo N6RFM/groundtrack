@@ -606,6 +606,11 @@ redirecting it toward a target that's already stale by the time each
 command lands. There is no time-based forced send at all - a slow-moving
 stretch of a pass can go a long time between commands, which is correct,
 not a gap. See `find_lead_ahead_target()` and `maybe_update_rotor()` in
-`run_passes.py`; adjust `threshold_deg` there if your rotor wants finer
-or coarser steps.
+`run_passes.py` for the implementation - set `rot_threshold_deg` in
+`satellites.yaml`'s top level if your rotor wants finer or coarser steps
+than the `5.0` default (no source edit needed). Comparisons use
+`Rotctld.get_pos()` - the rotor's own live, polled position - not the
+last-commanded value, which matters concretely: comparing against a
+stale commanded value compounds the lead-ahead offset on every trigger,
+roughly doubling the real step size the rotor actually takes.
 

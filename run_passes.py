@@ -434,7 +434,8 @@ def main():
                         corrected = sat_cfg["freq_hz"] + dop
                         rig.set_freq(corrected)
                         maybe_update_rotor(rot, sat, observer, ts, now,
-                                            az_deg, el_deg, active_pass["los_dt"])
+                                            az_deg, el_deg, active_pass["los_dt"],
+                                            threshold_deg=cfg.get("rot_threshold_deg", 5.0))
                         if args.verbose:
                             remaining = format_countdown(active_pass["los_dt"] - now)
                             status = (f"[{sat_cfg['name']}] el={el_deg:5.1f} az={az_deg:5.1f}  "
