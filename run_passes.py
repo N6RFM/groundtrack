@@ -27,7 +27,7 @@ import shutil
 import yaml
 import os
 import errno
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from skyfield.api import load, wgs84, EarthSatellite
 
 CONFIG_PATH = "satellites.yaml"
@@ -163,32 +163,26 @@ class Rotctld:
     """Client for a rotctld YOU start separately, pointed at your real rotor
     (or its Dummy backend for testing). This class does not launch rotctld -
     unlike rigctld's Dummy backend, a rotor daemon needs your actual serial
-    port and rotor model, which only you can supply."""
+    port and rotor model, which only you can supply.
+
+    Pure I/O - no throttling or lead-ahead logic here at all. That logic
+    needs satellite/orbital data this class has no business knowing about,
+    so it lives in find_lead_ahead_target() and maybe_update_rotor()
+    instead, matching gtk-rot-ctrl.c's own separation: gpredict's rotor
+    controller decides WHAT position to send, a plain rotctld client just
+    sends whatever it's told."""
 
     def __init__(self, host, port):
         self.host, self.port = host, port
         self.sock = None
-        self.last = None  # (az, el) last commanded, to avoid chatter
-        self.last_sent_at = None  # monotonic time of last actual send
+        self.last = None  # (az, el) last commanded, so callers can compare drift
 
     def _connect(self):
         self.sock = socket.create_connection((self.host, self.port), timeout=3)
 
-    def point(self, az_deg, el_deg, min_move_deg=5.0, min_interval_s=5.0):
-        """Send a new position only if az or el has moved by at least
-        min_move_deg, OR at least min_interval_s has passed since the last
-        command actually sent - whichever comes first. Keeps the rotor from
-        being spammed with near-identical positions during a fast slew,
-        while still guaranteeing an update at least every min_interval_s
-        even during a slow-changing stretch of the pass."""
-        now = time.monotonic()
-        if self.last is not None:
-            daz = abs(az_deg - self.last[0])
-            delv = abs(el_deg - self.last[1])
-            moved_enough = daz >= min_move_deg or delv >= min_move_deg
-            time_elapsed = self.last_sent_at is None or (now - self.last_sent_at) >= min_interval_s
-            if not moved_enough and not time_elapsed:
-                return
+    def point(self, az_deg, el_deg):
+        """Sends unconditionally - callers decide whether a send is
+        warranted before calling this at all."""
         try:
             if self.sock is None:
                 self._connect()
@@ -196,9 +190,77 @@ class Rotctld:
             self.sock.settimeout(0.5)
             self.sock.recv(64)
             self.last = (az_deg, el_deg)
-            self.last_sent_at = now
         except OSError:
             self.sock = None  # reconnect next call
+
+
+def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
+                            threshold_deg, los_dt):
+    """Ported from gtk-rot-ctrl.c (N6RFM/Gpredict_K4KDR_N6RFM), a proven,
+    working implementation - binary-searches for the FURTHEST future time
+    (up to los_dt) where the satellite's position still sits within
+    threshold_deg of its CURRENT position (cur_az/cur_el), rather than
+    sending the satellite's instantaneous current position. The comment
+    in the original explains why directly: "try to lead the satellite
+    some so we are not always chasing it." Sending a rotor toward a real
+    lead-ahead destination gives it something to travel toward
+    continuously, instead of repeatedly being redirected toward a target
+    that's already slightly stale by the time each command lands - which
+    is exactly the "too many commands" pattern this replaces.
+
+    The anchor MUST be the satellite's current position, not wherever the
+    rotor was last commanded - anchoring to a stale, already-passed
+    position gives the search nothing meaningful to converge on, since
+    every future point is monotonically further from a point already
+    behind the satellite's motion.
+
+    Bounded by los_dt (search never looks past the end of the current
+    pass) or a 20-minute fallback window, matching the original's own
+    choice when no pass end time is known."""
+    max_lookahead_s = (los_dt - now_dt).total_seconds() if los_dt else 1200.0
+    max_lookahead_s = max(max_lookahead_s, 1.0)
+    time_delta_s = max_lookahead_s
+    step_s = time_delta_s / 2.0
+    min_step_s = 1.0  # matches the main loop's own 1-second cadence
+    if step_s < min_step_s:
+        step_s = min_step_s
+    az_deg = cur_az
+    el_deg = cur_el
+    while step_s > min_step_s / 4.0:
+        t_future = ts.from_datetime(now_dt + timedelta(seconds=time_delta_s))
+        el_deg, az_deg = elevation_deg(sat, observer, t_future)
+        daz = abs(az_deg - cur_az)
+        delv = abs(el_deg - cur_el)
+        exceeds = el_deg < 0 or daz > threshold_deg or delv > threshold_deg
+        if exceeds:
+            time_delta_s -= step_s
+        else:
+            time_delta_s += step_s
+        step_s /= 2.0
+    return az_deg, el_deg
+
+
+def maybe_update_rotor(rot, sat, observer, ts, now_dt, cur_az, cur_el,
+                        los_dt, threshold_deg=5.0):
+    """The actual decision gpredict's threshold check makes: has the
+    satellite drifted more than threshold_deg from wherever the rotor was
+    last commanded? If not, do nothing at all - no time-based forced send
+    exists here, matching the reference implementation exactly. If so,
+    compute a lead-ahead target and send that instead of cur_az/cur_el."""
+    if rot is None:
+        return
+    if rot.last is not None:
+        daz = abs(cur_az - rot.last[0])
+        delv = abs(cur_el - rot.last[1])
+        if daz <= threshold_deg and delv <= threshold_deg:
+            return
+        target_az, target_el = find_lead_ahead_target(
+            sat, observer, ts, now_dt, cur_az, cur_el,
+            threshold_deg, los_dt)
+    else:
+        target_az, target_el = cur_az, cur_el  # first command - just go there
+    rot.point(target_az, target_el)
+
 
 
 class Rigctld:
@@ -336,8 +398,8 @@ def main():
                         dop = doppler_hz(sat, observer, t, sat_cfg["freq_hz"])
                         corrected = sat_cfg["freq_hz"] + dop
                         rig.set_freq(corrected)
-                        if rot is not None:
-                            rot.point(az_deg, el_deg)
+                        maybe_update_rotor(rot, sat, observer, ts, now,
+                                            az_deg, el_deg, active_pass["los_dt"])
                         if args.verbose:
                             remaining = format_countdown(active_pass["los_dt"] - now)
                             status = (f"[{sat_cfg['name']}] el={el_deg:5.1f} az={az_deg:5.1f}  "
