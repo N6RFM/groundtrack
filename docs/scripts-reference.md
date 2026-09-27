@@ -121,7 +121,7 @@ still means opening GRC. See [Adding a satellite](adding-satellites.md) for why 
 
 **`tcp_bridge.py`** - `relay.py`'s mirror-image, for a satellite whose
 flowgraph runs its own `TCP_SERVER` instead of connecting out as a
-client (see [The tcp_bridge](architecture.md) in the architecture doc for the full picture):
+client (see [The tcp_bridge](relay-and-bridging.md) for the full picture):
 ```
 python3 tcp_bridge.py --verbose
 ```
@@ -214,6 +214,28 @@ address, a block name that didn't match, two entries sharing one name,
 a port that didn't match the `.grc`) came from transcribing these
 values by hand, which this tool exists specifically to eliminate.
 
+## plan_passes.py
+
+Computes upcoming passes for every enabled satellite from their TLEs,
+shows them for review, and writes the approved ones to `schedule.yaml` -
+the step between having satellites configured and `run_passes.py` having
+anything to actually execute:
+```
+python3 plan_passes.py
+python3 plan_passes.py --hours 48
+python3 plan_passes.py --interactive   # prompt y/n per pass instead of approving all
+python3 plan_passes.py --add-satellite # interactively append a new satellite, then exit
+```
+Each pass's listing includes its peak angular rate (`peak deg/s`) - the
+fastest the rotor would need to track during that specific pass, sampled
+every 2 seconds from AOS to LOS. If `rot_max_deg_per_sec` is set in
+`satellites.yaml` (see [Tracking Control](tracking-control.md) for how to
+measure it), any pass whose peak rate would exceed it is flagged
+`!! EXCEEDS rotor max` right in the listing, before you approve it - real,
+physical hardware limits surfaced as advance information instead of
+something noticed mid-pass. A flagged pass isn't blocked; it's still your
+call whether to approve it.
+
 ## run_passes.py
 
 The actual execution engine - waits for each approved pass in
@@ -231,7 +253,7 @@ active - `--status-interval` (default `5`) controls how often that line
 actually redraws; Doppler correction itself still recomputes every
 second regardless, but the rotor only gets a new command when the
 satellite has actually drifted enough to warrant one (lead-ahead
-targeting - see [Architecture](architecture.md) - not a fixed cadence).
+targeting - see [Tracking Control](tracking-control.md) - not a fixed cadence).
 Only the printed line is throttled by this flag, since a
 real terminal session copied to a log file can otherwise look like a
 flood of scrolling lines even though only one line was ever changing in
@@ -282,6 +304,27 @@ seconds - useful for watching the rotor's own physical digital display
 against what the script separately reads back, to build real confidence
 the two agree. No pass, schedule, or TLE needed - useful any time, not
 just while waiting for a real satellite.
+
+## measure_rotor_speed.py
+
+Empirically measures your rotor's actual max slew rate - a clean,
+isolated point-to-point timed move (no lead-ahead/threshold tracking
+logic involved at all), the real basis `rot_max_deg_per_sec` should come
+from rather than a guess or a spec sheet number. See [Tracking
+Control](tracking-control.md) for the full rationale, including a real,
+hard-learned lesson about why the `--tolerance` setting matters more than
+it might seem:
+```
+python3 measure_rotor_speed.py
+python3 measure_rotor_speed.py --tolerance 2.0
+python3 measure_rotor_speed.py --distances 20 60 120
+```
+Tests several move distances and suggests a `rot_max_deg_per_sec` value
+with a safety margin already applied, based on the *slowest* measured
+rate - a real pass involves sustained tracking much more like a long
+test move than a short burst, so the slowest result is the more
+representative, trustworthy basis for the suggestion. This WILL
+physically move the antenna.
 
 ## ci_check.py
 

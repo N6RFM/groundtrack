@@ -52,7 +52,7 @@ line while a pass is active, by default every 5 seconds
 updates every second regardless of this setting, but the rotor line
 only actually changes when the satellite has drifted enough to warrant
 a new command (lead-ahead targeting, not a fixed cadence - see
-[Architecture](architecture.md)):
+[Tracking Control](tracking-control.md)):
 ```
 [GEOSCAN-2] el= 31.5 az=214.3  freq=436,158,412 Hz (doppler -1,588 Hz)
 ```

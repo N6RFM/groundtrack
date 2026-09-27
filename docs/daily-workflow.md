@@ -51,7 +51,7 @@ nohup python3 relay.py > relay.log 2>&1 &
 rotctld -m 607 -r /dev/ttyUSB2 &
 
 # 6. connect a decoder tab/instance for each decode-and-relay satellite,
-#    at its own consumer_port, and leave them open - see The relay in architecture.md for why this matters and how to check it's actually done
+#    at its own consumer_port, and leave them open - see The relay in relay-and-bridging.md for why this matters and how to check it's actually done
 #    correctly. Recording-only satellites need nothing here.
 
 # 7. execute: waits for AOS, launches flowgraphs, drives Doppler + rotor

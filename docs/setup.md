@@ -70,3 +70,18 @@
    Refresh this daily (cron), and re-run `plan_passes.py` after each
    refresh - stale TLEs drift AOS/LOS times and Doppler accuracy.
 
+7. **If you have a rotor, tune it** (optional, but worth doing once):
+   ```
+   python3 measure_rotor_speed.py
+   ```
+   Empirically measures your rotor's real max slew rate and suggests a
+   `rot_max_deg_per_sec` value to add to `satellites.yaml`'s top level -
+   `plan_passes.py` then warns you before approving any pass whose peak
+   angular rate would exceed what your rotor can actually keep up with.
+   `rot_threshold_deg` (also top-level, default `5.0` if unset) tunes how
+   often the rotor gets a new command during tracking. See [Tracking
+   Control](tracking-control.md) for the full explanation of both
+   settings and how they were arrived at - including a real, hard-learned
+   lesson about the measurement tool's own `--tolerance` setting that's
+   worth reading before trusting its output.
+

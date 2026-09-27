@@ -20,7 +20,7 @@ connected to it, and a different satellite's pass just happened. The
 relay serves every relay-using satellite's consumer port simultaneously
 and continuously - it never switches which port is "active." Your
 decoder needs **one persistent connection per relay-using satellite, all
-open at once** - not one connection you re-point before each pass. See [The relay](architecture.md) for the exact setup. Verify with `tail -f relay.log`:
+open at once** - not one connection you re-point before each pass. See [The relay](relay-and-bridging.md) for the exact setup. Verify with `tail -f relay.log`:
 you should see one `consumer connected` line per relay-using satellite
 that persists,
 not one connection that comes and goes.
@@ -137,7 +137,7 @@ config-only checks can't see.
   (set in `satellites.yaml`'s top level, default `5.0` if unset) from
   wherever the rotor was last commanded, and when they do, they send a
   predicted future point, not the satellite's instantaneous position -
-  see [Architecture](architecture.md) for the full explanation. There is
+  see [Tracking Control](tracking-control.md) for the full explanation. There is
   no time-based forced send at all anymore; a long quiet stretch during a
   slow-moving part of a pass is correct, not a sign anything's stuck.
   Comparisons use the rotor's own live, polled position
