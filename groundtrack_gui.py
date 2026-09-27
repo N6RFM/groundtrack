@@ -514,7 +514,8 @@ class GroundtrackGUI(tk.Tk):
         shell_line = (
             f"cd {shlex.quote(self.repo_root)} && {quoted_cmd}; "
             f"echo; echo '--- process exited (see above for any error) ---'; "
-            f"read -p 'Press Enter to close this window...'"
+            f"echo 'Press Ctrl-C or close this window to dismiss.'; "
+            f"sleep infinity"
         )
         try:
             subprocess.Popen(prefix + ["bash", "-c", shell_line])
