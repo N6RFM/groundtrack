@@ -193,6 +193,28 @@ class Rotctld:
         except OSError:
             self.sock = None  # reconnect next call
 
+    def get_pos(self):
+        """Queries the rotor's own actual, physical position via rotctld's
+        'p' command - a genuine, separate connection from point()'s own
+        persistent send socket, matching gtk-rot-ctrl.c's real design: it
+        compares against the rotor's LIVE reported position, not wherever
+        it was last commanded to go. This matters because a rotor that's
+        still catching up from a previous command sits somewhere between
+        its old and new targets - comparing against the stale commanded
+        value instead compounds the lead-ahead offset on every single
+        trigger, roughly doubling the effective step size. Returns (az,
+        el) as floats, or None on any error - callers should fall back to
+        self.last if this fails, rather than skip the update entirely."""
+        try:
+            with socket.create_connection((self.host, self.port), timeout=2) as s:
+                s.sendall(b"p\n")
+                s.settimeout(1)
+                data = s.recv(256).decode(errors="replace")
+            parts = data.split()
+            return float(parts[0]), float(parts[1])
+        except (OSError, ValueError, IndexError):
+            return None
+
 
 def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
                             threshold_deg, los_dt):
@@ -243,15 +265,26 @@ def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
 def maybe_update_rotor(rot, sat, observer, ts, now_dt, cur_az, cur_el,
                         los_dt, threshold_deg=5.0):
     """The actual decision gpredict's threshold check makes: has the
-    satellite drifted more than threshold_deg from wherever the rotor was
-    last commanded? If not, do nothing at all - no time-based forced send
-    exists here, matching the reference implementation exactly. If so,
-    compute a lead-ahead target and send that instead of cur_az/cur_el."""
+    satellite drifted more than threshold_deg from the rotor's OWN LIVE
+    reported position - not wherever it was last commanded to go? If not,
+    do nothing at all - no time-based forced send exists here, matching
+    the reference implementation exactly. If so, compute a lead-ahead
+    target and send that instead of cur_az/cur_el.
+
+    Comparing against a live-queried position (rather than the stale
+    last-commanded value) matters concretely: a rotor still catching up
+    from a previous command sits somewhere between its old and new
+    targets, and comparing against the stale commanded value instead
+    compounds the lead-ahead offset on every trigger - roughly doubling
+    the real, physical step size the rotor actually takes between
+    commands. Falls back to rot.last only if the live query fails (or
+    there's no previous command yet), rather than skipping the update."""
     if rot is None:
         return
-    if rot.last is not None:
-        daz = abs(cur_az - rot.last[0])
-        delv = abs(cur_el - rot.last[1])
+    reference = rot.get_pos() or rot.last
+    if reference is not None:
+        daz = abs(cur_az - reference[0])
+        delv = abs(cur_el - reference[1])
         if daz <= threshold_deg and delv <= threshold_deg:
             return
         target_az, target_el = find_lead_ahead_target(
