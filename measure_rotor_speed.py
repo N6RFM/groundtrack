@@ -184,6 +184,10 @@ def main():
         return
 
     print("\n=== Summary ===")
+    print(f"  Tolerance used: {args.tolerance} deg (results below aren't "
+          f"comparable to a run at a different tolerance - this rotor "
+          f"showed wildly inconsistent-looking numbers at 0.5 deg that "
+          f"cleaned right up at 1.0-2.0 deg, purely from tolerance alone)")
     for dist, rate in results:
         print(f"  {dist:5.0f} deg move: {rate:.2f} deg/sec achieved")
 
