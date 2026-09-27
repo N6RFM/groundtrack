@@ -246,6 +246,21 @@ rise, rather than left wherever the finished pass happened to end -
 for what that requires. Every other satellite launches exactly as
 before, regardless of this flag.
 
+## test_rotor_throttle.py
+
+**Historical, superseded - kept for reference, not for verifying current
+behavior.** This was the standalone test for the very first rotor
+throttle design (`min_move_deg`/`min_interval_s` on `Rotctld.point()`
+directly), before that design was replaced entirely by the lead-ahead
+targeting `test_rotor_leadahead.py` (below) actually tests. It has its
+own *copy* of the old `Rotctld` class, not an import from
+`run_passes.py`, so running it today exercises code that no longer
+matches what's actually deployed at all - `Rotctld.point()` in the real
+`run_passes.py` no longer has `min_move_deg`/`min_interval_s` parameters
+to test. Use `test_rotor_leadahead.py` for anything about actual, current
+rotor behavior; this one only remains useful if you want to see how the
+design's very first iteration behaved.
+
 ## test_rotor_leadahead.py
 
 Standalone verification for the lead-ahead rotor logic - imports
