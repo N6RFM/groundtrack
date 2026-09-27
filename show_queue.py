@@ -71,6 +71,15 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
+    capable_norads = set()
+    try:
+        with open("satellites.yaml") as f:
+            sat_cfg = yaml.safe_load(f)
+        capable_norads = {s["norad"] for s in sat_cfg.get("satellites", [])
+                           if s.get("record_iq_toggle", False)}
+    except FileNotFoundError:
+        pass  # record_iq column still shows; capability just can't be checked
+
     if not schedule or "passes" not in schedule:
         print(f"'{args.path}' has no 'passes' key - nothing to show.", file=sys.stderr)
         sys.exit(1)
@@ -103,8 +112,8 @@ def main():
     now = datetime.now(timezone.utc)
     next_shown = False
 
-    print(f"{'STATUS':13s} {'SATELLITE':12s} {'AOS':22s} {'LOS':22s} {'DUR':8s} {'MAX EL':7s}")
-    print("-" * 88)
+    print(f"{'STATUS':13s} {'SATELLITE':12s} {'AOS':22s} {'LOS':22s} {'DUR':8s} {'MAX EL':7s} {'RECORD_IQ':10s}")
+    print("-" * 99)
 
     for aos, los, sat, elev, raw in enriched:
         if los and los < now:
@@ -121,12 +130,18 @@ def main():
             status = "(unapproved)"
 
         elev_str = f"{elev:.0f}deg" if isinstance(elev, (int, float)) else "?"
+        if raw.get("norad") not in capable_norads:
+            iq_str = "n/a"
+        elif "record_iq" not in raw:
+            iq_str = "(default)"
+        else:
+            iq_str = "ON" if raw["record_iq"] else "OFF"
         print(f"{status:13s} {sat:12s} {fmt_dt(aos):22s} {fmt_dt(los):22s} "
-              f"{fmt_duration(aos, los):8s} {elev_str:7s}")
+              f"{fmt_duration(aos, los):8s} {elev_str:7s} {iq_str:10s}")
 
     total = len(enriched)
     remaining = sum(1 for aos, los, *_ in enriched if aos and aos > now)
-    print("-" * 88)
+    print("-" * 99)
     print(f"{total} pass(es) shown, {remaining} still upcoming.")
 
 
