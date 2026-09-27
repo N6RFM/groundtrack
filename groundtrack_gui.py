@@ -186,6 +186,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.add_satellite_dialog).pack(side="left", padx=4)
         ttk.Button(row1a, text="Edit selected",
                    command=self.edit_satellite_dialog).pack(side="left")
+        ttk.Button(row1a, text="View YAML for selected",
+                   command=self.view_yaml_selected).pack(side="left", padx=4)
         ttk.Button(row1a, text="Enable selected",
                    command=lambda: self.toggle(True)).pack(side="left", padx=4)
         ttk.Button(row1a, text="Disable selected",
@@ -394,6 +396,45 @@ class GroundtrackGUI(tk.Tk):
             messagebox.showerror("Missing .grc", f"{grc_path} doesn't exist.")
             return None, None
         return name, grc_path
+
+    def view_yaml_selected(self):
+        """Read-only - shows exactly what's in satellites.yaml for this one
+        satellite, all fields at once (extra_outputs, record_iq_toggle,
+        decoder file, everything), separate from the Edit dialog's
+        field-by-field editing which only shows one thing at a time."""
+        name = self.selected_name()
+        if not name:
+            messagebox.showinfo("No selection", "Select a satellite first.")
+            return
+        sats = load_satellites()
+        sat = next((s for s in sats if s["name"] == name), None)
+        if not sat:
+            messagebox.showerror("Not found", f"{name} not found in satellites.yaml.")
+            return
+
+        win = tk.Toplevel(self)
+        win.title(f"satellites.yaml - {name}")
+        win.geometry("640x480")
+
+        text_frame = ttk.Frame(win)
+        text_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        text = tk.Text(text_frame, wrap="none", yscrollcommand=scrollbar.set,
+                        font=("monospace", 10))
+        text.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=text.yview)
+
+        yaml_str = yaml.dump({name: sat}, sort_keys=False, default_flow_style=False)
+        text.insert("1.0", yaml_str)
+        text.config(state="disabled")  # read-only
+
+        btn_row = ttk.Frame(win)
+        btn_row.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(btn_row, text="Copy to clipboard",
+                   command=lambda: (win.clipboard_clear(),
+                                     win.clipboard_append(yaml_str))).pack(side="left")
+        ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
 
     def vet_selected(self):
         name, grc_path = self._grc_path_for_selected()
