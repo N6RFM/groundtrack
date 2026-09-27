@@ -123,13 +123,21 @@ def run_phase(rp, rot, label, base_time, start_az, el, deg_per_sec,
         _, cur_az = rp.elevation_deg(None, None, t_now)
         cur_el = el
         before = rot.last
+        live_pos = rot.get_pos()  # for display only - maybe_update_rotor queries its own
         rp.maybe_update_rotor(rot, None, None, ts, now, cur_az, cur_el,
                                los_dt, threshold_deg=threshold_deg)
         if rot.last != before:
+            stale_gap = abs(cur_az - before[0]) if before else None
+            live_gap = abs(cur_az - live_pos[0]) if live_pos else None
             print(f"  t={i:3d}s  current_az={cur_az:7.2f}  SENT -> "
                   f"az={rot.last[0]:.2f} el={rot.last[1]:.2f}"
                   + ("  (lead-ahead, ahead of current)"
                      if abs(rot.last[0] - cur_az) > 0.05 else "  (first command)"))
+            if live_pos and before:
+                print(f"           [trigger check] stale last-commanded="
+                      f"{before[0]:.2f} (gap {stale_gap:.2f}) vs live "
+                      f"rotctld position={live_pos[0]:.2f} (gap {live_gap:.2f}) "
+                      f"- the live gap is what actually decided this send")
 
         if i % 10 == 0:
             # a genuinely independent query, not a new send and not reusing
@@ -143,6 +151,51 @@ def run_phase(rp, rot, label, base_time, start_az, el, deg_per_sec,
             else:
                 print(f"  t={i:3d}s  [query] failed to read rotctld's position")
     return base_time + timedelta(seconds=duration_s), start_az + deg_per_sec * duration_s
+
+
+def wait_for_arrival(rot, target_az, target_el, tolerance_deg=1.0,
+                      assumed_speed_deg_per_sec=2.0, extra_buffer_s=10.0,
+                      poll_interval_s=0.5):
+    """Actually confirms arrival via get_pos() before returning, instead
+    of a fixed sleep that can be wrong in either direction - too short if
+    the rotor is slower than expected (starting a test phase from a
+    position that isn't actually settled, confounding the data - exactly
+    what happened last run), or needlessly long if it's already close.
+
+    assumed_speed_deg_per_sec is deliberately conservative (2.0), not the
+    rotor's actual measured max speed (~3.5 for this rotor) - the point
+    is a safe, generous timeout that won't give up early just because the
+    rotor is having an off run (temperature, load, friction), not a tight
+    estimate of best-case travel time."""
+    start_pos = rot.get_pos()
+    if start_pos is None:
+        print("  couldn't query starting position - falling back to a fixed 15s wait")
+        rot.point(target_az, target_el)
+        time.sleep(15)
+        return
+
+    distance = max(abs(target_az - start_pos[0]), abs(target_el - start_pos[1]))
+    max_wait_s = distance / assumed_speed_deg_per_sec + extra_buffer_s
+    print(f"  currently at az={start_pos[0]:.1f} el={start_pos[1]:.1f}, "
+          f"moving to az={target_az:.1f} el={target_el:.1f} "
+          f"({distance:.1f} deg) - allowing up to {max_wait_s:.0f}s "
+          f"(assuming a conservative {assumed_speed_deg_per_sec} deg/sec, "
+          f"plus a {extra_buffer_s:.0f}s buffer)")
+
+    rot.point(target_az, target_el)
+    elapsed = 0.0
+    while elapsed < max_wait_s:
+        time.sleep(poll_interval_s)
+        elapsed += poll_interval_s
+        pos = rot.get_pos()
+        if pos is None:
+            continue
+        if abs(pos[0] - target_az) <= tolerance_deg and abs(pos[1] - target_el) <= tolerance_deg:
+            print(f"  arrived: az={pos[0]:.2f} el={pos[1]:.2f} after {elapsed:.1f}s")
+            return
+    print(f"  WARNING: did not confirm arrival within {max_wait_s:.0f}s - "
+          f"last known position: {rot.get_pos()}. Continuing anyway, but "
+          f"the next phase may start from an unsettled position.")
 
 
 def main():
@@ -169,8 +222,7 @@ def main():
 
     start_az, el = 90.0, 30.0
     print(f"\nSettling at a known starting position first: az={start_az} el={el} ...")
-    rot.point(start_az, el)
-    time.sleep(5)  # give it time to actually arrive before the real test starts
+    wait_for_arrival(rot, start_az, el)
 
     base_time = datetime.now(timezone.utc)
     t_end, az_end = run_phase(rp, rot, "Phase 1: fast slew", base_time,
