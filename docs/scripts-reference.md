@@ -228,8 +228,11 @@ python3 run_passes.py --record-iq no
 ```
 `--verbose` prints a live el/az/freq/Doppler line while a pass is
 active - `--status-interval` (default `5`) controls how often that line
-actually redraws; the underlying Doppler/rotor updates still happen
-every second regardless, only the printed line is throttled, since a
+actually redraws; Doppler correction itself still recomputes every
+second regardless, but the rotor only gets a new command when the
+satellite has actually drifted enough to warrant one (lead-ahead
+targeting - see [Architecture](architecture.md) - not a fixed cadence).
+Only the printed line is throttled by this flag, since a
 real terminal session copied to a log file can otherwise look like a
 flood of scrolling lines even though only one line was ever changing in
 place. By default, when a pass ends (however it ends - normal LOS, an
@@ -242,4 +245,26 @@ rise, rather than left wherever the finished pass happened to end -
 [Adding a satellite](adding-satellites.md)
 for what that requires. Every other satellite launches exactly as
 before, regardless of this flag.
+
+## test_rotor_leadahead.py
+
+Standalone verification for the lead-ahead rotor logic - imports
+`Rotctld`, `find_lead_ahead_target`, and `maybe_update_rotor` directly
+from `run_passes.py` by file path (not a reimplementation), so it tests
+the actual deployed code. Drives your real, already-running `rotctld`
+with synthetic, constant-velocity motion (not a real TLE), so expected
+behavior can be worked out by hand rather than depending on whatever a
+real satellite happens to be doing right now:
+```
+python3 test_rotor_leadahead.py
+python3 test_rotor_leadahead.py --host 127.0.0.1 --port 4533
+```
+This will physically move the antenna, same as a real pass. Runs a fast
+slew and a slow slew, each printing every actual `SENT` command (with
+whether it was a genuine lead-ahead target ahead of the current
+position) plus an independent `rotctld` position query every 10
+seconds - useful for watching the rotor's own physical digital display
+against what the script separately reads back, to build real confidence
+the two agree. No pass, schedule, or TLE needed - useful any time, not
+just while waiting for a real satellite.
 

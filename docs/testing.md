@@ -47,7 +47,12 @@ python3 send_test_frames.py --satellite GEOSCAN-2 --synthetic 5
 ## Verifying Doppler and rotor control are working
 
 **From inside the script:** `python3 run_passes.py --verbose` prints a
-line every second while a pass is active:
+line while a pass is active, by default every 5 seconds
+(`--status-interval` controls this) - the Doppler-corrected frequency
+updates every second regardless of this setting, but the rotor line
+only actually changes when the satellite has drifted enough to warrant
+a new command (lead-ahead targeting, not a fixed cadence - see
+[Architecture](architecture.md)):
 ```
 [GEOSCAN-2] el= 31.5 az=214.3  freq=436,158,412 Hz (doppler -1,588 Hz)
 ```
@@ -66,10 +71,19 @@ or, with Hamlib's own clients:
 rigctl -m 2 -r 127.0.0.1:4532 f
 rotctl -m 2 -r 127.0.0.1:4533 p
 ```
-Query twice a few seconds apart *during an active pass* - the numbers
-should change each time; outside a pass they'll sit at whatever idle
-value the daemon started with (rigctld's Dummy backend defaults to
-145000000 Hz), which is expected, not broken.
+Query the frequency twice a few seconds apart *during an active pass* -
+it should change each time, since Doppler correction recomputes every
+second. The rotor's reported position is different: it may *not* change
+between two quick queries, even during an active pass, if the satellite
+hasn't yet drifted past the lead-ahead threshold - a long quiet stretch
+is correct, not broken. `test_rotor_leadahead.py` exercises this
+directly against your real rotctld with synthetic, predictable motion
+(no real pass needed) if you want to verify the rotor side thoroughly,
+including watching the rotor's own physical display against periodic
+independent position queries.
+Outside a pass both will sit at whatever idle value the daemon started
+with (rigctld's Dummy backend defaults to 145000000 Hz), which is
+expected, not broken.
 
 Be careful testing the rotor manually with a real `P <az> <el>` command -
 unlike rigctld's Dummy backend, `rotctld` is driving real hardware and

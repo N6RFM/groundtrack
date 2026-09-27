@@ -553,8 +553,11 @@ class GroundtrackGUI(tk.Tk):
             "Start run_passes.py",
             "Status line update interval (seconds) - how often the "
             "el/az/freq/Doppler line refreshes while a pass is active. "
-            "Doppler/rotor tracking itself still updates every second "
-            "regardless; this only controls how often the line is redrawn:",
+            "Doppler correction itself still recomputes every second "
+            "regardless; the rotor only gets a new command when the "
+            "satellite has actually drifted enough (lead-ahead targeting, "
+            "not a fixed cadence) - this setting only controls how often "
+            "the line is redrawn:",
             initialvalue=5.0, minvalue=0.1)
         if interval is None:
             return

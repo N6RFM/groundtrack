@@ -593,8 +593,19 @@ client reconnects automatically once it's up.
 To run with no rotor at all, remove `rot_host`/`rot_port` from
 `satellites.yaml`; `run_passes.py` prints a note and skips antenna control.
 
-Az/el updates are only sent when position has moved more than 1 degree
-since the last command, to avoid flooding the rotor - adjust
-`min_move_deg` in `Rotctld.point()` inside `run_passes.py` if your rotor
-wants finer or coarser steps.
+Az/el updates use lead-ahead targeting, ported from a proven, working
+implementation ([N6RFM/Gpredict_K4KDR_N6RFM](https://github.com/N6RFM/Gpredict_K4KDR_N6RFM)'s
+own rotor controller): a new position is only sent once the satellite has
+drifted `threshold_deg` (default `5.0`) from wherever the rotor was last
+commanded, and when it is sent, it's not the satellite's instantaneous
+position but a predicted future point - found by binary-searching for the
+furthest time (up to the pass's own LOS) where the satellite still sits
+within `threshold_deg` of its current position. This gives the rotor a
+real destination to travel toward continuously, rather than repeatedly
+redirecting it toward a target that's already stale by the time each
+command lands. There is no time-based forced send at all - a slow-moving
+stretch of a pass can go a long time between commands, which is correct,
+not a gap. See `find_lead_ahead_target()` and `maybe_update_rotor()` in
+`run_passes.py`; adjust `threshold_deg` there if your rotor wants finer
+or coarser steps.
 

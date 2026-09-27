@@ -298,8 +298,10 @@ def main():
                      help="print each Doppler/rotor update while a pass is active")
     ap.add_argument("--status-interval", type=float, default=5.0, metavar="SECONDS",
                      help="how often to print the verbose status line during a pass "
-                          "(default: 5s) - Doppler/rotor tracking itself still updates "
-                          "every second regardless, only the printed line is throttled")
+                          "(default: 5s) - Doppler correction itself still recomputes "
+                          "every second regardless; the rotor only moves when it's "
+                          "actually drifted enough (lead-ahead targeting, not a fixed "
+                          "cadence). Only the printed line is throttled by this flag")
     ap.add_argument("--no-preposition", action="store_true",
                      help="don't pre-position the rotor toward the next approved pass "
                           "when the current one ends - leave it wherever the pass "
@@ -405,10 +407,12 @@ def main():
                             status = (f"[{sat_cfg['name']}] el={el_deg:5.1f} az={az_deg:5.1f}  "
                                       f"freq={corrected:,.0f} Hz (doppler {dop:+.0f} Hz)  "
                                       f"LOS in {remaining}")
-                            # the underlying Doppler/rotor updates above still
-                            # happen every second regardless - only how often
-                            # this line actually gets WRITTEN is throttled,
-                            # for both paths. For a real terminal, write_status()
+                            # Doppler correction above still recomputes every
+                            # second regardless; the rotor only actually moves
+                            # when it's drifted enough to warrant a new
+                            # lead-ahead target, not on a fixed cadence. Only
+                            # how often this STATUS LINE gets WRITTEN is
+                            # throttled here, for both paths. For a real terminal, write_status()
                             # only overwrites the same line, but a terminal
                             # emulator's own scrollback/copy buffer can still
                             # preserve every individual \r-updated write as its
