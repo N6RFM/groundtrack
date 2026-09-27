@@ -24,13 +24,13 @@ inside one that already exists - is always a manual step in GRC.**
 Copying an existing satellite's `.grc` as a starting point and adapting
 it is a perfectly reasonable way to do that.
 
-**`vet_grc.py`** is the one narrow, deliberate exception worth being
-precise about, since it's easy to mistake for a reversal of the rule
-above rather than a careful exception to it. Read-only inspection was
-never in question - checking a `.grc`'s content is exactly what
-`preflight.py` already does, and `vet_grc.py` extends that with checks
-for the specific bugs this project has actually hit: GRC's own
-copy/paste-collision renaming (a block ending up named
+**`vet_grc.py`** and **`locate_decoders.py`** are the two narrow,
+deliberate exceptions worth being precise about, since they're easy to
+mistake for a reversal of the rule above rather than careful exceptions
+to it. Read-only inspection was never in question - checking a `.grc`'s
+content is exactly what `preflight.py` already does, and `vet_grc.py`
+extends that with checks for the specific bugs this project has actually
+hit: GRC's own copy/paste-collision renaming (a block ending up named
 `network_socket_pdu_0_0` instead of `network_socket_pdu_0`), and the
 `gpredict_doppler`-instead-of-`rig_freq_poller` mistake described below.
 Its `--fix` flag *does* write to a `.grc`, but only for the two cases
@@ -43,6 +43,17 @@ shows a diff before writing and keeps a `.bak` of the original. Missing
 `rig_freq_poller`, a leftover waterfall, an incorrect `osmosdr_source`
 tuning formula - none of that is something `--fix` will ever attempt;
 those still mean opening GRC.
+
+`locate_decoders.py` is the other exception, and a narrower one: it only
+ever sets the `file` parameter on an existing `satellites_satellite_decoder`
+block, given a decoder `.yml` it found by searching a directory tree for
+a name or NORAD match - see [scripts-reference.md](scripts-reference.md)
+for the full usage. Worth knowing before running it: unlike `vet_grc.py
+--fix`'s careful raw-text editing, this one round-trips the whole file
+through PyYAML (load, modify, dump), which will reformat the entire
+`.grc`'s structure as a side effect - coordinates and formatting may
+shift even though nothing about the flowgraph's actual wiring changes.
+Review the diff before committing, same as any other `.grc` change.
 
 **Decode-and-relay** (has a `gr-satellites` decoder definition, feeds a
 downstream decoder GUI over KISS):

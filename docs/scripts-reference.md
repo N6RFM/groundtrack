@@ -283,3 +283,61 @@ against what the script separately reads back, to build real confidence
 the two agree. No pass, schedule, or TLE needed - useful any time, not
 just while waiting for a real satellite.
 
+## ci_check.py
+
+The subset of `preflight.py`'s checks that can actually run on a bare CI
+runner - no GNU Radio, no Hamlib, no real TLE file needed. Checks: every
+`.py` file compiles (catches a genuine syntax error before anyone runs
+anything), `satellites.example.yaml` parses and each entry's basics are
+present, its `freq`/`nfreq` match the corresponding `.grc`,
+`network_socket_pdu` hasn't reverted to `TCP_SERVER` where a client
+connection was intended, and no port collisions across the fleet. Exists
+because these are exactly the classes of bug that have actually shipped
+before - catching them here means before a PR merges, not after someone
+runs `preflight.py` on real hardware and wonders why:
+```
+python3 ci_check.py
+```
+
+## locate_decoders.py
+
+Searches a directory tree for a satellite's decoder `.yml` (matched by
+NORAD ID or name appearing in the filename) and patches the matching
+`satellites_satellite_decoder` block's `file` parameter in that
+satellite's `.grc` directly - see [Adding a
+Satellite](adding-satellites.md) for why this is one of only two
+narrow, deliberate exceptions to "nothing here touches `.grc` files":
+```
+python3 locate_decoders.py ~/Launches
+python3 locate_decoders.py ~/Launches --dry-run
+```
+Skips ambiguous cases (more than one plausible match) rather than
+guessing, printing every candidate so you can patch that one by hand
+instead. Worth knowing before running it for real: this round-trips the
+whole `.grc` through PyYAML (load, modify, dump), unlike `vet_grc.py
+--fix`'s careful raw-text editing - it will reformat the file's
+structure as a side effect, so review the diff before committing, same
+as any other `.grc` change. Remember to `grcc` the `.grc` afterward, same
+as any other manual edit - this only ever touches the file on disk, not
+the compiled `.py`.
+
+## send_test_frames.py
+
+Sends real KISS frames through `relay.py` to your downstream decoder
+without waiting for an actual pass - useful for confirming the whole
+decode pipeline works before ever pointing an antenna at anything.
+Connects to the satellite's `producer_port` as if it were the flowgraph
+itself, so it exercises the exact same path a real pass uses; `relay.py`
+must already be running. Two modes:
+```
+python3 send_test_frames.py --satellite GEOSCAN-2 --replay geoscan2.kss
+python3 send_test_frames.py --satellite GEOSCAN-2 --synthetic 5
+```
+`--replay` sends real frames captured during a past pass (from
+`satellites_kiss_file_sink_0`'s own output file) - these decode
+meaningfully, since it's genuine data. `--synthetic N` sends `N`
+garbage-payload frames purely to prove the relay/decoder connection and
+KISS framing work at all; your decoder will likely flag CRC/parse errors
+on these, which is expected - the point is confirming frames arrive,
+not that they mean anything. `--count`/`--delay` control how many frames
+and how far apart, for either mode.
