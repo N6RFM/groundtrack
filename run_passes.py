@@ -491,8 +491,16 @@ def main():
                         if sat_cfg.get("record_iq_toggle", False):
                             # only satellites whose .grc actually has the
                             # record_iq Parameter block wired up get this flag -
-                            # everything else launches exactly as before
-                            cmd += ["--record-iq", "1" if args.record_iq == "yes" else "0"]
+                            # everything else launches exactly as before.
+                            # A per-pass override in schedule.yaml (set via
+                            # toggle_pass_record_iq.py) takes priority over
+                            # the session-wide --record-iq default, if set.
+                            per_pass_override = p.get("record_iq")
+                            if per_pass_override is not None:
+                                record_iq_value = per_pass_override
+                            else:
+                                record_iq_value = args.record_iq == "yes"
+                            cmd += ["--record-iq", "1" if record_iq_value else "0"]
                         active_proc = subprocess.Popen(cmd)
                         active_pass = p
                         time.sleep(3)  # let the flowgraph come up before polling rigctld

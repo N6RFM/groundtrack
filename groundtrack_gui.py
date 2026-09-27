@@ -229,6 +229,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.plan_passes_auto).pack(side="left", padx=4)
         ttk.Button(row4, text="Plan passes (interactive, new window)",
                    command=self.plan_passes_interactive).pack(side="left")
+        ttk.Button(row4, text="Toggle IQ for pass (new window)",
+                   command=self.toggle_pass_record_iq).pack(side="left", padx=4)
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
@@ -596,6 +598,13 @@ class GroundtrackGUI(tk.Tk):
             self.log(self.output.get("1.0", tk.END) +
                      "\nApprove/reject passes there, then use 'Show schedule' "
                      "here once you're done.")
+
+    def toggle_pass_record_iq(self):
+        """Interactive - lists the queue and prompts for pass number(s) and
+        on/off/clear, same reasoning as everywhere else that reads from
+        stdin: needs a real terminal, not a captured subprocess."""
+        cmd = [sys.executable, "toggle_pass_record_iq.py"]
+        self.spawn_in_terminal(cmd)
 
     def _extra_output_form(self, parent):
         """Small modal sub-form for one extra_outputs entry. Returns a
