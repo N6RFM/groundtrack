@@ -139,6 +139,17 @@ target is accounted for rather than ignored.
   limit surfaced as advance information rather than something you
   discover mid-pass.
 
+Both are set the same way, at the top level of `satellites.yaml`
+alongside `rot_host`/`rot_port` - not per-satellite, since both describe
+the physical rotor itself, not any one satellite:
+```yaml
+rot_host: 127.0.0.1
+rot_port: 4533
+rot_threshold_deg: 3.0      # optional - defaults to 5.0 if omitted
+rot_max_deg_per_sec: 4.5    # optional - the peak-rate warning is simply
+                            # off in plan_passes.py if this is omitted
+```
+
 ### Measuring your rotor's real capability
 
 Don't guess at `rot_max_deg_per_sec` from watching a pass or reading a
