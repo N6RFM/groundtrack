@@ -57,13 +57,21 @@ class Rotctld:
             return None
 
 
-def wait_for_arrival(rot, target_az, target_el, tolerance_deg=0.5,
+def wait_for_arrival(rot, target_az, target_el, tolerance_deg=1.0,
                       assumed_speed_deg_per_sec=2.0, extra_buffer_s=10.0,
-                      poll_interval_s=0.25, log_samples=None):
+                      poll_interval_s=0.25, log_samples=None,
+                      progress_every_s=2.0):
     """Same approach as test_rotor_leadahead.py's own settle step -
     conservative timeout, actual polling for real confirmed arrival, not
     a fixed sleep. If log_samples is given, appends (elapsed_s, az, el)
-    for every poll, for the caller to compute an achieved rate from."""
+    for every poll, for the caller to compute an achieved rate from.
+
+    Prints a progress line every progress_every_s seconds while waiting -
+    this used to poll completely silently, which meant a wait that looked
+    "stuck" gave zero information about why: whether the rotor had
+    genuinely stalled, or was sitting a fraction of a degree outside
+    tolerance_deg the whole time. Silence with no diagnostic is worse
+    than a few extra printed lines."""
     start_pos = rot.get_pos()
     if start_pos is None:
         raise SystemExit("Couldn't query starting position - is rotctld reachable?")
@@ -74,30 +82,44 @@ def wait_for_arrival(rot, target_az, target_el, tolerance_deg=0.5,
     rot.point(target_az, target_el)
     start_time = time.monotonic()
     elapsed = 0.0
+    last_progress = 0.0
     while elapsed < max_wait_s:
         time.sleep(poll_interval_s)
         elapsed = time.monotonic() - start_time
         pos = rot.get_pos()
         if pos is None:
+            if elapsed - last_progress >= progress_every_s:
+                print(f"    ... {elapsed:.1f}s: get_pos() query failed")
+                last_progress = elapsed
             continue
         if log_samples is not None:
             log_samples.append((elapsed, pos[0], pos[1]))
-        if abs(pos[0] - target_az) <= tolerance_deg and abs(pos[1] - target_el) <= tolerance_deg:
+        daz = abs(pos[0] - target_az)
+        delv = abs(pos[1] - target_el)
+        if daz <= tolerance_deg and delv <= tolerance_deg:
             return True
+        if elapsed - last_progress >= progress_every_s:
+            print(f"    ... {elapsed:.1f}s: az={pos[0]:.2f} (target "
+                  f"{target_az:.1f}, gap {daz:.2f}), el={pos[1]:.2f} "
+                  f"(target {target_el:.1f}, gap {delv:.2f}) - "
+                  f"tolerance is {tolerance_deg}")
+            last_progress = elapsed
     return False
 
 
-def measure_one_move(rot, from_az, to_az, el):
+def measure_one_move(rot, from_az, to_az, el, tolerance_deg=1.0):
     """Settles at from_az first (untimed), then times the move to to_az,
     logging samples throughout - returns (achieved_rate_deg_per_sec,
     samples) or (None, samples) if it never confirmed arrival."""
     print(f"  settling at az={from_az} before starting the timed move ...")
-    if not wait_for_arrival(rot, from_az, el):
+    if not wait_for_arrival(rot, from_az, el, tolerance_deg=tolerance_deg):
         print("  WARNING: didn't confirm settling - measurement may be off")
+    else:
+        print(f"  settled OK at az={from_az}")
 
     samples = []
     print(f"  timed move: az={from_az} -> az={to_az} ...")
-    arrived = wait_for_arrival(rot, to_az, el, log_samples=samples)
+    arrived = wait_for_arrival(rot, to_az, el, tolerance_deg=tolerance_deg, log_samples=samples)
     if not samples:
         return None, samples
 
@@ -124,6 +146,11 @@ def main():
     ap.add_argument("--distances", type=float, nargs="+", default=[20.0, 60.0, 120.0],
                      help="azimuth distances (degrees) to test moves over (default: 20 60 120)")
     ap.add_argument("--el", type=float, default=30.0, help="elevation to hold throughout (default: 30)")
+    ap.add_argument("--tolerance", type=float, default=1.0,
+                     help="how close (degrees) counts as arrived (default: 1.0) - "
+                          "many rotors have a real precision limit around this size; "
+                          "if a settle keeps reporting a persistent ~1 deg gap that "
+                          "never closes, try --tolerance 2")
     ap.add_argument("--base-az", type=float, default=90.0,
                      help="starting azimuth for the first move (default: 90)")
     args = ap.parse_args()
@@ -146,7 +173,7 @@ def main():
     for dist in args.distances:
         target = az + dist
         print(f"\n=== Move of {dist:.0f} degrees ===")
-        rate, _ = measure_one_move(rot, az, target, args.el)
+        rate, _ = measure_one_move(rot, az, target, args.el, tolerance_deg=args.tolerance)
         if rate is not None:
             results.append((dist, rate))
         az = target  # chain moves so we don't need to backtrack every time
@@ -161,8 +188,23 @@ def main():
         print(f"  {dist:5.0f} deg move: {rate:.2f} deg/sec achieved")
 
     fastest = max(r for _, r in results)
-    conservative = fastest * 0.7  # 30% safety margin, not a measured fact - a judgment call
-    print(f"\nFastest achieved: {fastest:.2f} deg/sec")
+    slowest = min(r for _, r in results)
+    if fastest - slowest > 0.5 * fastest:
+        print(f"\nNOTE: measured rates vary a lot ({slowest:.2f} to {fastest:.2f} "
+              f"deg/sec) - possibly motor current-limiting/heating under a "
+              f"longer sustained move, or a mechanical characteristic "
+              f"specific to the azimuth range tested. A real pass involves "
+              f"sustained tracking over many seconds to minutes, much more "
+              f"like your longest test move than a short burst - so the "
+              f"suggestion below is deliberately based on the SLOWEST "
+              f"measured rate, not the fastest, since that's more "
+              f"representative of real tracking conditions. Worth repeating "
+              f"a long move over a different azimuth range to see if the "
+              f"slowdown follows the move's duration or a specific part of "
+              f"the sky.")
+    conservative = slowest * 0.7  # 30% safety margin, not a measured fact - a judgment call
+    print(f"\nSlowest achieved (used as the basis, being the more "
+          f"representative case for a real pass): {slowest:.2f} deg/sec")
     print(f"Suggested rot_max_deg_per_sec (with a 30% safety margin): "
           f"{conservative:.2f}")
     print(f"\nAdd this to satellites.yaml's top level (alongside rot_host/"
