@@ -659,7 +659,7 @@ blocks:
     bus_structure: null
     coordinate: [760, 136.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: rig_freq_poller_0
   id: epy_block
   parameters:
