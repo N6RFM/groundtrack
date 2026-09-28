@@ -233,18 +233,48 @@ def check_grc(name, grc_path, sat):
             check(f"{name}: decoder file left blank (relying on norad lookup)", True, level=WARN)
 
     sink_block = blocks.get("filerepeater_AdvFileSink_0")
-    if sink_block:
+    if sat.get("record_iq_toggle", False) and sink_block is None:
+        check(f"{name}: recordOnStart wired to record_iq (record_iq_toggle "
+              f"is set)", False,
+              f"record_iq_toggle is true, but this .grc has no "
+              f"filerepeater_AdvFileSink_0 block at all - there's nothing "
+              f"for the toggle to control, so run_passes.py's --record-iq "
+              f"flag would have no effect on this satellite despite the "
+              f"declared capability")
+    elif sink_block:
         record_on_start = str(sink_block["parameters"].get("recordOnStart", ""))
         if sat.get("record_iq_toggle", False):
             # this satellite's Record On Start is meant to be the expression
             # bool(record_iq) - a runtime-controllable Parameter block, not a
             # fixed literal - so check that it's actually wired to record_iq,
             # not that it equals the old literal True
+            wired = "record_iq" in record_on_start
             check(f"{name}: recordOnStart wired to record_iq (record_iq_toggle "
-                  f"is set)", "record_iq" in record_on_start,
+                  f"is set)", wired,
                   f"got {record_on_start!r} - expected something like "
                   f"bool(record_iq) so run_passes.py's --record-iq flag can "
                   f"actually control this satellite")
+            if wired:
+                # the text says bool(record_iq), but does a Parameter block
+                # actually named record_iq exist, and is it enabled? GRC
+                # excludes disabled blocks from the compiled output
+                # entirely, so a disabled Parameter block here would likely
+                # fail to compile at all despite this text looking correct
+                param_block = blocks.get("record_iq")
+                if param_block is None:
+                    check(f"{name}: record_iq Parameter block actually exists",
+                          False,
+                          f"recordOnStart references record_iq, but no block "
+                          f"named record_iq exists in this .grc at all - "
+                          f"grcc will fail to compile this flowgraph")
+                else:
+                    state = param_block.get("states", {}).get("state", "enabled")
+                    check(f"{name}: record_iq Parameter block is enabled",
+                          state == "enabled",
+                          f"got state={state!r} - a disabled block is excluded "
+                          f"from the compiled output entirely, so this would "
+                          f"likely fail to compile despite recordOnStart's "
+                          f"text looking correct")
         else:
             check(f"{name}: recordOnStart is True", record_on_start.lower() == "true")
 
