@@ -44,9 +44,10 @@ Refuses to start a second instance against the same folder (a
 left over from a crash is detected and cleared automatically). Set
 `notify: true` in `satellites.yaml` for desktop notifications via
 `notify-send` (silently does nothing if `notify-send` isn't available,
-e.g. on a headless box) - fires at AOS and LOS, and also on a pass
-failing (a flowgraph exiting early, or an error caught during tracking),
-not just on success.
+e.g. on a headless box) - fires at AOS (once per pass, not again on a
+retry) and LOS, and on every failed launch attempt: a flowgraph exiting
+early (the message says which attempt of 3, and when it's giving up) or
+an error caught during tracking - not just on success.
 
 **`relay.py`** - persistent process, independent of any pass, that lets
 your downstream KISS decoder hold one stable connection across every
@@ -231,7 +232,10 @@ expression than a plain `True`/`False`, a block named `record_iq` exists but
 isn't a Parameter block or is disabled, there's no Advanced File Sink, or the
 file isn't laid out the way GRC writes it. It does not recompile and does not
 touch `satellites.yaml`. Its own output ends with the exact commands to run
-next.
+next. If the flowgraph is open in GRC, close it without saving first and
+reopen it afterwards - GRC doesn't notice a file changing on disk, and
+saving from the stale window would silently undo the change (see "Known
+caveats" in [Troubleshooting](troubleshooting.md)).
 
 ## suggest_extra_outputs.py
 
@@ -324,7 +328,8 @@ net, which can fire before the scheduled LOS) is never relaunched. Every real
 pass's actual outcome (started/completed/crashed/error, and which
 `record_iq` value was actually used) is appended to `pass_log.jsonl` -
 see `show_pass_log.py` below. `notify: true` in `satellites.yaml` also
-triggers a desktop notification on a pass failing, not just on AOS/LOS.
+triggers a desktop notification on each failed launch attempt, not just
+on AOS/LOS.
 
 ## toggle_pass_record_iq.py
 
@@ -354,19 +359,24 @@ needing to run this interactively.
 Human-readable summary of `pass_log.jsonl` - `run_passes.py`'s
 persistent, append-only record of what actually happened during each
 real pass, as opposed to `schedule.yaml`'s record of what was predicted
-or approved. One JSON object per line (`started`, then exactly one of
-`completed`/`crashed`/`error`); this tool correlates each pair by
-satellite and AOS time into one row per real pass:
+or approved. One JSON object per line: a `started` record for each
+launch attempt (with its `attempt` number and the `record_iq` value
+actually used), then how that attempt ended - `crashed` (exit code,
+`attempt`, and `will_retry`), `error`, or, for a pass that ran to its end,
+`completed` (with why: the scheduled LOS, or the elevation safety net).
+This tool correlates them by satellite and AOS time into one row per real
+pass, showing how it finally ended:
 ```
 python3 show_pass_log.py
 python3 show_pass_log.py --last 20
 python3 show_pass_log.py --failures-only
 ```
 A pass that needed more than one launch attempt shows the count (e.g.
-`3 launch attempts`). A pass with a `started` record but no matching outcome is called out
-explicitly rather than silently dropped - it usually means `run_passes.py`
-itself was killed mid-pass, not just the flowgraph crashing (which
-would have logged its own `crashed` outcome).
+`3 launch attempts`). A pass with a `started` record but no matching
+outcome is called out explicitly rather than silently dropped - it usually
+means `run_passes.py` itself was killed mid-pass, not just the flowgraph
+crashing (which would have logged its own `crashed` outcome).
+`pass_log.jsonl` is local run data and is gitignored.
 
 ## test_rotor_throttle.py
 

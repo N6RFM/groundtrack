@@ -276,6 +276,10 @@ def main():
         wired.append(name)
 
     if wired:
+        print("\nIf any of these flowgraphs is open in GRC, close it WITHOUT saving "
+              "before going on, and reopen it afterwards: GRC doesn't notice the "
+              "file changed on disk, and saving (or Generate/Run) from the old "
+              "window would silently undo this.")
         print("\nNext - recompile, then declare the capability (nothing changes "
               "for these satellites until the flag is passed; the default "
               "preserves what Record On Start was before):")

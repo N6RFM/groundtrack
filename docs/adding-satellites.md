@@ -17,10 +17,14 @@ embedded block. Each was fixable, but the pattern itself - a script
 trying to safely manipulate GNU Radio's nested block-graph structure -
 kept finding new ways to fail quietly. `satellites.yaml` is a simple flat
 config format; a `.grc` is a complex graph GRC itself already knows how
-to edit correctly. So the scope boundary is now firm: **every script
-here only ever reads or writes `satellites.yaml`. Building or editing a
-`.grc` - a brand new satellite, or a decoder/relay/`extra_outputs` block
-inside one that already exists - is always a manual step in GRC.**
+to edit correctly. So the scope boundary is firm: **no script here
+builds or designs a `.grc` - a brand new satellite, or a decoder/relay/
+`extra_outputs` block inside one that already exists, is always a manual
+step in GRC.** Three narrow, single-purpose tools do make small mechanical
+edits to an existing `.grc` (a rename, a decoder path, one wired
+parameter) - described below - and none of them creates or changes a
+connection between blocks. Everything else here only ever reads or writes
+`satellites.yaml`.
 Copying an existing satellite's `.grc` as a starting point and adapting
 it is a perfectly reasonable way to do that.
 
@@ -63,6 +67,15 @@ diff and asks first, keeps a `.bak`, re-checks its own result (restoring the
 original if the check fails), refuses anything that needs a human decision,
 and does nothing to a flowgraph that's already wired. See "Toggling IQ
 recording" below and [scripts-reference.md](scripts-reference.md).
+
+**If the flowgraph is open in GRC when any of these three runs, close it
+first - discarding, not saving - and reopen it afterwards.** GRC doesn't
+notice a file changing underneath it: it keeps showing the copy it
+loaded, so the edit looks like it never happened, and saving (or
+Generate/Run, which rebuilds the `.py` from what's on screen) silently
+writes that older copy back over the tool's change. The edit is on disk
+either way; a stale window is just a stale view - but a dangerous one to
+act on.
 
 **Decode-and-relay** (has a `gr-satellites` decoder definition, feeds a
 downstream decoder GUI over KISS):
@@ -190,8 +203,10 @@ python3 edit_satellite.py ASRTU-1_SSDV --extra-output-name ssdv_viewer \
     --extra-output-port 9985 --extra-output-bridge-port 19985
 python3 edit_satellite.py ASRTU-1_SSDV --remove-extra-output ssdv_viewer
 ```
-Only touches the fields you actually pass, and only ever `satellites.yaml`
-- never the `.grc`. If a change here (a new frequency, a corrected
+Only touches the fields you actually pass, and only ever writes
+`satellites.yaml` - never the `.grc` (`--record-iq-toggle` does open the
+`.grc` to check it's wired before setting the flag, but only reads it).
+If a change here (a new frequency, a corrected
 NORAD) needs the `.grc` to match, that's still your own separate edit in
 GRC; the script prints a note when that applies. Refuses a NORAD or port
 collision with another configured satellite rather than silently

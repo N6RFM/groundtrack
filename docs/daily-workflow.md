@@ -19,6 +19,14 @@ before starting `run_passes.py` for a session. It exits non-zero if
 anything failed, so it's also cron/CI-friendly if you want to wire it into
 your daily TLE-refresh routine.
 
+`run_passes.py` does **not** run these checks for you. One overnight run
+launched a misconfigured satellite's flowgraph - which died instantly -
+hundreds of times before anyone noticed. `run_passes.py` now caps launch
+retries at 3 and re-verifies at startup the one setting that caused that
+(that a flowgraph really accepts `--record-iq` when `record_iq_toggle` is
+set), but this step is still what catches config problems before a session
+instead of during one.
+
 For a deeper check that actually launches each flowgraph briefly (using
 real SDR hardware) to confirm it starts without crashing and correctly
 connects out to the relay:
@@ -43,6 +51,9 @@ python3 doctor.py
 # 3. plan: predict upcoming passes and approve/reject them
 python3 plan_passes.py --hours 24 --interactive
 
+# 3b. (optional) turn IQ recording on or off for specific queued passes
+python3 toggle_pass_record_iq.py
+
 # 4. start the persistent relay (leave running - only needs restarting if it dies;
 #    only needed if at least one configured satellite uses one)
 nohup python3 relay.py > relay.log 2>&1 &
@@ -56,6 +67,9 @@ rotctld -m 607 -r /dev/ttyUSB2 &
 
 # 7. execute: waits for AOS, launches flowgraphs, drives Doppler + rotor
 python3 run_passes.py --verbose
+
+# 8. afterwards: what actually happened, one row per pass
+python3 show_pass_log.py
 ```
 
 Steps 3-6 only need to be started once per session (they're long-running);
@@ -74,7 +88,10 @@ python3 show_queue.py
 ```
 This reads `schedule.yaml` directly and prints every `approved` pass,
 sorted by AOS, with a status column (`past` / `ACTIVE` / `NEXT` /
-`upcoming`), duration, and max elevation.
+`upcoming`), duration, max elevation, and a `RECORD_IQ` column: `ON` or
+`OFF` if that pass has a per-pass override (set with
+`toggle_pass_record_iq.py`), `(default)` if it will follow the session-wide
+`--record-iq`, or `n/a` if that satellite has no `record_iq_toggle`.
 
 To also see unapproved/rejected passes (e.g. ones `plan_passes.py`'s
 overlap resolution dropped):
@@ -82,7 +99,8 @@ overlap resolution dropped):
 python3 show_queue.py --all
 ```
 `schedule.yaml`'s pass fields as of this writing: `name`, `norad`, `aos`,
-`los`, `max_elevation_deg`, `approved`. If `plan_passes.py`'s schema ever
+`los`, `max_elevation_deg`, `peak_rate_deg_per_sec`, `approved`, and
+optionally `record_iq` (the per-pass override). If `plan_passes.py`'s schema ever
 changes, update the key lists near the top of `show_queue.py` to match.
 
 ### Starting from an uncertain state

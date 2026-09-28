@@ -149,6 +149,16 @@ config-only checks can't see.
 
 ## Known caveats
 
+- **GRC doesn't reload a `.grc` that changed on disk**: `wire_record_iq.py`,
+  `vet_grc.py --fix`, and `locate_decoders.py` (and any edit made from
+  outside GRC) change the file, but a GRC window that already has it open
+  keeps showing the copy it loaded - the new block or renamed field simply
+  isn't there on screen. That's a stale view, not a failed edit (check with
+  `grep`, or `python3 preflight.py`, which reads the real file), and it's a
+  dangerous one to act on: saving, or Generate/Run - which rebuilds the
+  `.py` from what's on screen - silently writes the old copy back over the
+  change. Close the flowgraph in GRC (discarding, not saving) before
+  running one of these tools, and reopen it afterwards.
 - **Single SDR**: only one flowgraph runs at a time (highest elevation
   wins among approved, in-window passes; a running satellite is not
   pre-empted). Extending to multiple SDRs means tracking more than one
