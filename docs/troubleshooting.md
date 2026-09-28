@@ -6,6 +6,33 @@
 
 Symptoms we've actually hit, in the order worth checking:
 
+**A satellite's pass "exits early" over and over, with `error: unrecognized
+arguments: --record-iq 1` (or another argument error) printed each time**
+That satellite has `record_iq_toggle: true` in `satellites.yaml`, so
+`run_passes.py` passes it `--record-iq`, but its compiled flowgraph doesn't
+have a `record_iq` Parameter block, so it rejects the flag and exits
+immediately. Two ways out: wire the `.grc` (a `record_iq` Parameter block
+feeding the Advanced File Sink's Record On Start) with `python3
+wire_record_iq.py <name>` followed by `./regen_all.sh` - see [Adding a
+satellite](adding-satellites.md), "Toggling IQ recording" - or, if you don't
+need the toggle for that satellite, turn the flag back off:
+`python3 edit_satellite.py <name> --no-record-iq-toggle`. (Either way the
+satellite keeps recording IQ exactly as its `.grc` always did; the flag only
+controls whether `run_passes.py` passes an option to switch it per run.) `python3
+preflight.py` flags this mismatch before a run ever starts, which is the
+reason to run it (or `doctor.py`) first. Two backstops exist for when that
+step is skipped: `run_passes.py` asks each relevant compiled script whether
+it accepts `--record-iq` at startup and, if it doesn't, prints a warning and
+launches that satellite without the flag instead of crashing it every pass;
+and `edit_satellite.py --record-iq-toggle` now checks the `.grc` itself and
+refuses to set the flag on an unwired satellite, so the bad state is hard to
+create in the first place. Separately, a flowgraph that does die at launch is
+retried at most 3 times, 15 seconds apart, then given up on for that pass -
+earlier versions relaunched it every few seconds for the entire pass window
+(one overnight run logged hundreds of crash/relaunch cycles from a single
+bad pass). Each failed attempt is recorded in `pass_log.jsonl`;
+`python3 show_pass_log.py --failures-only` shows what happened.
+
 **`Connection refused` from `test_downstream.py` or when connecting your
 decoder to a consumer port**
 `relay.py` isn't running (or died). Check with `ps aux | grep relay.py`,

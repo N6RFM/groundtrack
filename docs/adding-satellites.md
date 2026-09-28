@@ -24,8 +24,8 @@ inside one that already exists - is always a manual step in GRC.**
 Copying an existing satellite's `.grc` as a starting point and adapting
 it is a perfectly reasonable way to do that.
 
-**`vet_grc.py`** and **`locate_decoders.py`** are the two narrow,
-deliberate exceptions worth being precise about, since they're easy to
+**`vet_grc.py`**, **`locate_decoders.py`**, and **`wire_record_iq.py`** are
+the narrow, deliberate exceptions worth being precise about, since they're easy to
 mistake for a reversal of the rule above rather than careful exceptions
 to it. Read-only inspection was never in question - checking a `.grc`'s
 content is exactly what `preflight.py` already does, and `vet_grc.py`
@@ -54,6 +54,15 @@ through PyYAML (load, modify, dump), which will reformat the entire
 `.grc`'s structure as a side effect - coordinates and formatting may
 shift even though nothing about the flowgraph's actual wiring changes.
 Review the diff before committing, same as any other `.grc` change.
+
+`wire_record_iq.py` is the third, and the most careful about how it edits:
+it changes exactly one line (the Advanced File Sink's Record On Start) and
+inserts one block (the `record_iq` Parameter block) as *raw text*, never a
+load/dump round-trip, so nothing else in the file is reformatted. It shows a
+diff and asks first, keeps a `.bak`, re-checks its own result (restoring the
+original if the check fails), refuses anything that needs a human decision,
+and does nothing to a flowgraph that's already wired. See "Toggling IQ
+recording" below and [scripts-reference.md](scripts-reference.md).
 
 **Decode-and-relay** (has a `gr-satellites` decoder definition, feeds a
 downstream decoder GUI over KISS):
@@ -201,11 +210,26 @@ dropdown with no way to reference a variable - the fork changes that one
 field's type so it can hold an expression instead. `record_iq_toggle` in
 `satellites.yaml` is a persistent capability flag confirming a
 satellite's `.grc` is wired this way; the actual record-or-not decision
-is normally a session-wide choice made when `run_passes.py` starts:
+is normally a session-wide choice made when `run_passes.py` starts.
+
+**Order matters: wire the `.grc` first, then set the flag.** The quick way:
+```
+python3 wire_record_iq.py BY70-4 JAMX-01     # shows a diff, asks, keeps a .bak
+./regen_all.sh
+```
+By hand in GRC, the same thing is: add a Parameter block with ID
+`record_iq`, type `int`, value `1`; set the Advanced File Sink's Record On
+Start to `bool(record_iq)`; save and recompile. Either way, only then:
 ```
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 python3 edit_satellite.py ASRTU-1_SSDV --no-record-iq-toggle
 ```
+`--record-iq-toggle` checks the `.grc` and refuses, changing nothing, if
+it isn't wired - the flag is not a harmless note to self. Set on a satellite
+whose flowgraph doesn't accept `--record-iq`, every launch of that satellite
+fails on an argument error. (`preflight.py` checks the same wiring, and
+`run_passes.py` re-verifies the compiled script at startup as a last
+backstop; see [Troubleshooting](troubleshooting.md).)
 See [run_passes.py](scripts-reference.md#run_passespy) for the
 `--record-iq` flag this actually enables. That session-wide choice can
 also be overridden for one specific upcoming pass, regardless of

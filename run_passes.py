@@ -65,20 +65,88 @@ def log_pass_event(event, sat_cfg, pass_info, **extra):
     ended). pass_info needs norad, aos_dt, los_dt - both `active_pass`
     and a raw schedule.yaml pass dict already have these, so either can
     be passed directly."""
-    record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "event": event,
-        "satellite": sat_cfg["name"],
-        "norad": pass_info["norad"],
-        "aos": pass_info["aos_dt"].isoformat(),
-        "los": pass_info["los_dt"].isoformat(),
-    }
-    record.update(extra)
     try:
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": event,
+            "satellite": sat_cfg["name"],
+            "norad": pass_info["norad"],
+            "aos": pass_info["aos_dt"].isoformat(),
+            "los": pass_info["los_dt"].isoformat(),
+        }
+        record.update(extra)
         with open(PASS_LOG_PATH, "a") as f:
             f.write(json.dumps(record) + "\n")
-    except OSError:
-        pass
+    except Exception:
+        pass  # a logging problem must never take down the tracking loop
+
+
+# A flowgraph that dies at launch used to be relaunched on the very next
+# loop tick for the whole pass window - nothing remembered that the pass
+# had already failed - producing hundreds of crash/relaunch cycles (and,
+# with logging and notifications on, hundreds of log lines and desktop
+# notifications) for a single bad pass. A launch failure can be genuinely
+# transient (SDR briefly busy), so a few spaced-out retries are allowed,
+# but bounded: after MAX_LAUNCH_ATTEMPTS the pass is given up on for good.
+MAX_LAUNCH_ATTEMPTS = 3
+LAUNCH_RETRY_DELAY_S = 15
+
+
+def pass_key(p):
+    """Identity of one queued pass - (norad, aos), the same pairing
+    show_pass_log.py correlates on."""
+    return (p["norad"], p["aos_dt"])
+
+
+def launch_allowed(key, now, launch_attempts, finished_passes):
+    """False if this pass already ended (normally, or was given up on),
+    has used up its attempts, or is still inside the retry delay after a
+    recent failed launch."""
+    if key in finished_passes:
+        return False
+    state = launch_attempts.get(key)
+    if state is None:
+        return True
+    if state["count"] >= MAX_LAUNCH_ATTEMPTS:
+        return False
+    return (now - state["last"]).total_seconds() >= LAUNCH_RETRY_DELAY_S
+
+
+def note_launch(key, now, launch_attempts):
+    """Records a launch attempt; returns which attempt number this is."""
+    state = launch_attempts.setdefault(key, {"count": 0, "last": now})
+    state["count"] += 1
+    state["last"] = now
+    return state["count"]
+
+
+def crash_outcome(key, launch_attempts, finished_passes):
+    """After a launch/early-exit failure: ('retry', n) if attempts remain,
+    or ('give_up', n) - in which case the pass is marked finished so it's
+    never launched again."""
+    attempt = launch_attempts[key]["count"]
+    if attempt >= MAX_LAUNCH_ATTEMPTS:
+        finished_passes.add(key)
+        return "give_up", attempt
+    return "retry", attempt
+
+
+def script_accepts_flag(script, flag, timeout_s=60):
+    """Asks the compiled flowgraph itself, via its own --help, whether it
+    accepts a flag - the only check that reflects what will actually
+    execute (a .grc can be rewired without the .py being recompiled, or
+    the reverse). GRC-generated scripts parse arguments before creating
+    any Qt/SDR objects, so --help exits without touching hardware.
+    Returns True/False, or None if it couldn't be determined."""
+    try:
+        out = subprocess.run([sys.executable, script, "--help"],
+                              capture_output=True, text=True, timeout=timeout_s)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    text = out.stdout + out.stderr
+    if "usage:" not in text:
+        return None
+    return flag in text
 
 
 def acquire_lock():
@@ -418,6 +486,38 @@ def main():
         print("No rot_host/rot_port in satellites.yaml - antenna will not be steered.")
     ts = load.timescale()
 
+    launch_attempts = {}      # pass_key -> {"count", "last"} - crash-retry accounting
+    finished_passes = set()   # pass_keys that ended (or were given up on): never relaunch
+
+    # A satellite can declare record_iq_toggle: true while its compiled
+    # flowgraph doesn't actually accept --record-iq (the .grc was never
+    # wired, or was rewired but not recompiled). Passing the flag anyway
+    # makes every launch die instantly on an argparse error. Ask each
+    # relevant script directly before the run starts, and if it doesn't
+    # accept the flag, launch without it (the .grc's own baked-in
+    # Record On Start applies) rather than crash on every pass.
+    record_iq_ok = {}
+    for norad, c in sat_cfgs.items():
+        if not c.get("record_iq_toggle", False):
+            continue
+        if not any(p["norad"] == norad for p in passes):
+            continue  # nothing queued for it, no need to check
+        print(f"Verifying {c['script']} accepts --record-iq ...")
+        ok = script_accepts_flag(c["script"], "--record-iq")
+        record_iq_ok[norad] = ok is not False
+        if ok is False:
+            print(f"WARNING: {c['name']} has record_iq_toggle: true in satellites.yaml, "
+                  f"but {c['script']} doesn't accept --record-iq - its .grc likely "
+                  f"isn't wired to a record_iq Parameter block (or wasn't recompiled "
+                  f"after being wired). Launching it WITHOUT the flag; its .grc's own "
+                  f"Record On Start applies. To fix: python3 wire_record_iq.py "
+                  f"{c['name']} then ./regen_all.sh - or, if you don't want the "
+                  f"toggle for it: python3 edit_satellite.py {c['name']} "
+                  f"--no-record-iq-toggle")
+        elif ok is None:
+            print(f"NOTE: couldn't verify {c['script']}'s arguments (timed out or "
+                  f"no usage text) - assuming it accepts --record-iq.")
+
     active_pass = None
     active_proc = None
     is_tty = sys.stdout.isatty()
@@ -437,17 +537,28 @@ def main():
                     if active_proc.poll() is not None:
                         if is_tty:
                             clear_line()
+                        rc = active_proc.returncode
+                        outcome, attempt = crash_outcome(
+                            pass_key(active_pass), launch_attempts, finished_passes)
+                        will_retry = outcome == "retry"
                         print(f"[{sat_cfg['name']}] flowgraph exited early "
-                              f"(code {active_proc.returncode}) - check its output above. "
-                              f"Abandoning this pass; rotor/Doppler stopped for it.")
+                              f"(code {rc}) - check its output above. "
+                              + (f"Attempt {attempt}/{MAX_LAUNCH_ATTEMPTS}; retrying in "
+                                 f"{LAUNCH_RETRY_DELAY_S}s." if will_retry else
+                                 f"Attempt {attempt}/{MAX_LAUNCH_ATTEMPTS}; giving up on "
+                                 f"this pass - rotor/Doppler stopped for it."))
                         if notify_enabled:
                             notify("Satellite pass FAILED",
                                    f"{sat_cfg['name']} - flowgraph exited early "
-                                   f"(code {active_proc.returncode})")
-                        log_pass_event("crashed", sat_cfg, active_pass,
-                                       exit_code=active_proc.returncode)
+                                   f"(code {rc}), attempt {attempt}/{MAX_LAUNCH_ATTEMPTS}"
+                                   + ("" if will_retry else " - giving up"))
+                        log_pass_event("crashed", sat_cfg, active_pass, exit_code=rc,
+                                       attempt=attempt, will_retry=will_retry)
                         active_pass, active_proc = None, None
-                        if not args.no_preposition:
+                        # only move the rotor toward the NEXT pass once we've
+                        # stopped trying this one - pre-positioning away and
+                        # then back on every retry would be pointless motion
+                        if not will_retry and not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
                         time.sleep(1)
                         continue
@@ -468,6 +579,11 @@ def main():
                             active_proc.wait(timeout=10)
                         except subprocess.TimeoutExpired:
                             active_proc.kill()
+                        # this pass is over - without this, an elevation
+                        # safety-net LOS (which fires BEFORE the scheduled
+                        # window closes) would see the pass still "in
+                        # window" and relaunch it immediately
+                        finished_passes.add(pass_key(active_pass))
                         active_pass, active_proc = None, None
                         if not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
@@ -515,6 +631,12 @@ def main():
                         notify("Satellite pass FAILED",
                                f"{sat_cfg['name']} - error during tracking: {e!r}")
                     log_pass_event("error", sat_cfg, active_pass, error=repr(e))
+                    # an exception in the tracking code isn't something a
+                    # blind relaunch fixes - treat the pass as finished so it
+                    # can't loop. (active_pass can already be None here if the
+                    # exception fired after the pass was reset.)
+                    if active_pass is not None:
+                        finished_passes.add(pass_key(active_pass))
                     try:
                         active_proc.terminate()
                         active_proc.wait(timeout=10)
@@ -527,32 +649,37 @@ def main():
             if active_pass is None:
                 for p in passes:
                     if p["aos_dt"] <= now < p["los_dt"]:
+                        key = pass_key(p)
+                        if not launch_allowed(key, now, launch_attempts, finished_passes):
+                            continue  # already ended, given up on, or waiting to retry
                         if is_tty:
                             clear_line()
                         sat_cfg = sat_cfgs[p["norad"]]
-                        print(f"[{sat_cfg['name']}] AOS - launching {sat_cfg['script']}")
-                        if notify_enabled:
+                        attempt = note_launch(key, now, launch_attempts)
+                        print(f"[{sat_cfg['name']}] AOS - launching {sat_cfg['script']}"
+                              + (f" (attempt {attempt}/{MAX_LAUNCH_ATTEMPTS})"
+                                 if attempt > 1 else ""))
+                        if notify_enabled and attempt == 1:
                             notify("Satellite pass starting", f"{sat_cfg['name']} - AOS")
                         cmd = [sys.executable, "-u", sat_cfg["script"]]
-                        if sat_cfg.get("record_iq_toggle", False):
-                            # only satellites whose .grc actually has the
-                            # record_iq Parameter block wired up get this flag -
+                        record_iq_value = None  # None = --record-iq isn't being passed at all
+                        if sat_cfg.get("record_iq_toggle", False) and \
+                                record_iq_ok.get(p["norad"], True):
+                            # only satellites whose compiled flowgraph actually
+                            # accepts --record-iq (verified at startup) get it -
                             # everything else launches exactly as before.
                             # A per-pass override in schedule.yaml (set via
                             # toggle_pass_record_iq.py) takes priority over
                             # the session-wide --record-iq default, if set.
                             per_pass_override = p.get("record_iq")
-                            if per_pass_override is not None:
-                                record_iq_value = per_pass_override
-                            else:
-                                record_iq_value = args.record_iq == "yes"
+                            record_iq_value = (per_pass_override
+                                               if per_pass_override is not None
+                                               else args.record_iq == "yes")
                             cmd += ["--record-iq", "1" if record_iq_value else "0"]
                         active_proc = subprocess.Popen(cmd)
                         active_pass = p
                         log_pass_event("started", sat_cfg, p,
-                                       record_iq=(record_iq_value
-                                                  if sat_cfg.get("record_iq_toggle", False)
-                                                  else None))
+                                       record_iq=record_iq_value, attempt=attempt)
                         time.sleep(3)  # let the flowgraph come up before polling rigctld
                         break
 

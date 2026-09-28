@@ -89,7 +89,12 @@ def main():
         names = sorted({upcoming[i]["name"] for i in incapable})
         print(f"Skipping {names} - record_iq_toggle isn't set for these "
               f"satellites, so a per-pass override would have no effect. "
-              f"Set it first with: python3 edit_satellite.py <name> --record-iq-toggle")
+              f"Enabling it is a two-step thing: the satellite's .grc must first "
+              f"be wired for it - python3 wire_record_iq.py <name> does that in "
+              f"one step, then ./regen_all.sh - and only then: "
+              f"python3 edit_satellite.py <name> --record-iq-toggle "
+              f"(which checks the .grc and refuses if it isn't wired). See "
+              f"docs/adding-satellites.md, 'Toggling IQ recording'.")
         indices = [i for i in indices if i not in incapable]
     if not indices:
         print("Nothing left to toggle.")

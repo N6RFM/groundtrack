@@ -47,6 +47,7 @@ def main():
         if rec["event"] == "started":
             entry["record_iq"] = rec.get("record_iq")
             entry["started_at"] = rec["timestamp"]
+            entry["attempts"] = entry.get("attempts", 0) + 1
         else:
             entry["outcome"] = rec["event"]
             entry["ended_at"] = rec["timestamp"]
@@ -70,7 +71,10 @@ def main():
                                     "or run_passes.py itself was killed)")
         iq = "?" if e.get("record_iq") is None else ("Y" if e["record_iq"] else "N")
         aos_display = e["aos"][:19].replace("T", " ")  # trim to seconds, drop the T
-        print(f"{aos_display:<20}{e['satellite']:<16}{outcome:<12}{iq:<6}{e.get('detail', '')}")
+        detail = e.get("detail", "")
+        if e.get("attempts", 1) > 1:
+            detail += f" ({e['attempts']} launch attempts)"
+        print(f"{aos_display:<20}{e['satellite']:<16}{outcome:<12}{iq:<6}{detail}")
 
     total = len(entries)
     failed = sum(1 for e in entries if e.get("outcome") in ("crashed", "error"))

@@ -122,7 +122,7 @@ blocks:
     maxSize: '0'
     maxTimeSec: '0'
     radioCenterFreq: freq
-    recordOnStart: 'True'
+    recordOnStart: bool(record_iq)
     sampleRate: 1e6
     type: complex
     unbuffered: 'False'
@@ -746,6 +746,23 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1160, 24.0]
+    rotation: 0
+    state: enabled
+- name: record_iq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: 'record IQ on this run? 1 = yes, 0 = no'
+    hide: none
+    label: record_iq
+    short_id: ''
+    type: intx
+    value: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [72, 1056.0]
     rotation: 0
     state: enabled
 

@@ -50,6 +50,52 @@ import yaml
 CONFIG_PATH = "satellites.yaml"
 
 
+def record_iq_wiring_problem(sat):
+    """Returns None if this satellite's .grc is genuinely wired for the
+    record_iq toggle, else a plain-language description of what's missing.
+    Mirrors preflight.py's own lookups exactly (same block names, same
+    substring test) so this tool and preflight can never disagree - a flag
+    set here that preflight then fails on would be worse than no check.
+
+    Declaring record_iq_toggle without the wiring isn't harmless: run_passes.py
+    would pass --record-iq to a flowgraph that doesn't accept it, and every
+    launch of that satellite would die instantly on an argument error."""
+    script = sat.get("script", "")
+    grc_path = script.replace(".py", ".grc") if script else ""
+    if not grc_path:
+        return "this satellite has no script: set in satellites.yaml"
+    return grc_wiring_problem(grc_path)
+
+
+def grc_wiring_problem(grc_path):
+    """The same check, given the .grc path directly - also used by
+    wire_record_iq.py to verify its own edit before and after writing it."""
+    try:
+        with open(grc_path) as f:
+            grc = yaml.safe_load(f)
+    except FileNotFoundError:
+        return f"{grc_path} doesn't exist yet - build the flowgraph first"
+    blocks = {b["name"]: b for b in grc.get("blocks", [])}
+    sink = blocks.get("filerepeater_AdvFileSink_0")
+    if sink is None:
+        return (f"{grc_path} has no filerepeater_AdvFileSink_0 block, so there's "
+                f"nothing for the toggle to control")
+    record_on_start = str(sink["parameters"].get("recordOnStart", ""))
+    if "record_iq" not in record_on_start:
+        return (f"the Advanced File Sink's Record On Start in {grc_path} is "
+                f"{record_on_start!r}, not an expression using record_iq "
+                f"(e.g. bool(record_iq))")
+    param = blocks.get("record_iq")
+    if param is None:
+        return (f"Record On Start references record_iq, but {grc_path} has no "
+                f"block named record_iq (a Parameter block, type int)")
+    state = param.get("states", {}).get("state", "enabled")
+    if state != "enabled":
+        return (f"the record_iq Parameter block in {grc_path} is {state} - GRC "
+                f"leaves disabled blocks out of the compiled script")
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -136,6 +182,13 @@ def main():
         sat["enabled"] = False
 
     if args.record_iq_toggle:
+        problem = record_iq_wiring_problem(sat)
+        if problem:
+            sys.exit(f"Refusing to set record_iq_toggle for {args.name}: {problem}.\n"
+                     f"Wire the .grc first - python3 wire_record_iq.py {args.name} "
+                     f"does it in one step (see docs/adding-satellites.md, "
+                     f"'Toggling IQ recording') - recompile with ./regen_all.sh, "
+                     f"then run this again. Nothing was changed.")
         if sat.get("record_iq_toggle", False) is not True:
             changes.append("record_iq_toggle: false -> true")
         sat["record_iq_toggle"] = True

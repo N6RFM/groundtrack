@@ -122,7 +122,7 @@ blocks:
     maxSize: '0'
     maxTimeSec: '0'
     radioCenterFreq: freq
-    recordOnStart: 'True'
+    recordOnStart: bool(record_iq)
     sampleRate: '50000'
     type: complex
     unbuffered: 'False'
@@ -775,7 +775,7 @@ blocks:
 - name: zeromq_pub_msg_sink_0
   id: zeromq_pub_msg_sink
   parameters:
-    address: tcp://127.0.0.1:5555
+    address: tcp://127.0.0.1:5557
     affinity: ''
     alias: ''
     bind: 'True'
@@ -786,6 +786,23 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1280, 536.0]
+    rotation: 0
+    state: enabled
+- name: record_iq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: 'record IQ on this run? 1 = yes, 0 = no'
+    hide: none
+    label: record_iq
+    short_id: ''
+    type: intx
+    value: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [72, 848.0]
     rotation: 0
     state: enabled
 

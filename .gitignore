@@ -42,3 +42,4 @@ run_passes.out
 # kiss_encode_pdu.py is hand-written reference code, not a compiled
 # flowgraph output - keep it tracked despite the flowgraphs/*.py ignore
 !flowgraphs/kiss_encode_pdu.py
+*.bak*

@@ -191,6 +191,47 @@ python3 edit_satellite.py GEOSCAN-1 --freq 435970000
 python3 edit_satellite.py GEOSCAN-1 --enabled
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 ```
+`--record-iq-toggle` is the one flag that also *reads* the satellite's
+`.grc` (never writes it): it checks that the `.grc` is genuinely wired for
+the toggle - an Advanced File Sink whose Record On Start uses `record_iq`,
+and an enabled `record_iq` Parameter block - and refuses, changing nothing,
+if it isn't. Declaring the capability without the wiring isn't harmless: the
+flag gets passed to a flowgraph that doesn't accept it, and every launch of
+that satellite dies immediately. The checks match `preflight.py`'s, so the
+two can't disagree. If it refuses because the `.grc` isn't wired, the next
+tool is `wire_record_iq.py`, below.
+
+## wire_record_iq.py
+
+Wires a satellite's `.grc` for the per-run IQ recording toggle in one step -
+the GRC work that has to exist before `record_iq_toggle` means anything. That
+work is two things: a `record_iq` Parameter block (what makes the compiled
+script accept a `--record-iq` option at all) and the Advanced File Sink's
+Record On Start set to `bool(record_iq)` instead of a fixed `True`/`False`.
+Accepts several names at once:
+```
+python3 wire_record_iq.py BY70-4 JAMX-01
+python3 wire_record_iq.py BY70-4 --dry-run
+python3 wire_record_iq.py BY70-4 --yes
+./regen_all.sh
+python3 edit_satellite.py BY70-4 --record-iq-toggle
+```
+Nothing changes about a satellite's behavior until something passes
+`--record-iq`: the new parameter's default is taken from what Record On Start
+was (`True` gives 1, `False` gives 0), so a flowgraph that always recorded
+still always records. One of three narrow tools that write to a `.grc` (see
+[Adding a satellite](adding-satellites.md)), and the most careful: it edits the
+file as raw text - one line changed, one block inserted, nothing reformatted;
+shows a diff and asks before writing (`--yes` skips the question, `--dry-run`
+only shows the diff); keeps a `.bak` next to the file (never overwriting an
+earlier one); re-checks its own result and restores the original if the check
+fails; and does nothing if the flowgraph is already wired. It refuses, changing
+nothing, when a human has to decide something: Record On Start is some other
+expression than a plain `True`/`False`, a block named `record_iq` exists but
+isn't a Parameter block or is disabled, there's no Advanced File Sink, or the
+file isn't laid out the way GRC writes it. It does not recompile and does not
+touch `satellites.yaml`. Its own output ends with the exact commands to run
+next.
 
 ## suggest_extra_outputs.py
 
@@ -270,7 +311,16 @@ rise, rather than left wherever the finished pass happened to end -
 for what that requires. Every other satellite launches exactly as
 before, regardless of this flag. A pass can override this session
 default individually - see `toggle_pass_record_iq.py` below - which
-takes priority over `--record-iq` for that one pass only. Every real
+takes priority over `--record-iq` for that one pass only. Before the run
+starts, `run_passes.py` asks each satellite that has a queued pass and
+`record_iq_toggle: true` whether its compiled script actually accepts
+`--record-iq` (via the script's own `--help`, which exits before touching any
+hardware); if not, it prints a warning and launches that satellite without
+the flag rather than crashing it every pass. A flowgraph that exits early at
+launch is retried at most 3 times, 15 seconds apart, and then given up on for
+that pass - the rotor is only pre-positioned toward the next pass once it has
+stopped trying. A pass that ends normally (including by the elevation safety
+net, which can fire before the scheduled LOS) is never relaunched. Every real
 pass's actual outcome (started/completed/crashed/error, and which
 `record_iq` value was actually used) is appended to `pass_log.jsonl` -
 see `show_pass_log.py` below. `notify: true` in `satellites.yaml` also
@@ -312,7 +362,8 @@ python3 show_pass_log.py
 python3 show_pass_log.py --last 20
 python3 show_pass_log.py --failures-only
 ```
-A pass with a `started` record but no matching outcome is called out
+A pass that needed more than one launch attempt shows the count (e.g.
+`3 launch attempts`). A pass with a `started` record but no matching outcome is called out
 explicitly rather than silently dropped - it usually means `run_passes.py`
 itself was killed mid-pass, not just the flowgraph crashing (which
 would have logged its own `crashed` outcome).
