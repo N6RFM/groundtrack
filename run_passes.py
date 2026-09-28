@@ -27,11 +27,13 @@ import shutil
 import yaml
 import os
 import errno
+import json
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load, wgs84, EarthSatellite
 
 CONFIG_PATH = "satellites.yaml"
 SCHEDULE_PATH = "schedule.yaml"
+PASS_LOG_PATH = "pass_log.jsonl"
 SPEED_OF_LIGHT = 299792458.0
 LOCK_PATH = "run_passes.lock"
 
@@ -44,6 +46,38 @@ def notify(title, message):
         subprocess.run(["notify-send", title, message], timeout=2,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+
+def log_pass_event(event, sat_cfg, pass_info, **extra):
+    """Appends one JSON record per line to pass_log.jsonl - a persistent,
+    append-only history of what actually happened during each pass, not
+    just what was predicted. Never raises - a logging failure should
+    never take down the actual tracking loop, so any error here is
+    swallowed rather than propagated.
+
+    JSONL (one JSON object per line) rather than a single YAML/JSON
+    document: safely appendable without re-reading or re-writing the
+    whole file, and trivially parseable later with any tool, including
+    a one-liner with jq or a simple Python loop - no special log-reading
+    code needed in this project itself. events: "started" (AOS, one per
+    pass), and exactly one of "completed" / "crashed" / "error" (how it
+    ended). pass_info needs norad, aos_dt, los_dt - both `active_pass`
+    and a raw schedule.yaml pass dict already have these, so either can
+    be passed directly."""
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        "satellite": sat_cfg["name"],
+        "norad": pass_info["norad"],
+        "aos": pass_info["aos_dt"].isoformat(),
+        "los": pass_info["los_dt"].isoformat(),
+    }
+    record.update(extra)
+    try:
+        with open(PASS_LOG_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError:
         pass
 
 
@@ -406,6 +440,12 @@ def main():
                         print(f"[{sat_cfg['name']}] flowgraph exited early "
                               f"(code {active_proc.returncode}) - check its output above. "
                               f"Abandoning this pass; rotor/Doppler stopped for it.")
+                        if notify_enabled:
+                            notify("Satellite pass FAILED",
+                                   f"{sat_cfg['name']} - flowgraph exited early "
+                                   f"(code {active_proc.returncode})")
+                        log_pass_event("crashed", sat_cfg, active_pass,
+                                       exit_code=active_proc.returncode)
                         active_pass, active_proc = None, None
                         if not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
@@ -421,6 +461,8 @@ def main():
                         print(f"[{sat_cfg['name']}] LOS ({'scheduled' if past_los else 'elevation safety net'})")
                         if notify_enabled:
                             notify("Satellite pass ended", f"{sat_cfg['name']} - LOS")
+                        log_pass_event("completed", sat_cfg, active_pass,
+                                       reason="scheduled" if past_los else "elevation_safety_net")
                         active_proc.terminate()
                         try:
                             active_proc.wait(timeout=10)
@@ -469,6 +511,10 @@ def main():
                     print(f"[{sat_cfg['name']}] ERROR during pass ({e!r}) - "
                           f"abandoning this pass rather than crashing the scheduler. "
                           f"Killing its flowgraph so it doesn't record silently forever.")
+                    if notify_enabled:
+                        notify("Satellite pass FAILED",
+                               f"{sat_cfg['name']} - error during tracking: {e!r}")
+                    log_pass_event("error", sat_cfg, active_pass, error=repr(e))
                     try:
                         active_proc.terminate()
                         active_proc.wait(timeout=10)
@@ -503,6 +549,10 @@ def main():
                             cmd += ["--record-iq", "1" if record_iq_value else "0"]
                         active_proc = subprocess.Popen(cmd)
                         active_pass = p
+                        log_pass_event("started", sat_cfg, p,
+                                       record_iq=(record_iq_value
+                                                  if sat_cfg.get("record_iq_toggle", False)
+                                                  else None))
                         time.sleep(3)  # let the flowgraph come up before polling rigctld
                         break
 

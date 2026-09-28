@@ -231,6 +231,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.plan_passes_interactive).pack(side="left")
         ttk.Button(row4, text="Toggle IQ for pass (new window)",
                    command=self.toggle_pass_record_iq).pack(side="left", padx=4)
+        ttk.Button(row4, text="Show pass log",
+                   command=self.show_pass_log).pack(side="left")
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
@@ -576,6 +578,9 @@ class GroundtrackGUI(tk.Tk):
 
     def show_schedule(self):
         self.run_cmd([sys.executable, "show_queue.py"])
+
+    def show_pass_log(self):
+        self.run_cmd([sys.executable, "show_pass_log.py"])
 
     def plan_passes_auto(self):
         hours = simpledialog.askinteger(
