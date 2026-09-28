@@ -43,3 +43,4 @@ run_passes.out
 # flowgraph output - keep it tracked despite the flowgraphs/*.py ignore
 !flowgraphs/kiss_encode_pdu.py
 *.bak*
+pass_log.jsonl
