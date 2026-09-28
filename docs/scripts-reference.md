@@ -42,9 +42,11 @@ python3 run_passes.py --verbose
 Refuses to start a second instance against the same folder (a
 `run_passes.lock` file, checked against the running PID - a stale lock
 left over from a crash is detected and cleared automatically). Set
-`notify: true` in `satellites.yaml` for desktop notifications at AOS/LOS
-via `notify-send` (silently does nothing if `notify-send` isn't available,
-e.g. on a headless box).
+`notify: true` in `satellites.yaml` for desktop notifications via
+`notify-send` (silently does nothing if `notify-send` isn't available,
+e.g. on a headless box) - fires at AOS and LOS, and also on a pass
+failing (a flowgraph exiting early, or an error caught during tracking),
+not just on success.
 
 **`relay.py`** - persistent process, independent of any pass, that lets
 your downstream KISS decoder hold one stable connection across every
@@ -262,11 +264,58 @@ elevation safety-net, or the flowgraph crashing early), the rotor is
 pre-positioned toward wherever the *next* approved pass will actually
 rise, rather than left wherever the finished pass happened to end -
 `--no-preposition` disables this. `--record-iq {yes,no}` (default
-`yes`) is a session-wide choice affecting only satellites with
+`yes`) is the session-wide default, affecting only satellites with
 `record_iq_toggle: true` set - see
 [Adding a satellite](adding-satellites.md)
 for what that requires. Every other satellite launches exactly as
-before, regardless of this flag.
+before, regardless of this flag. A pass can override this session
+default individually - see `toggle_pass_record_iq.py` below - which
+takes priority over `--record-iq` for that one pass only. Every real
+pass's actual outcome (started/completed/crashed/error, and which
+`record_iq` value was actually used) is appended to `pass_log.jsonl` -
+see `show_pass_log.py` below. `notify: true` in `satellites.yaml` also
+triggers a desktop notification on a pass failing, not just on AOS/LOS.
+
+## toggle_pass_record_iq.py
+
+Toggles IQ recording on or off for specific upcoming passes in the
+queue - a per-pass-instance override, independent of which satellite it
+is, distinct from both `record_iq_toggle` (the per-satellite capability
+flag) and `run_passes.py`'s own `--record-iq` (the session-wide
+default). Takes priority over the session default for that one pass
+only, when set - unset, that pass just falls back to whatever
+`--record-iq` says:
+```
+python3 toggle_pass_record_iq.py
+```
+Interactive: lists every upcoming approved pass with its current
+override state and whether the satellite is even capable of being
+toggled at all, then prompts for which pass number(s) to change and
+whether to turn recording on, off, or clear back to no override. Skips
+(with a clear explanation) any selected pass whose satellite doesn't
+have `record_iq_toggle` set, since a per-pass override would have no
+effect there. Only ever writes to `schedule.yaml`, never `satellites.yaml`
+or any `.grc`. `show_queue.py`'s own listing shows each pass's current
+`record_iq` state (`ON`/`OFF`/`(default)`/`n/a`) for a quick look without
+needing to run this interactively.
+
+## show_pass_log.py
+
+Human-readable summary of `pass_log.jsonl` - `run_passes.py`'s
+persistent, append-only record of what actually happened during each
+real pass, as opposed to `schedule.yaml`'s record of what was predicted
+or approved. One JSON object per line (`started`, then exactly one of
+`completed`/`crashed`/`error`); this tool correlates each pair by
+satellite and AOS time into one row per real pass:
+```
+python3 show_pass_log.py
+python3 show_pass_log.py --last 20
+python3 show_pass_log.py --failures-only
+```
+A pass with a `started` record but no matching outcome is called out
+explicitly rather than silently dropped - it usually means `run_passes.py`
+itself was killed mid-pass, not just the flowgraph crashing (which
+would have logged its own `crashed` outcome).
 
 ## test_rotor_throttle.py
 

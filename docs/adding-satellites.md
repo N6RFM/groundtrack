@@ -201,14 +201,17 @@ dropdown with no way to reference a variable - the fork changes that one
 field's type so it can hold an expression instead. `record_iq_toggle` in
 `satellites.yaml` is a persistent capability flag confirming a
 satellite's `.grc` is wired this way; the actual record-or-not decision
-is a session-wide choice made when `run_passes.py` starts, not stored
-anywhere:
+is normally a session-wide choice made when `run_passes.py` starts:
 ```
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 python3 edit_satellite.py ASRTU-1_SSDV --no-record-iq-toggle
 ```
 See [run_passes.py](scripts-reference.md#run_passespy) for the
-`--record-iq` flag this actually enables.
+`--record-iq` flag this actually enables. That session-wide choice can
+also be overridden for one specific upcoming pass, regardless of
+satellite, via [toggle_pass_record_iq.py](scripts-reference.md) -
+stored right in `schedule.yaml` against that one pass, taking priority
+over `--record-iq` for it alone.
 
 **Pausing a satellite** without deleting its hard-won config - sharing
 one SDR across satellites you don't all want active at once is the
