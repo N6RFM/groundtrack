@@ -234,7 +234,12 @@ def main():
             print(line)
     print(f"added to satellites.yaml")
 
-    result = subprocess.run(["grcc", new_grc])
+    # -o flowgraphs/, matching regen_all.sh exactly: grcc otherwise writes
+    # its .py to the CURRENT directory, not the .grc's own folder - a real,
+    # repeated source of confusion elsewhere in this project (it's exactly
+    # what doctor.py's "stray compiled flowgraphs" check exists to catch).
+    # Telling it explicitly avoids the problem instead of cleaning up after it.
+    result = subprocess.run(["grcc", "-o", os.path.dirname(new_grc), new_grc])
     if result.returncode != 0:
         sys.exit(f"grcc failed (exit {result.returncode}) - {new_grc} and the "
                  f"satellites.yaml entry both exist, but flowgraphs/{slug}.py "
