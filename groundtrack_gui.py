@@ -21,6 +21,8 @@ Run from the repo root, same as every other script here:
     python3 groundtrack_gui.py
 """
 
+import contextlib
+import io
 import os
 import subprocess
 import sys
@@ -28,6 +30,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 import yaml
+
+from doctor import check_stray_compiled_files
 
 CONFIG_PATH = "satellites.yaml"
 
@@ -384,7 +388,20 @@ class GroundtrackGUI(tk.Tk):
             messagebox.showerror("Missing .grc", f"{grc_path} doesn't exist - "
                                   f"nothing to regenerate. Use add_satellite.py first.")
             return
-        self.run_cmd(["grcc", grc_path])
+        # -o flowgraphs, matching regen_all.sh: grcc otherwise writes its
+        # .py to the current directory, not the .grc's own folder. -o only
+        # redirects the main flowgraph's own output though - an embedded
+        # Python block (epy_block, e.g. rig_freq_poller) still gets its own
+        # companion .py written to cwd regardless, so the stray-sweep below
+        # runs every time, not just as a fallback for when -o isn't used.
+        returncode, output = self.run_cmd(["grcc", "-o", os.path.dirname(grc_path), grc_path])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            check_stray_compiled_files(fix=True)
+        sweep_output = buf.getvalue()
+        if "none found" not in sweep_output:
+            self.log(f"$ grcc -o {os.path.dirname(grc_path)} {grc_path}\n\n{output}\n\n"
+                      f"--- stray-file check ---\n{sweep_output}")
         self.refresh()
 
     def _grc_path_for_selected(self):

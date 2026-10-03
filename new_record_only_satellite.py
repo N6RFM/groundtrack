@@ -43,6 +43,7 @@ import sys
 import yaml
 
 from add_satellite import slugify
+from doctor import check_stray_compiled_files
 
 DEFAULT_TEMPLATE = "flowgraphs/_record_only_template.grc"
 FALLBACK_TEMPLATE = "flowgraphs/scionx.grc"
@@ -246,6 +247,12 @@ def main():
                  f"was not produced. The entry is disabled by default, so "
                  f"nothing will try to launch it until that's fixed and "
                  f"./regen_all.sh (or grcc again) succeeds.")
+
+    # -o above only redirects the main flowgraph's own output - a template
+    # with an embedded Python block (e.g. the record_iq-wired scionx.grc's
+    # rig_freq_poller) still gets that block's own companion .py written to
+    # cwd regardless, so sweep for it rather than leave it as a stray
+    check_stray_compiled_files(fix=True)
 
     print(f"\nDone. {args.name} is in satellites.yaml as enabled: false. Next:")
     if args.record_iq_toggle and not fields["has_record_iq"]:

@@ -180,6 +180,18 @@ either, but `doctor.py` catches a wider class of problems (like an
 orphaned process from a since-deleted folder silently holding a port,
 which `preflight.py` alone has no way to see).
 
+The stray-compile check specifically isn't something you need to remember
+to ask for, though: `preflight.py` runs it automatically, always
+fixing (not just reporting) anything it finds, before its own other
+checks - a stray left by a manual `grcc` run outside any tool here gets
+caught the next time *anything* runs `preflight.py`, not only via
+`doctor.py --fix`. `new_record_only_satellite.py` and the GUI's
+"Regenerate .grc for selected" do the same immediately after their own
+`grcc` calls, for the same reason: `-o` (which both now pass) only
+redirects the main flowgraph's own output, not an embedded block's
+companion file, so the sweep is the actual fix, not just a fallback for
+when `-o` is missing.
+
 ```
 python3 doctor.py --fix
 ```

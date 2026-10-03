@@ -464,6 +464,16 @@ def main():
                      help="seconds to wait for the relay connection in --live mode")
     args = ap.parse_args()
 
+    # Runs unconditionally, not just under doctor.py --fix: a stray compile
+    # (grcc writes to cwd, not the .grc's own folder - see doctor.py for the
+    # full explanation) otherwise surfaces here anyway, as a confusing
+    # "flowgraphs/X.py doesn't exist" a few checks below, even though the
+    # file exists and compiled fine - it's just sitting in the wrong place.
+    # Fixing it first, always, means that failure mode can't happen instead
+    # of requiring a separate, easy-to-forget "doctor.py --fix" step first.
+    from doctor import check_stray_compiled_files
+    check_stray_compiled_files(fix=True)
+
     cfg = static_checks(CONFIG_PATH)
 
     if os.path.exists(SCHEDULE_PATH) and cfg:

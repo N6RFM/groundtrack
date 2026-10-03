@@ -147,6 +147,16 @@ Start with `python3 doctor.py` every time - it's a strict superset of
 class of problems (wrong folder, stale process, occupied port) that
 config-only checks can't see.
 
+**A satellite's `.py` seems to go missing, or `preflight.py` briefly shows
+"doesn't exist" for a `flowgraphs/*.py` you just compiled**
+A manual `grcc some.grc` (outside any tool here) writes its output to
+whatever directory you ran it from, not the `.grc`'s own folder - see
+"Known caveats" below. You shouldn't need to chase this down by hand:
+plain `python3 preflight.py` (no `--fix`, no `doctor.py` needed) finds and
+relocates a stray compile automatically, before its own other checks even
+run. If a satellite still looks wrong after that, the stray wasn't the
+cause - the fix would have already resolved it.
+
 ## Known caveats
 
 - **GRC doesn't reload a `.grc` that changed on disk**: `wire_record_iq.py`,
