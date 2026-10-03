@@ -466,6 +466,8 @@ class Rigctld:
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--verbose", action="store_true",
                      help="print each Doppler/rotor update while a pass is active")

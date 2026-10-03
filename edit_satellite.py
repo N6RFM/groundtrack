@@ -97,6 +97,8 @@ def grc_wiring_problem(grc_path):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("name", help="satellite name to edit, exactly as it appears in satellites.yaml")

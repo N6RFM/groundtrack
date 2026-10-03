@@ -100,6 +100,8 @@ def send_frames(port, frames, delay):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--satellite", required=True, help="e.g. GEOSCAN-2")
     ap.add_argument("--replay", help="path to a .kss file with real captured frames")

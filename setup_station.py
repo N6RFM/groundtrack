@@ -30,6 +30,8 @@ def ask(prompt, default=None, cast=str):
 
 
 def main():
+    import station
+    station.enter()
     cfg = {}
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH) as f:
@@ -43,7 +45,9 @@ def main():
     cfg["ground_station"] = gs
 
     print("\n=== TLE source ===")
-    cfg["tle_file"] = ask("Path to TLE file", cfg.get("tle_file", "tle/amateur.txt"))
+    import station
+    default_tle = "../tle/amateur.txt" if station.current() else "tle/amateur.txt"
+    cfg["tle_file"] = ask("Path to TLE file", cfg.get("tle_file", default_tle))
     tle_url = ask(
         "Celestrak URL to fetch it from (blank to skip)",
         cfg.get("tle_url", "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle"),

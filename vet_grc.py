@@ -258,6 +258,8 @@ def apply_fixes(path):
 
 
 def main():
+    import station
+    station.enter()
     args = sys.argv[1:]
     fix = "--fix" in args
     if fix:

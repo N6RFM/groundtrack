@@ -12,7 +12,9 @@ Usage:
 """
 
 import glob
+import os
 import py_compile
+import re
 import sys
 import yaml
 
@@ -37,6 +39,47 @@ def check_python_syntax():
             check(f"{path} compiles", True)
         except py_compile.PyCompileError as e:
             check(f"{path} compiles", False, str(e))
+
+
+# Scripts that mention station-relative files but deliberately don't call
+# station.enter() themselves, and why. Anything else that touches
+# satellites.yaml / schedule.yaml / flowgraphs/ without choosing a station
+# would, in multi-station mode, look in the project root and find nothing.
+STATION_EXEMPT = {
+    "station.py": "defines station selection",
+    "ci_check.py": "checks the repo's own example files, not a station's",
+    "groundtrack_gui.py": "not station-aware yet - being done as its own step "
+                          "(it needs a runtime switch, not a start-up choice)",
+}
+STATION_STATE = re.compile(r"satellites\.yaml|schedule\.yaml|flowgraphs/|"
+                           r"run_passes\.lock|pass_log\.jsonl|CONFIG_PATH|SCHEDULE_PATH")
+
+
+def check_station_wiring():
+    print("\n=== multi-station wiring ===")
+    for path in sorted(glob.glob("*.py")):
+        if path in STATION_EXEMPT:
+            continue
+        with open(path) as f:
+            src = f.read()
+        if not STATION_STATE.search(src):
+            continue
+        wired = "station.enter()" in src or "station.enter_all()" in src
+        check(f"{path} chooses a station", wired,
+              "" if wired else "reads station files (satellites.yaml, flowgraphs/, ...) "
+              "but never calls station.enter() - in multi-station mode it would look "
+              "in the project root and find nothing. Add `import station` and "
+              "`station.enter()` as the first lines of main(), or list it in "
+              "STATION_EXEMPT with the reason.")
+
+    try:
+        import station
+        station.RADIOS_PATH = os.path.abspath("radios.example.yaml")
+        default, stations = station.load_radios()
+        check("radios.example.yaml is a valid station list", True,
+              f"{len(stations)} stations, default {default!r}")
+    except Exception as e:  # missing file, bad YAML, or a StationError
+        check("radios.example.yaml is a valid station list", False, str(e))
 
 
 def check_config():
@@ -101,6 +144,7 @@ def check_config():
 
 def main():
     check_python_syntax()
+    check_station_wiring()
     check_config()
     n_fail = sum(1 for s, _, _ in results if s == FAIL)
     n_pass = sum(1 for s, _, _ in results if s == PASS)

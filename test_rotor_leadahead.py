@@ -199,6 +199,8 @@ def wait_for_arrival(rot, target_az, target_el, tolerance_deg=1.0,
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default=None)

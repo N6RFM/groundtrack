@@ -186,6 +186,8 @@ def verify_text(new_text):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("names", nargs="+", help="satellite name(s), as in satellites.yaml")

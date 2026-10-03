@@ -44,3 +44,10 @@ run_passes.out
 !flowgraphs/kiss_encode_pdu.py
 *.bak*
 pass_log.jsonl
+
+# Multi-station mode (see radios.example.yaml): your own station list is
+# site-specific, and compiled flowgraphs now live one level down, inside each
+# station folder - the root-anchored patterns above no longer reach them.
+radios.yaml
+*/flowgraphs/*.py
+!*/flowgraphs/kiss_encode_pdu.py

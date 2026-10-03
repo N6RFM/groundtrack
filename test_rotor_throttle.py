@@ -82,6 +82,8 @@ class Rotctld:
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default=None)

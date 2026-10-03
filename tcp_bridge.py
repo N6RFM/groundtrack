@@ -226,6 +226,8 @@ async def main():
 
 
 if __name__ == "__main__":
+    import station
+    station.enter()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

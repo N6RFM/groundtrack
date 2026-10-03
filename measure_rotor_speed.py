@@ -139,6 +139,8 @@ def measure_one_move(rot, from_az, to_az, el, tolerance_deg=1.0):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default=None)

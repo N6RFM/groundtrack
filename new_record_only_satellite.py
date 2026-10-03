@@ -122,6 +122,8 @@ def build_new_text(text, old, new_slug, new_name, new_freq_hz):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True, help="e.g. NEWSAT-7")
@@ -192,7 +194,8 @@ def main():
     print(f"Will create {new_grc} from {template}:")
     print("\n".join("  " + line for line in diff))
     print(f"\nWill also run:")
-    add_cmd = [sys.executable, "add_satellite.py", "--name", args.name,
+    import station
+    add_cmd = [sys.executable, station.script_path("add_satellite.py"), "--name", args.name,
                "--norad", str(args.norad), "--freq", str(args.freq),
                "--min-elev", str(args.min_elev), "--record-only"]
     if args.record_iq_toggle:

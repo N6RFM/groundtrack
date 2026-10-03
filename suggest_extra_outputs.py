@@ -54,6 +54,8 @@ def find_satellite(cfg, name):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("name", help="satellite name, exactly as in satellites.yaml")
@@ -114,7 +116,8 @@ def main():
             print("  skipped.\n")
             continue
 
-        cmd = [sys.executable, "edit_satellite.py", args.name,
+        import station
+        cmd = [sys.executable, station.script_path("edit_satellite.py"), args.name,
                "--extra-output-name", out_name,
                "--extra-output-block", block_name]
 

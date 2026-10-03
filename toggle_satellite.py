@@ -22,6 +22,8 @@ CONFIG_PATH = "satellites.yaml"
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     group = ap.add_mutually_exclusive_group(required=True)

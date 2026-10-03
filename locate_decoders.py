@@ -55,6 +55,8 @@ def patch_grc(grc_path, new_file_path):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("search_root", help="directory to search, e.g. ~/Launches")
     ap.add_argument("--dry-run", action="store_true", help="show matches without editing .grc files")

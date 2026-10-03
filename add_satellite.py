@@ -50,6 +50,8 @@ def next_free_ports(cfg):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True, help="e.g. GEOSCAN-3")

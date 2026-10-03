@@ -261,5 +261,7 @@ python3 ci_check.py
 regenerates every `flowgraphs/*.grc` into its `.py` via `grcc`, then runs
 `preflight.py` - one command instead of remembering to `grcc` each file
 individually. Other targets: `make check`, `make check-live`,
-`make status`, `make doctor`.
+`make status`, `make doctor`. In multi-station mode (see
+[scripts-reference.md](scripts-reference.md), `station.py`) these act on one
+station: `./regen_all.sh --radio mini`, or `GROUNDTRACK_STATION=mini make check`.
 

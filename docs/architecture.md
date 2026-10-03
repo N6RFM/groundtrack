@@ -164,6 +164,8 @@ groundtrack/
 ├── run_passes.py          # executor: launches flowgraphs at AOS, feeds Doppler+rotor
 ├── relay.py                # persistent TCP relay, for satellites configured to use one
 ├── show_queue.py            # prints the approved pass queue from schedule.yaml
+├── station.py               # multi-radio setups: picks which station's folder a script works in
+├── radios.example.yaml      # copy to radios.yaml to switch multi-station mode on
 ├── wire_record_iq.py        # wires a .grc for the per-run IQ toggle (diff + backup)
 ├── toggle_pass_record_iq.py # per-pass IQ recording override in the queue
 ├── show_pass_log.py         # summarizes pass_log.jsonl - what actually happened per pass

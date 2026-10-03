@@ -456,6 +456,8 @@ def live_check(cfg, only=None, duration=8):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true",
                      help="also briefly launch each flowgraph (uses real SDR hardware)")

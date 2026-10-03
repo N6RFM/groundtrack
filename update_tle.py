@@ -29,6 +29,10 @@ Usage:
 
     python3 update_tle.py --check-only
         # just report current file's age and satellite coverage, don't download
+
+With radios.yaml (multi-station mode), this covers every station's satellites
+in one run and ignores --radio: the stations share a single TLE file, so
+refreshing it from only one station's list would drop the others.
 """
 
 import argparse
@@ -96,13 +100,25 @@ def fetch_celestrak_one(norad):
 
 
 def main():
+    # Unlike every other script, this one deliberately does NOT pick a
+    # station: stations share one TLE file, and this rebuilds that whole file
+    # from whichever satellites it's told about - so reading one station's
+    # list alone would drop the others' TLEs the next time it ran. In
+    # multi-station mode it reads every station's satellites.yaml instead.
+    import station
+    multi = station.enter_all()
+
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check-only", action="store_true",
                      help="just report current file's age and satellite coverage, don't download")
     args = ap.parse_args()
 
-    cfg = load_cfg()
+    cfg = station.merged_tle_config() if multi else load_cfg()
+    if multi:
+        print("Covering every station: " + ", ".join(
+            f"{name} ({n} satellite{'s' if n != 1 else ''})"
+            for name, n in cfg["_stations"]))
     tle_path = cfg["tle_file"]
     custom_tle_path = cfg.get("custom_tle_file")
     satellites = cfg.get("satellites", [])

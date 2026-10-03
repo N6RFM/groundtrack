@@ -97,7 +97,11 @@ python3 update_tle.py --check-only    # report coverage/age, don't download
 ```
 Nothing to specify per-satellite - every satellite in `satellites.yaml`
 is covered automatically by both sources, so there's no flag to remember
-to pass when a new one gets added.
+to pass when a new one gets added. With `radios.yaml` (multi-station mode -
+see `station.py` below) it covers every station's satellites in one run and
+ignores `--radio`: the stations share one TLE file, and this rebuilds that
+whole file from whichever satellites it's given, so reading just one
+station's list would drop the others' TLEs.
 
 For a satellite too new for either source to have picked up at all (not
 even a "temporary ID" entry yet), set `custom_tle_file` in
@@ -564,3 +568,47 @@ KISS framing work at all; your decoder will likely flag CRC/parse errors
 on these, which is expected - the point is confirming frames arrive,
 not that they mean anything. `--count`/`--delay` control how many frames
 and how far apart, for either mode.
+
+## station.py and radios.yaml
+
+For a ground station with more than one SDR/antenna system running
+independently - say a beam-steered receiver and a fixed helix one, often at
+the same time. Each system is a **station**: a complete folder of its own
+(`satellites.yaml`, `flowgraphs/`, `schedule.yaml`, `pass_log.jsonl`, and
+`run_passes.lock` while it's tracking), while the scripts themselves live
+once, in the project root, and are never duplicated. Every script acts on
+one station at a time, and two copies of `run_passes.py` - one per station -
+run side by side sharing nothing but the TLE file.
+
+`radios.yaml` (copy `radios.example.yaml`) lists the stations and which one
+the GUI opens on. A script picks its station, changes into that folder, and
+from then on runs exactly as it always has - every relative path it already
+used just resolves inside the station. Choosing one:
+```
+python3 run_passes.py --radio mini
+GROUNDTRACK_STATION=mini python3 run_passes.py
+python3 run_passes.py          # at a terminal: asks which station
+```
+`--radio` wins over the environment variable, which wins over being asked;
+there is deliberately never a silent default, since starting the wrong
+radio's tracking is worth one extra keystroke. With no terminal and no
+choice made, a script refuses and says how to choose. `--help` works without
+choosing. With no `radios.yaml` at all, nothing changes: the classic
+single-folder layout works exactly as before.
+
+What differs between radios lives in that station's own files, not in
+`radios.yaml`: `rig_port`, `rot_host`/`rot_port` (leave those two out and
+the rotor is never touched for that station - the same existing mechanism
+as running with no rotor at all), and the SDR device string inside each of
+its `.grc` files. For record-only satellites, keep a
+`_record_only_template.grc` in each station's `flowgraphs/` carrying that
+radio's device string, and `new_record_only_satellite.py --radio ...` uses
+the right one automatically.
+
+The one thing stations share is the TLE file: point every station's
+`tle_file` (and `custom_tle_file`, if used) at the same path, e.g.
+`../tle/amateur.txt`. `update_tle.py` is the one script that spans stations
+- it refuses, rather than guess, if two stations name different TLE files.
+
+`python3 station.py --list` shows what's configured; `--shell` prints the
+`export`/`cd` lines `regen_all.sh` evals.

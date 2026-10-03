@@ -189,6 +189,8 @@ def resolve_overlaps(passes, interactive):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=24.0,
                      help="lookahead window in hours (default 24)")

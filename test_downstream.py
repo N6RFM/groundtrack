@@ -79,6 +79,8 @@ def test_one(sat, count, delay):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--satellite", help="test only this satellite (default: all)")
     ap.add_argument("--count", type=int, default=5, help="frames per satellite (default 5)")

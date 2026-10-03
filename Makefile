@@ -16,4 +16,4 @@ doctor:
 	python3 doctor.py
 
 clean:
-	rm -rf __pycache__ flowgraphs/__pycache__ *.pyc
+	rm -rf __pycache__ flowgraphs/__pycache__ */flowgraphs/__pycache__ *.pyc

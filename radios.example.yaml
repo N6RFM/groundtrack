@@ -1,0 +1,33 @@
+# Copy to radios.yaml to switch on multi-station mode - for a ground station
+# with more than one SDR/antenna system running independently, e.g. a
+# beam-steered receiver and a fixed helix one at the same time.
+#
+# Each station is a complete folder of its own (see "dir:" below), holding
+# what that radio needs and nothing it shares with another: satellites.yaml,
+# flowgraphs/, schedule.yaml, pass_log.jsonl, and run_passes.lock while it's
+# tracking. The scripts themselves live once, in the project root. Every
+# script acts on ONE station at a time - pick it with --radio NAME, or the
+# GROUNDTRACK_STATION environment variable, or be asked at the terminal.
+# Two copies of run_passes.py, one per station, can run side by side.
+#
+# What differs between stations lives in that station's own files, not here:
+# rig_port, and rot_host/rot_port (leave those two out of a station's
+# satellites.yaml and the rotor is never touched for it), plus the SDR
+# device string inside each of its .grc files.
+#
+# The one thing stations DO share is the TLE file - point every station's
+# tle_file (and custom_tle_file, if you use one) at the same path, e.g.
+# "../tle/amateur.txt". update_tle.py refreshes it for all stations at once.
+#
+# With no radios.yaml at all, nothing changes: the classic single-folder
+# layout works exactly as before.
+
+default: r2                      # which station the GUI opens on
+
+stations:
+  r2:
+    dir: r2                      # relative to the project root, or absolute
+    label: R2 + beam antenna (Az/El)
+  mini:
+    dir: mini
+    label: Mini + helix (fixed, no rotor)

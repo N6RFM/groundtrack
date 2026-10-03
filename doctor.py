@@ -344,6 +344,8 @@ def check_stray_compiled_files(fix=False):
 
 
 def main():
+    import station
+    station.enter()
     if "--status" in sys.argv:
         quick_status()
         return

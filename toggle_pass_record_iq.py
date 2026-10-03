@@ -37,6 +37,8 @@ def parse_iso(s):
 
 
 def main():
+    import station
+    station.enter()
     try:
         with open(SCHEDULE_PATH) as f:
             schedule = yaml.safe_load(f)

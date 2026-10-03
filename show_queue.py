@@ -57,6 +57,8 @@ def fmt_duration(aos, los):
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--path", default="schedule.yaml", help="path to schedule.yaml")
     ap.add_argument("--all", action="store_true",

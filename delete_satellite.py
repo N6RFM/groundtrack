@@ -21,6 +21,8 @@ CONFIG_PATH = "satellites.yaml"
 
 
 def main():
+    import station
+    station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("name", nargs="?", help="satellite name to remove")
