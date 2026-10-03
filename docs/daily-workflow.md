@@ -142,7 +142,8 @@ python3 update_tle.py
 python3 doctor.py
 ```
 Confirm `update_tle.py` reports every configured satellite covered, with
-no `MISSING from TLE file` lines. Confirm `doctor.py` ends in `0 failed` -
+no `MISSING from TLE file` lines (a satellite covered only by
+`custom_tle_file`, if you've set one, counts as covered too). Confirm `doctor.py` ends in `0 failed` -
 if `.grc` files were touched since the last session (GNU Radio Companion
 re-saving them counts), you may see a "`.py` is up to date with `.grc`"
 failure here; fix with `./regen_all.sh` before continuing.
@@ -213,14 +214,24 @@ python3 add_satellite.py --name SCIONX --norad 69880 --freq 437500000 --record-o
 Auto-assigns the next free `producer_port`/`consumer_port` (unless
 `--record-only`, or overridden with `--producer-port`/`--consumer-port`),
 refuses a NORAD or port collision with another configured satellite, and
-tells you exactly what's still needed afterward. **Only ever touches
-`satellites.yaml` - never generates or modifies a `.grc`.** Building
-`flowgraphs/<name>.grc` is a manual step in GRC every time, same as
-`edit_satellite.py` below and every other `.grc`-shaped thing in this
+tells you exactly what's still needed afterward. Always adds the
+satellite as `enabled: false` (nothing is built yet);
+`--record-iq-toggle` also writes `record_iq_toggle: true` now, ahead of
+actually wiring the `.grc` later with `wire_record_iq.py`. Otherwise only
+ever touches `satellites.yaml` - never generates or modifies a `.grc`.
+Building `flowgraphs/<name>.grc` is a manual step in GRC every time, same
+as `edit_satellite.py` below and every other `.grc`-shaped thing in this
 toolkit - see "Why nothing here touches `.grc` files" under "Adding a
-satellite" for why. `plan_passes.py --add-satellite` does roughly the
-same job through an interactive prompt instead of flags, though without
-`add_satellite.py`'s port-collision and duplicate-NORAD checks.
+satellite" for why.
+
+`plan_passes.py --add-satellite` does roughly the same job through an
+interactive prompt instead of flags (including the same `enabled: false`
+default and a y/n prompt for `record_iq_toggle`), though without
+`add_satellite.py`'s duplicate-NORAD check. For a batch of record-only
+satellites whose `.grc` files would otherwise be identical except for
+name/frequency, `new_record_only_satellite.py` (see
+[scripts-reference.md](scripts-reference.md)) builds the `.grc`, adds the
+entry, and compiles it in one step.
 
 **`edit_satellite.py`** - updates an already-configured satellite's
 fields, and its `extra_outputs` list, without touching anything you

@@ -195,6 +195,14 @@ def quick_status():
         tle_str = "MISSING"
     print(f"TLE:      {tle_str}")
 
+    # optional hand-maintained file for a satellite not yet in Celestrak/
+    # SatNOGS - update_tle.py never touches this one, so its age isn't a
+    # staleness signal the way tle_file's is; just confirm it's there
+    custom_tle_path = cfg.get("custom_tle_file")
+    if custom_tle_path:
+        custom_str = "present" if os.path.exists(custom_tle_path) else "configured but not created yet"
+        print(f"Custom TLE: {custom_str} ({custom_tle_path})")
+
     # daemons
     def port_status(port):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

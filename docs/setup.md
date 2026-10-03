@@ -62,7 +62,11 @@
    ```
    Fetches every configured satellite's TLE from SatNOGS in one bulk
    download - including "temporary ID" satellites too new for
-   Celestrak/Space-Track's official catalog to have picked up yet.
+   Celestrak/Space-Track's official catalog to have picked up yet. For one
+   too new even for that, set `custom_tle_file` in `satellites.yaml` to a
+   file you maintain by hand - never touched by this script. It's a
+   stopgap: once a public source does catch up, its newer data is used
+   automatically instead (see [scripts-reference.md](scripts-reference.md)).
    Anything SatNOGS doesn't have falls back automatically to an
    individual Celestrak lookup for just that satellite. Nothing to add
    manually - every satellite in `satellites.yaml` is covered by both

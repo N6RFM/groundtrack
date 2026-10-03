@@ -65,8 +65,15 @@ def main():
     ap.add_argument("--consumer-port", type=int, default=None,
                      help="override the auto-assigned consumer port (decode-and-relay only)")
     ap.add_argument("--disabled", action="store_true",
-                     help="add with enabled: false, so it's configured but not yet scheduled "
-                          "(toggle on later with toggle_satellite.py --enable)")
+                     help="no longer needed - every new satellite is added as enabled: "
+                          "false now, since nothing is built/wired yet. Kept so an "
+                          "existing habit or script passing it doesn't break; does "
+                          "nothing extra.")
+    ap.add_argument("--record-iq-toggle", action="store_true",
+                     help="write record_iq_toggle: true now, so it's already set once "
+                          "the .grc is wired later. Does NOT wire the .grc itself - that "
+                          "can't happen until the .grc exists. Use wire_record_iq.py "
+                          "after building it, same as for any other satellite.")
     args = ap.parse_args()
 
     with open(CONFIG_PATH) as f:
@@ -110,8 +117,14 @@ def main():
     if not args.record_only:
         new_entry["producer_port"] = producer_port
         new_entry["consumer_port"] = consumer_port
-    if args.disabled:
-        new_entry["enabled"] = False
+    # Nothing is built or wired yet (the .grc doesn't even exist until the
+    # next step below) - every tool here treats a MISSING enabled key as
+    # enabled: true, so leaving it out would make preflight.py (and a real
+    # run_passes.py session) treat this satellite as live immediately,
+    # failing on a .grc/.py that doesn't exist. Always write it explicitly.
+    new_entry["enabled"] = False
+    if args.record_iq_toggle:
+        new_entry["record_iq_toggle"] = True
     cfg.setdefault("satellites", []).append(new_entry)
     with open(CONFIG_PATH, "w") as f:
         yaml.dump(cfg, f, sort_keys=False, default_flow_style=False)
@@ -122,9 +135,8 @@ def main():
     else:
         print(f"Added {args.name} to {CONFIG_PATH}: "
               f"producer_port={producer_port}, consumer_port={consumer_port}")
-    if args.disabled:
-        print(f"Added as disabled - enable later with: "
-              f"python3 toggle_satellite.py --enable {args.name}")
+    print(f"Added as disabled (nothing is built yet) - enable later with: "
+          f"python3 toggle_satellite.py --enable {args.name}")
 
     print(f"\nStill needed:")
     print(f"  1. Build {grc_path} yourself in GRC - an existing satellite's .grc "
@@ -134,11 +146,20 @@ def main():
         print(f"  3. Point its decoder file at a real *.yml (or clear it to rely on "
               f"norad auto-lookup), and its network_socket_pdu at port {producer_port}, "
               f"type TCP_CLIENT")
-    print(f"  {'4' if not args.record_only else '3'}. If it needs extra_outputs, run "
+    step = 4 if not args.record_only else 3
+    print(f"  {step}. If it needs extra_outputs, run "
           f"python3 suggest_extra_outputs.py {args.name} - it scans the .grc you just "
           f"built and generates the edit_satellite.py commands directly from the real "
           f"block ports/addresses, so nothing needs to be typed by hand")
-    print(f"  {'5' if not args.record_only else '4'}. python3 preflight.py")
+    step += 1
+    if args.record_iq_toggle:
+        print(f"  {step}. python3 wire_record_iq.py {args.name} then ./regen_all.sh - "
+              f"record_iq_toggle is set, but the .grc isn't wired for it yet (it didn't "
+              f"exist until step 1)")
+        step += 1
+    print(f"  {step}. python3 preflight.py")
+    print(f"  {step + 1}. python3 toggle_satellite.py --enable {args.name} once everything "
+          f"above passes")
 
 
 if __name__ == "__main__":

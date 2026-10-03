@@ -104,31 +104,47 @@ def main():
 
     cfg = load_cfg()
     tle_path = cfg["tle_file"]
+    custom_tle_path = cfg.get("custom_tle_file")
     satellites = cfg.get("satellites", [])
+
+    def read_norads(path):
+        """NORADs present in one TLE file, or an empty set if it doesn't
+        exist - callers decide whether that's notable, not this helper."""
+        if not os.path.exists(path):
+            return set()
+        with open(path) as f:
+            lines = [l.rstrip("\n") for l in f if l.strip()]
+        norads = set()
+        for i in range(0, len(lines) - 2, 3):
+            if lines[i + 1].startswith("1 "):
+                try:
+                    norads.add(int(lines[i + 1][2:7]))
+                except ValueError:
+                    pass
+        return norads
 
     if args.check_only:
         if not os.path.exists(tle_path):
             sys.exit(f"{tle_path} does not exist.")
         age_h = (time.time() - os.path.getmtime(tle_path)) / 3600
         print(f"{tle_path}: {age_h:.1f} hour(s) old")
-        with open(tle_path) as f:
-            lines = [l.rstrip("\n") for l in f if l.strip()]
-        present_norads = set()
-        for i in range(0, len(lines) - 2, 3):
-            if lines[i + 1].startswith("1 "):
-                try:
-                    present_norads.add(int(lines[i + 1][2:7]))
-                except ValueError:
-                    pass
-        missing = [s for s in satellites if s.get("norad") not in present_norads]
+        present_norads = read_norads(tle_path)
+        custom_norads = read_norads(custom_tle_path) if custom_tle_path else set()
+        if custom_tle_path:
+            label = "exists" if custom_norads or os.path.exists(custom_tle_path) else "not created yet"
+            print(f"{custom_tle_path} ({label}): {len(custom_norads)} satellite(s) - "
+                  f"never touched by this script")
+        all_present = present_norads | custom_norads
+        missing = [s for s in satellites if s.get("norad") not in all_present]
         print(f"Current file: {len(present_norads)} satellite(s), "
               f"{len(satellites)} configured in {CONFIG_PATH}")
         if missing:
-            print("  MISSING from TLE file:")
+            print("  MISSING from TLE file (and custom_tle_file, if set):")
             for s in missing:
                 print(f"    {s['name']} (norad {s.get('norad')})")
         else:
-            print("  all configured satellites present.")
+            print("  all configured satellites present"
+                  + (" (via tle_file and/or custom_tle_file)." if custom_tle_path else "."))
         sys.exit(1 if missing else 0)
 
     satnogs_data = fetch_satnogs()
@@ -174,10 +190,24 @@ def main():
     print(f"  {len(found_via_satnogs)} via SatNOGS, {len(found_via_celestrak)} via "
           f"Celestrak fallback.")
     if still_missing:
-        print(f"\nWARNING: {len(still_missing)} configured satellite(s) not found in "
-              f"either source: {', '.join(still_missing)}. Their pass planning will "
-              f"fail until this is resolved.")
-        sys.exit(1)
+        # a satellite not yet in either public source may already have a
+        # hand-maintained entry in custom_tle_file - that's the intended
+        # fix for exactly this situation, not a problem to warn about
+        custom_norads = read_norads(custom_tle_path) if custom_tle_path else set()
+        by_name = {s.get("name"): s.get("norad") for s in satellites}
+        covered = [name for name in still_missing if by_name.get(name) in custom_norads]
+        truly_missing = [name for name in still_missing if name not in covered]
+        if covered:
+            print(f"\n{len(covered)} satellite(s) not in SatNOGS or Celestrak, but "
+                  f"covered by custom_tle_file: {', '.join(covered)}")
+        if truly_missing:
+            print(f"\nWARNING: {len(truly_missing)} configured satellite(s) not found "
+                  f"in either source, and not in custom_tle_file: "
+                  f"{', '.join(truly_missing)}. Their pass planning will fail until "
+                  f"this is resolved - either source catches up, or add a TLE for "
+                  f"{'it' if len(truly_missing) == 1 else 'them'} to "
+                  f"{custom_tle_path or 'a custom_tle_file you configure'}.")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

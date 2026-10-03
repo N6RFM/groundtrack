@@ -95,6 +95,28 @@ itself - no decoder, no KISS sink, no network block, `recordOnStart:
 True`, no waterfall - is still yours to build in GRC; `scionx.grc` is a
 working example to copy from.
 
+Either way, the new entry is always written as `enabled: false` - nothing
+is built yet, and a *missing* `enabled` key is treated as `true`
+everywhere else in this toolkit, which would make `preflight.py` (or a
+real `run_passes.py` session) treat the satellite as live immediately and
+fail on a `.grc`/`.py` that doesn't exist yet. `toggle_satellite.py
+--enable <name>` turns it on once the steps below are done. Add
+`--record-iq-toggle` to also write `record_iq_toggle: true` now - it
+doesn't wire the `.grc` (which doesn't exist yet either); run
+`wire_record_iq.py` after building it, same as for any other satellite.
+
+**If a record-only satellite's `.grc` would be identical to an existing one
+except for name, NORAD, and frequency** (the common case when adding many
+similar satellites), `new_record_only_satellite.py` does the whole thing -
+generate the `.grc` from a template, add the entry, compile it - in one
+step instead of three manual ones. See
+[scripts-reference.md](scripts-reference.md) for how, and for exactly why
+this is safe in a way the old, general-purpose `.grc` auto-generation
+(described above) wasn't: a record-only flowgraph has none of the
+structure (decoder, relay block, `kiss_encode_pdu`) that caused the
+original bugs, so there's nothing for a templating tool to get wrong in
+the same way.
+
 **extra_outputs** - for a satellite with a
 second live output that a specific downstream app connects to, separate
 from `relay.py`'s normal KISS path. Only two shapes are actually tracked
@@ -190,6 +212,17 @@ Either way, finish with:
 grcc flowgraphs/<name>.grc      # or ./regen_all.sh for everything at once
 python3 update_tle.py           # auto-covers every configured satellite, no flags needed
 python3 preflight.py
+```
+If the satellite is too new for `update_tle.py`'s sources (SatNOGS,
+Celestrak) to have it at all, set `custom_tle_file` in `satellites.yaml`
+to a file you maintain by hand with its TLE. `update_tle.py` never writes
+to that file, but it's a stopgap, not a standing override: once the
+public sources do catch up, their entry's TLE epoch is newer than your
+one-time hand-entered one, and `plan_passes.py`/`run_passes.py` use epoch
+to resolve the overlap automatically - your custom entry just stops being
+used, with no action needed on your part. See
+[scripts-reference.md](scripts-reference.md) for the full explanation.
+```
 ```
 
 **Editing a satellite** already in `satellites.yaml` - NORAD, frequency,

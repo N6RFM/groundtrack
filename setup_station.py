@@ -50,6 +50,10 @@ def main():
     )
     if tle_url:
         cfg["tle_url"] = tle_url
+    print("(If a satellite is ever too new for Celestrak or SatNOGS to have "
+          "yet, add 'custom_tle_file: path/to/file.txt' to satellites.yaml "
+          "later - update_tle.py never touches it, so a hand-maintained TLE "
+          "there is never overwritten. Not needed for this setup.)")
 
     print("\n=== Doppler control ===")
     cfg["rig_port"] = ask("Shared rigctld port", cfg.get("rig_port", 4532), int)

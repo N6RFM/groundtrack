@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import os
 import yaml
 from datetime import datetime, timezone
 from skyfield.api import load, wgs84, EarthSatellite
@@ -34,16 +35,54 @@ def save_config(cfg):
         yaml.dump(cfg, f, sort_keys=False, default_flow_style=False)
 
 
-def load_tles(path, wanted_norads):
+def load_tles(cfg, wanted_norads):
+    """Reads tle_file, then custom_tle_file if it's configured AND exists -
+    for a satellite recently launched and not yet in Celestrak or SatNOGS,
+    so update_tle.py (which only ever writes tle_file) has nothing to
+    overwrite it with. custom_tle_file is entirely optional: unset, or set
+    but not yet existing, is not an error - it's the normal state before
+    you've needed one.
+
+    A NORAD present in both files is resolved by TLE epoch, not by which
+    file it came from: whichever entry's orbital data is actually more
+    recent wins. custom_tle_file is a stopgap for a gap in the public
+    catalogs, not a standing override - once SatNOGS or Celestrak actually
+    has newer data for that satellite, update_tle.py's regular fetches
+    keep tle_file current while a hand-entered custom_tle_file entry just
+    sits there unchanged, so it must be allowed to age out automatically
+    rather than keep permanently shadowing a source that has since caught
+    up."""
     sats = {}
-    with open(path) as f:
-        lines = [l.strip() for l in f if l.strip()]
     ts = load.timescale()
-    for i in range(0, len(lines), 3):
-        name, l1, l2 = lines[i], lines[i + 1], lines[i + 2]
-        sat = EarthSatellite(l1, l2, name, ts)
-        if sat.model.satnum in wanted_norads:
-            sats[sat.model.satnum] = sat
+
+    def read_one(path):
+        entries = {}
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+        for i in range(0, len(lines), 3):
+            name, l1, l2 = lines[i], lines[i + 1], lines[i + 2]
+            sat = EarthSatellite(l1, l2, name, ts)
+            if sat.model.satnum in wanted_norads:
+                entries[sat.model.satnum] = sat
+        return entries
+
+    sats.update(read_one(cfg["tle_file"]))
+    custom_path = cfg.get("custom_tle_file")
+    if custom_path:
+        if os.path.exists(custom_path):
+            for norad, custom_sat in read_one(custom_path).items():
+                existing = sats.get(norad)
+                if existing is None or custom_sat.epoch.tt > existing.epoch.tt:
+                    sats[norad] = custom_sat
+                else:
+                    print(f"NOTE: custom_tle_file has an entry for NORAD {norad}, "
+                          f"but tle_file's is newer ({existing.epoch.utc_iso()} vs "
+                          f"{custom_sat.epoch.utc_iso()}) - using tle_file's. "
+                          f"The public catalog has caught up; the custom entry "
+                          f"can be removed.")
+        else:
+            print(f"NOTE: custom_tle_file is set to {custom_path!r} but that "
+                  f"file doesn't exist yet - continuing without it.")
     return sats
 
 
@@ -169,7 +208,7 @@ def main():
     gs = cfg["ground_station"]
     observer = wgs84.latlon(gs["lat"], gs["lon"], gs["alt_m"])
     sat_cfgs = {c["norad"]: c for c in cfg["satellites"] if c.get("enabled", True)}
-    tles = load_tles(cfg["tle_file"], set(sat_cfgs))
+    tles = load_tles(cfg, set(sat_cfgs))
 
     missing = set(sat_cfgs) - set(tles)
     if missing:
@@ -243,17 +282,38 @@ def add_satellite(cfg):
     script = input(f"Flowgraph script path [flowgraphs/{name.lower().replace('-', '')}.py]: ").strip() \
         or f"flowgraphs/{name.lower().replace('-', '')}.py"
     min_elev = float(input("Minimum elevation to record (deg) [15]: ").strip() or "15")
-    n_existing = len(cfg.get("satellites", []))
-    producer_port = 9101 + n_existing
-    consumer_port = 8101 + n_existing
-    cfg.setdefault("satellites", []).append({
+    used_ports = ({s["producer_port"] for s in cfg.get("satellites", []) if "producer_port" in s}
+                  | {s["consumer_port"] for s in cfg.get("satellites", []) if "consumer_port" in s})
+    producer_port, consumer_port = 9101, 8101
+    while producer_port in used_ports:
+        producer_port += 1
+    while consumer_port in used_ports:
+        consumer_port += 1
+    record_iq = input("Will this satellite's .grc be wired for the record_iq "
+                      "toggle? [y/N]: ").strip().lower() == "y"
+    entry = {
         "name": name, "norad": norad, "freq_hz": freq_hz, "script": script,
         "min_elev_deg": min_elev, "producer_port": producer_port,
         "consumer_port": consumer_port,
-    })
+        # Nothing is built or wired yet - a MISSING enabled key is treated
+        # as enabled: true everywhere else in this toolkit (preflight.py,
+        # run_passes.py, doctor.py), which would make this satellite look
+        # live immediately and fail preflight on a .grc/.py that doesn't
+        # exist. Always write it explicitly, same as add_satellite.py.
+        "enabled": False,
+    }
+    if record_iq:
+        entry["record_iq_toggle"] = True
+    cfg.setdefault("satellites", []).append(entry)
     save_config(cfg)
     print(f"Added {name}: producer_port={producer_port}, consumer_port={consumer_port}")
-    print("Remember to also create flowgraphs/<name>.grc for it.")
+    print(f"Added as disabled (nothing is built yet) - enable later with: "
+          f"python3 toggle_satellite.py --enable {name}")
+    print(f"Still needed: build flowgraphs/{name.lower().replace('-', '')}.grc "
+          f"yourself in GRC, then grcc it"
+          + (f", then python3 wire_record_iq.py {name} (record_iq_toggle is set, "
+             f"but the .grc isn't wired for it yet)" if record_iq else "")
+          + f", then python3 preflight.py.")
 
 
 if __name__ == "__main__":

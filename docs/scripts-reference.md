@@ -98,6 +98,27 @@ python3 update_tle.py --check-only    # report coverage/age, don't download
 Nothing to specify per-satellite - every satellite in `satellites.yaml`
 is covered automatically by both sources, so there's no flag to remember
 to pass when a new one gets added.
+
+For a satellite too new for either source to have picked up at all (not
+even a "temporary ID" entry yet), set `custom_tle_file` in
+`satellites.yaml` to a file you maintain by hand - this script only ever
+reads it (to avoid double-reporting a satellite as missing that it
+already is), never writes to it. `--check-only` and the main fetch both
+check it: a satellite covered there is never reported `MISSING`, and
+during a real fetch, one not found in SatNOGS or Celestrak but present in
+`custom_tle_file` is reported separately rather than failing the run.
+
+**`custom_tle_file` is a stopgap, not a standing override.** `plan_passes.py`
+and `run_passes.py` (which actually use the TLE data, not this script)
+resolve a NORAD present in both files by comparing TLE epoch - whichever
+entry's orbital data is genuinely more recent wins, regardless of which
+file it's in. Leaving a satellite's entry in `custom_tle_file` after
+SatNOGS or Celestrak catches up is harmless: `update_tle.py` keeps
+`tle_file` current from then on, and since that entry's epoch keeps
+advancing while the untouched custom one doesn't, `tle_file`'s copy
+starts winning automatically, with a printed note explaining why.
+Removing the stale custom entry at that point is just housekeeping, not
+required for correctness.
 Validates the download before overwriting the real file, and reports
 exactly which configured satellites are missing afterward rather than
 failing silently later inside `plan_passes.py`.
@@ -260,6 +281,43 @@ command - every `extra_outputs` bug found in one real session (a typo'd
 address, a block name that didn't match, two entries sharing one name,
 a port that didn't match the `.grc`) came from transcribing these
 values by hand, which this tool exists specifically to eliminate.
+
+## new_record_only_satellite.py
+
+Generates a record-only satellite's `.grc` from a template, adds it to
+`satellites.yaml` (`add_satellite.py --record-only`), and compiles it -
+one command instead of building the `.grc` by hand, running
+`add_satellite.py`, and running `grcc` separately. Worth it specifically
+when a batch of satellites' `.grc` files would be identical except for
+name, frequency, and NORAD (not present in the `.grc` at all - it's a
+`satellites.yaml`-only, TLE-lookup concept):
+```
+cp flowgraphs/scionx.grc flowgraphs/_record_only_template.grc   # once
+python3 new_record_only_satellite.py --name NEWSAT-7 --norad 12345 --freq 437500000
+python3 new_record_only_satellite.py --name NEWSAT-7 --norad 12345 --freq 437500000 --dry-run
+```
+Uses `flowgraphs/_record_only_template.grc` if it exists, else
+`flowgraphs/scionx.grc` directly (with a suggestion to save a dedicated
+copy - editing `scionx.grc` later for its own reasons would otherwise
+silently change what every future satellite is built from). Six fields
+change: the flowgraph's internal id/title, the recording filename prefix,
+the waterfall's display name, and the frequency (written once, read by
+both `freq` and `nfreq`, which must match in the template - the normal
+state for one sitting at its own downlink frequency - or the tool refuses
+rather than guess which should change). Nothing else - every block,
+connection, and other parameter is copied from the template exactly as
+`vet_grc.py --fix` and `wire_record_iq.py` already do, `--yes`/`--dry-run`
+work the same way, and it never overwrites an existing satellite's `.grc`.
+
+This is a narrower, more deliberate version of the auto-generation
+`add_satellite.py` used to do and stopped doing - see "Why nothing here
+touches `.grc` files" in [Adding a satellite](adding-satellites.md) for
+that history, and for why a record-only flowgraph's much simpler, fixed
+shape (no decoder, no relay block, no `kiss_encode_pdu`) means the
+specific bugs that happened there don't apply here. `--record-iq-toggle`
+passes through to `add_satellite.py`; if the template isn't itself wired
+for the toggle, the tool says so and names `wire_record_iq.py` as the
+next step.
 
 ## plan_passes.py
 

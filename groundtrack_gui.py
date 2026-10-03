@@ -769,7 +769,7 @@ class GroundtrackGUI(tk.Tk):
         record_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(win, text="Recording-only (no decoder yet, just raw IQ)",
                          variable=record_only_var,
-                         command=lambda: toggle_port_fields()).grid(
+                         command=lambda: toggle_fields()).grid(
             row=4, column=0, columnspan=2, sticky="w", padx=10, pady=(8, 4))
 
         fields["producer_port"] = add_row(5, "Producer port:", str(suggested_prod))
@@ -778,16 +778,45 @@ class GroundtrackGUI(tk.Tk):
                   foreground="#666", font=("", 8)).grid(
             row=7, column=0, columnspan=2, padx=10, sticky="w")
 
-        def toggle_port_fields():
-            state = "disabled" if record_only_var.get() else "normal"
-            fields["producer_port"].config(state=state)
-            fields["consumer_port"].config(state=state)
+        # Only meaningful once Recording-only is checked: builds the .grc from
+        # a template (new_record_only_satellite.py) instead of leaving that as
+        # a separate manual step. Default matches the standalone tool's own
+        # default exactly, so the GUI and the CLI never disagree about which
+        # file a bare "Add" would use.
+        default_template = ("flowgraphs/_record_only_template.grc"
+                            if os.path.exists("flowgraphs/_record_only_template.grc")
+                            else "flowgraphs/scionx.grc")
+        use_template_var = tk.BooleanVar(value=False)
+        template_check = ttk.Checkbutton(
+            win, text="Also build its .grc from a template (name/freq only differ)",
+            variable=use_template_var, command=lambda: toggle_fields())
+        template_check.grid(row=8, column=0, columnspan=2, sticky="w", padx=10, pady=(4, 0))
+
+        fields["template"] = add_row(9, "Template .grc:", default_template)
+        record_iq_var = tk.BooleanVar(value=False)
+        record_iq_check = ttk.Checkbutton(
+            win, text="Template is wired for the record_iq toggle - set it for this one too",
+            variable=record_iq_var)
+        record_iq_check.grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
+
+        def toggle_fields():
+            ro = record_only_var.get()
+            fields["producer_port"].config(state="disabled" if ro else "normal")
+            fields["consumer_port"].config(state="disabled" if ro else "normal")
+            template_check.config(state="normal" if ro else "disabled")
+            if not ro:
+                use_template_var.set(False)
+            ut = ro and use_template_var.get()
+            fields["template"].config(state="normal" if ut else "disabled")
+            record_iq_check.config(state="normal" if ut else "disabled")
+
+        toggle_fields()  # correct initial disabled/enabled state for every field above
 
         status_label = ttk.Label(win, text="", foreground="#a00", wraplength=340)
-        status_label.grid(row=8, column=0, columnspan=2, padx=10, pady=(4, 0))
+        status_label.grid(row=11, column=0, columnspan=2, padx=10, pady=(4, 0))
 
         button_row = ttk.Frame(win)
-        button_row.grid(row=9, column=0, columnspan=2, pady=10)
+        button_row.grid(row=12, column=0, columnspan=2, pady=10)
 
         def submit():
             name = fields["name"].get().strip()
@@ -799,19 +828,35 @@ class GroundtrackGUI(tk.Tk):
                 status_label.config(text="Name, NORAD, and frequency are all required.")
                 return
 
-            args = [sys.executable, "add_satellite.py", "--name", name,
-                    "--norad", norad, "--freq", freq, "--min-elev", min_elev]
-            if record_only_var.get():
-                args += ["--record-only"]
+            use_template = record_only_var.get() and use_template_var.get()
+            if use_template:
+                # --record-only isn't passed separately - this tool always
+                # calls add_satellite.py --record-only internally, and
+                # --yes skips its own confirmation prompt, which run_cmd
+                # (built for non-interactive tools, same as add_satellite.py
+                # itself) has no way to answer
+                template = fields["template"].get().strip()
+                tool_name = "new_record_only_satellite.py"
+                args = [sys.executable, tool_name, "--name", name, "--norad", norad,
+                        "--freq", freq, "--min-elev", min_elev,
+                        "--template", template, "--yes"]
+                if record_iq_var.get():
+                    args += ["--record-iq-toggle"]
             else:
-                prod = fields["producer_port"].get().strip()
-                cons = fields["consumer_port"].get().strip()
-                if prod:
-                    args += ["--producer-port", prod]
-                if cons:
-                    args += ["--consumer-port", cons]
+                tool_name = "add_satellite.py"
+                args = [sys.executable, tool_name, "--name", name,
+                        "--norad", norad, "--freq", freq, "--min-elev", min_elev]
+                if record_only_var.get():
+                    args += ["--record-only"]
+                else:
+                    prod = fields["producer_port"].get().strip()
+                    cons = fields["consumer_port"].get().strip()
+                    if prod:
+                        args += ["--producer-port", prod]
+                    if cons:
+                        args += ["--consumer-port", cons]
 
-            status_label.config(text="Running add_satellite.py...", foreground="#000")
+            status_label.config(text=f"Running {tool_name}...", foreground="#000")
             win.update_idletasks()
 
             returncode, output = self.run_cmd(args)
@@ -824,7 +869,7 @@ class GroundtrackGUI(tk.Tk):
                 # this is the whole point of a real form instead of
                 # chained popups: a failure doesn't throw away your input
                 last_line = output.strip().splitlines()[-1] if output.strip() else \
-                    "add_satellite.py failed (see the main output pane for details)"
+                    f"{tool_name} failed (see the main output pane for details)"
                 status_label.config(text=f"Failed: {last_line}", foreground="#a00")
 
         ttk.Button(button_row, text="Add", command=submit).pack(side="left", padx=4)

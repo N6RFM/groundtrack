@@ -30,7 +30,7 @@ by a divider:
 | Button | What it actually runs |
 |---|---|
 | Refresh | (read-only - re-parses `satellites.yaml` and re-checks each satellite's files) |
-| Add satellite... | `add_satellite.py --name ... --norad ... --freq ...` (plus `--record-only` if checked, plus `--producer-port`/`--consumer-port` if you've overridden the suggested defaults) |
+| Add satellite... | `add_satellite.py --name ... --norad ... --freq ...` (plus `--record-only` if checked, plus `--producer-port`/`--consumer-port` if you've overridden the suggested defaults) - or, if Recording-only and "Also build its .grc from a template" are both checked, `new_record_only_satellite.py --name ... --norad ... --freq ... --template ... --yes` instead (plus `--record-iq-toggle` if checked), which builds the .grc, adds the entry, and compiles it in one step |
 | Edit selected | `edit_satellite.py NAME` with whichever fields you changed - see below |
 | Enable / Disable selected | `toggle_satellite.py --enable/--disable NAME` |
 | Regenerate .grc for selected | `grcc flowgraphs/<name>.grc` |

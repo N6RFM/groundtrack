@@ -69,6 +69,23 @@ def static_checks(cfg_path):
     tle_exists = os.path.exists(tle_path) and os.path.getsize(tle_path) > 0
     check(f"TLE file exists and is non-empty ({tle_path})", tle_exists)
 
+    # optional: a hand-maintained file for a satellite not yet in Celestrak
+    # or SatNOGS - update_tle.py never writes to this one, only tle_file.
+    # Not existing at all is the normal, expected state before it's needed
+    # (a WARN, not a FAIL); configured AND present but empty is a genuine
+    # mistake worth failing on, same as tle_file above.
+    custom_tle_path = cfg.get("custom_tle_file")
+    custom_tle_exists = False
+    if custom_tle_path:
+        if not os.path.exists(custom_tle_path):
+            check(f"custom_tle_file exists and is non-empty ({custom_tle_path})",
+                  False, "not created yet - fine until a satellite that needs "
+                  "it actually does", level=WARN)
+        else:
+            custom_tle_exists = os.path.getsize(custom_tle_path) > 0
+            check(f"custom_tle_file exists and is non-empty ({custom_tle_path})",
+                  custom_tle_exists)
+
     check("rig_port is set", isinstance(cfg.get("rig_port"), int))
     has_rotor = "rot_host" in cfg and "rot_port" in cfg
     if has_rotor:
@@ -95,15 +112,20 @@ def static_checks(cfg_path):
 
     all_norads, all_ports = set(), {}
     tle_names = set()
-    if tle_exists:
-        with open(tle_path) as f:
+
+    def collect_norads(path):
+        with open(path) as f:
             lines = [l.strip() for l in f if l.strip()]
         for i in range(0, len(lines) - 2, 3):
             try:
-                norad = int(lines[i + 1][2:7])
-                tle_names.add(norad)
+                tle_names.add(int(lines[i + 1][2:7]))
             except (ValueError, IndexError):
                 pass
+
+    if tle_exists:
+        collect_norads(tle_path)
+    if custom_tle_exists:
+        collect_norads(custom_tle_path)
 
     for sat in sats:
         name = sat.get("name", "<unnamed>")
