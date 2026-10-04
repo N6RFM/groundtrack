@@ -332,7 +332,10 @@ both `freq` and `nfreq`, which must match in the template - the normal
 state for one sitting at its own downlink frequency - or the tool refuses
 rather than guess which should change). The frequency can be written the
 way GRC writes it either way - `437.500e6`, or a quoted integer such as
-`'400500000'` - and the new one is written back in the same form. Nothing else - every block,
+`'400500000'` - and the new one is written back in the same form. A template
+with no waterfall display (a flowgraph saved from a decode setup, say) simply has
+no display name to change; one whose waterfall block has a different name is found
+by its type. Nothing else - every block,
 connection, and other parameter is copied from the template exactly as
 `vet_grc.py --fix` and `wire_record_iq.py` already do, `--yes`/`--dry-run`
 work the same way, and it never overwrites an existing satellite's `.grc`.

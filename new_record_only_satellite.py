@@ -77,8 +77,22 @@ def discover_fields(text):
                       "look like a record-only flowgraph")
     basefile = sink["parameters"].get("basefile")
 
+    # The waterfall's display name is the one cosmetic field that follows the satellite. Its
+    # block is normally qtgui_waterfall_sink_x_0, but a template saved from some other
+    # flowgraph may name it differently - or have no waterfall at all, in which case there's
+    # simply nothing to rename. (That last case used to go hunting for the literal text
+    # 'name: None' and refuse with a message that said nothing about the real reason.)
     waterfall = blocks.get("qtgui_waterfall_sink_x_0")
+    if waterfall is None:
+        sinks = [b for b in grc.get("blocks", []) if b.get("id") == "qtgui_waterfall_sink_x"]
+        if len(sinks) > 1:
+            raise Refusal(f"{len(sinks)} waterfall displays ({', '.join(b['name'] for b in sinks)}) and "
+                          f"none named qtgui_waterfall_sink_x_0 - can't tell which one's title should "
+                          f"follow the satellite")
+        waterfall = sinks[0] if sinks else None
     wf_name = waterfall["parameters"].get("name") if waterfall else None
+    if wf_name in (None, "", '""', "''"):
+        wf_name = None      # no waterfall, or one with no title: nothing to change
 
     freq_block, nfreq_block = blocks.get("freq"), blocks.get("nfreq")
     if freq_block is None or nfreq_block is None:
@@ -119,9 +133,10 @@ def build_new_text(text, old, new_slug, new_name, new_freq_hz):
         (f"    id: {old['id_title']}", f"    id: {new_slug}", 1),
         (f"    title: {old['id_title']}", f"    title: {new_slug}", 1),
         (f"basefile: {old['basefile']}", f"basefile: {new_slug}", 1),
-        (f"name: {old['wf_name']}", f"name: {new_name.upper()}", 1),
-        (freq_find, freq_replace, 2),
     ]
+    if old["wf_name"]:     # a template with no waterfall (or an untitled one) has no name to change
+        subs.append((f"name: {old['wf_name']}", f"name: {new_name.upper()}", 1))
+    subs.append((freq_find, freq_replace, 2))
     for find, _, expected in subs:
         got = text.count(find)
         if got != expected:
