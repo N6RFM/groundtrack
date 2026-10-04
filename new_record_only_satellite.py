@@ -106,12 +106,21 @@ def build_new_text(text, old, new_slug, new_name, new_freq_hz):
     written - refuses (changing nothing) rather than guess if any count is
     off, since a silent partial substitution would be worse than stopping."""
     new_freq_str = str(new_freq_hz)
+    # The frequency is written the way GRC wrote it: a value like 437.500e6 can't be an
+    # integer, so it's plain; a plain integer such as 400500000 is quoted ('400500000').
+    # Find it in whichever form the template actually uses, and write the new one in that
+    # same form - searching for only the plain form made a perfectly good template refuse.
+    freq_find, freq_replace = f"value: {old['freq_value']}", f"value: {new_freq_str}"
+    for quote in ("'", '"'):
+        quoted = f"value: {quote}{old['freq_value']}{quote}"
+        if text.count(freq_find) != 2 and text.count(quoted) == 2:
+            freq_find, freq_replace = quoted, f"value: {quote}{new_freq_str}{quote}"
     subs = [
         (f"    id: {old['id_title']}", f"    id: {new_slug}", 1),
         (f"    title: {old['id_title']}", f"    title: {new_slug}", 1),
         (f"basefile: {old['basefile']}", f"basefile: {new_slug}", 1),
         (f"name: {old['wf_name']}", f"name: {new_name.upper()}", 1),
-        (f"value: {old['freq_value']}", f"value: {new_freq_str}", 2),
+        (freq_find, freq_replace, 2),
     ]
     for find, _, expected in subs:
         got = text.count(find)
