@@ -47,7 +47,11 @@ def main():
     print("\n=== TLE source ===")
     import station
     default_tle = "../tle/amateur.txt" if station.current() else "tle/amateur.txt"
-    cfg["tle_file"] = ask("Path to TLE file", cfg.get("tle_file", default_tle))
+    existing_tle = cfg.get("tle_file")
+    if station.current() and existing_tle == "tle/amateur.txt":
+        # the example config's classic path: inside a station the shared TLE folder is one level up
+        existing_tle = None
+    cfg["tle_file"] = ask("Path to TLE file", existing_tle or default_tle)
     tle_url = ask(
         "Celestrak URL to fetch it from (blank to skip)",
         cfg.get("tle_url", "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle"),

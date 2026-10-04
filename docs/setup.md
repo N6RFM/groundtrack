@@ -4,13 +4,25 @@
 
 ## One-time setup
 
+> **The repo ships in the multi-station layout.** A station's own files -
+> `satellites.yaml`, `schedule.yaml`, `flowgraphs/` - live in a folder of their
+> own (`r2/` holds the shipped examples), and every command acts on one station
+> at a time. With one radio, set `GROUNDTRACK_STATION=r2` once (for example
+> `export GROUNDTRACK_STATION=r2` in `~/.bashrc`) and read every
+> `flowgraphs/`, `satellites.yaml` and `schedule.yaml` below as the one inside
+> `r2/`. Otherwise pass `--radio r2`, or answer the prompt. See
+> [Stations](stations.md).
+
 1. **Clone the repo and create your personal config:**
    ```
    git clone git@github.com:n6rfm/groundtrack.git
    cd groundtrack
-   cp satellites.example.yaml satellites.yaml
+   cp radios.example.yaml radios.yaml
+   cp satellites.example.yaml r2/satellites.yaml
+   export GROUNDTRACK_STATION=r2
    ```
-   `satellites.yaml` is gitignored on purpose - it holds your ground
+   `radios.yaml` lists your stations - with one radio, delete its `mini:`
+   block. `r2/satellites.yaml` is gitignored on purpose - it holds your ground
    station's coordinates and is yours alone; `satellites.example.yaml` is
    the version-controlled template everyone starts from.
 

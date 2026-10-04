@@ -204,6 +204,13 @@ def check_config():
             sock_type = sock_block["parameters"].get("type", "")
             check(f"{name}: network_socket_pdu type is TCP_CLIENT",
                   "TCP_CLIENT" in str(sock_type), f"got {sock_type!r}")
+            sock_port = sock_block["parameters"].get("port")
+            try:
+                port_match = int(sock_port) == int(sat["producer_port"])
+            except (TypeError, ValueError, KeyError):
+                port_match = False
+            check(f"{name}: network_socket_pdu port matches example producer_port",
+                  port_match, f".grc={sock_port}  yaml={sat.get('producer_port')}")
         else:
             check(f"{name}: has a network_socket_pdu block", False)
 

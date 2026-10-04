@@ -623,7 +623,8 @@ The one thing stations share is the TLE file: point every station's
 running (`station.switch()`) instead of choosing once at start-up, and
 `preflight.py` inside a station also runs `station.cross_station_conflicts()`:
 `rig_port`, rotor and relay/bridge ports must not be shared with another
-station. Automatic "next free port" (`add_satellite.py`, the GUI's Add
+station, and warns (`station.cross_station_norad_clashes()`) when enabled satellites
+in two stations share a NORAD number under different names. Automatic "next free port" (`add_satellite.py`, the GUI's Add
 dialog, `plan_passes.py --add-satellite`) likewise avoids every other
 station's ports.
 

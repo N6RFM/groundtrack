@@ -38,13 +38,13 @@ satellites:
     freq_hz: 435338000
     script: flowgraphs/geoscan4.py
     min_elev_deg: 15
-    producer_port: 9103
-    consumer_port: 8103
+    producer_port: 9104
+    consumer_port: 8104
 
   - name: GEOSCAN-5
     norad: 64891
     freq_hz: 436663000
     script: flowgraphs/geoscan5.py
     min_elev_deg: 15
-    producer_port: 9104
-    consumer_port: 8104
+    producer_port: 9105
+    consumer_port: 8105

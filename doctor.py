@@ -27,13 +27,15 @@ FLEET_PORTS = {
     4533: "rotctld (antenna)",
     9101: "GEOSCAN-1 producer", 8101: "GEOSCAN-1 consumer",
     9102: "GEOSCAN-2 producer", 8102: "GEOSCAN-2 consumer",
-    9103: "GEOSCAN-4 producer", 8103: "GEOSCAN-4 consumer",
-    9104: "GEOSCAN-5 producer", 8104: "GEOSCAN-5 consumer",
+    9103: "GEOSCAN-3 producer", 8103: "GEOSCAN-3 consumer",
+    9104: "GEOSCAN-4 producer", 8104: "GEOSCAN-4 consumer",
+    9105: "GEOSCAN-5 producer", 8105: "GEOSCAN-5 consumer",
+    9106: "GEOSCAN-6 producer", 8106: "GEOSCAN-6 consumer",
 }
 FLEET_PROCESS_PATTERNS = [
     "relay.py", "run_passes.py", "preflight.py",
     "rigctld", "rotctld",
-    "geoscan1.py", "geoscan2.py", "geoscan4.py", "geoscan5.py",
+    "geoscan1.py", "geoscan2.py", "geoscan3.py", "geoscan4.py", "geoscan5.py", "geoscan6.py",
 ]
 
 

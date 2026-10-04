@@ -30,9 +30,9 @@ Each `.grc` connects *out* to `relay.py` (`network_socket_pdu`, TCP_CLIENT)
 instead of opening its own listening KISS port. `relay.py` opens two ports
 per satellite (see `producer_port`/`consumer_port` in `satellites.yaml`):
 
-- `producer_port` (9101-9104) - internal; only the currently-running
+- `producer_port` (9101-9106 for the shipped GEOSCAN flowgraphs: GEOSCAN-N uses 9100+N) - internal; only the currently-running
   flowgraph connects here. Nothing else should touch these.
-- `consumer_port` (8101-8104) - point your decoder at these. This side
+- `consumer_port` (8101-8106, 8100+N) - point your decoder at these. This side
   never drops, even across LOS - only the producer side comes and goes as
   passes start and stop.
 

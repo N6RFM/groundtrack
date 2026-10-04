@@ -11,6 +11,32 @@ Symptoms we've actually hit, in the order worth checking:
 Multi-station mode (a `radios.yaml` exists) - see [Stations](stations.md),
 "Troubleshooting". Pass `--radio NAME` or set `GROUNDTRACK_STATION`.
 
+**`preflight.py` fails with `embedded-block modules sit next to flowgraphs/<n>.py`, or a
+flowgraph dies at launch with `ModuleNotFoundError`**
+A compiled flowgraph imports a small module GRC generates for each embedded Python
+block (`rig_freq_poller`, say - named `<id>_<block>.py`), and it has to sit next to
+the flowgraph's `.py`. It goes missing if the flowgraph was compiled by a bare
+`grcc` from another folder, or the module was deleted. Fix: `./regen_all.sh` (add
+`--radio NAME` with several radios), or `grcc -o flowgraphs flowgraphs/<n>.grc`.
+`doctor.py --fix` moves one that landed in the wrong folder into place and never
+deletes it.
+
+**`[warn]` about a TLE coming from `custom_tle_file` (in `preflight.py`,
+`plan_passes.py` or `run_passes.py`)**
+Your custom file always wins for any NORAD it lists, whatever the catalog says, and
+every use prints how old the entry is. The warning means it's more than 14 days old
+or the catalog now has newer data. Not a failure: refresh the entry from a source you
+trust, or delete it to follow the catalog again. See
+[scripts-reference.md](scripts-reference.md).
+
+**`[warn] no NORAD names different satellites in different stations`**
+Enabled satellites in two stations share a NORAD under different names. The same
+number and name on both radios is normal and stays quiet. If they really are
+different satellites, one number is wrong: look it up (SatNOGS DB) and fix it with
+`python3 edit_satellite.py --radio NAME "<satellite>" --norad N`. The warning also
+says if the stations take that TLE from different places, meaning they're tracking
+different orbits for the number.
+
 **A satellite's pass "exits early" over and over, with `error: unrecognized
 arguments: --record-iq 1` (or another argument error) printed each time**
 That satellite is toggle-capable (its `.grc` is wired for it, or it has

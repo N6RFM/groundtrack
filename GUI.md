@@ -188,7 +188,7 @@ approved pass will rise as soon as the current one ends, instead of
 leaving it wherever the pass happened to finish. **Record IQ** (checked
 by default) only actually affects satellites whose `.grc` is wired for
 the toggle (detected automatically) - see
-[Adding a satellite](adding-satellites.md)
+[Adding a satellite](docs/adding-satellites.md)
 for what that requires; every other satellite is unaffected regardless
 of this checkbox's state.
 
