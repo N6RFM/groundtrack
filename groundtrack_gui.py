@@ -531,11 +531,11 @@ class GroundtrackGUI(tk.Tk):
                                   f"nothing to regenerate. Use add_satellite.py first.")
             return
         # -o flowgraphs, matching regen_all.sh: grcc otherwise writes its
-        # .py to the current directory, not the .grc's own folder. -o only
-        # redirects the main flowgraph's own output though - an embedded
-        # Python block (epy_block, e.g. rig_freq_poller) still gets its own
-        # companion .py written to cwd regardless, so the stray-sweep below
-        # runs every time, not just as a fallback for when -o isn't used.
+        # .py to the current directory, not the .grc's own folder. The
+        # stray-sweep below still runs every time, as a safety net: anything
+        # that lands in the current directory anyway (an embedded block's
+        # module, say) is moved into flowgraphs/, where the flowgraph imports
+        # it from - never deleted.
         returncode, output = self.run_cmd(["grcc", "-o", os.path.dirname(grc_path), grc_path])
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):

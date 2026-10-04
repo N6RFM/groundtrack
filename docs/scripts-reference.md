@@ -191,18 +191,23 @@ checks - a stray left by a manual `grcc` run outside any tool here gets
 caught the next time *anything* runs `preflight.py`, not only via
 `doctor.py --fix`. `new_record_only_satellite.py` and the GUI's
 "Regenerate .grc for selected" do the same immediately after their own
-`grcc` calls, for the same reason: `-o` (which both now pass) only
-redirects the main flowgraph's own output, not an embedded block's
-companion file, so the sweep is the actual fix, not just a fallback for
-when `-o` is missing.
+`grcc` calls, as a safety net: both pass `-o`, which should keep everything
+in `flowgraphs/`, but if any generated file (an embedded block's module, say)
+lands in the current directory anyway it's moved to where the flowgraph imports
+it from - never deleted. `preflight.py` also checks, for every enabled
+satellite, that the embedded-block modules its compiled script imports
+(`rig_freq_poller`'s, for instance) sit next to it: a compiled flowgraph needs
+them at launch, and a missing one otherwise only shows up as a
+`ModuleNotFoundError` mid-pass.
 
 ```
 python3 doctor.py --fix
 ```
-Actually removes/moves the stray compiled files it finds - deleting
-disposable embedded-block companions, and either deleting a stray main
-flowgraph `.py` (if the correct copy already exists in `flowgraphs/`) or
-moving it into place (if it doesn't). Safe regardless: nothing else in
+Actually moves the stray compiled files it finds into place - the main
+flowgraph `.py` and each embedded block's module (a compiled flowgraph
+imports these at launch, so one is required beside it, never disposable) -
+dropping a stray only when `flowgraphs/` already has an equal-or-newer copy of
+that same file. Safe regardless: nothing else in
 this toolkit ever reads these files from the repo root, so cleaning them
 up can't break anything that was working. `--fix` is stripped out before
 anything else is passed through to `preflight.py`, so it won't cause an

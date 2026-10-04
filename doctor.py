@@ -304,28 +304,50 @@ def check_stray_compiled_files(fix=False):
                     print(f"  {stray_main} - landed here instead of {correct_path}. Move it:")
                     print(f"    mv {stray_main} {correct_path}")
 
-        # companion .py files for every embedded Python block (epy_block) -
-        # grcc writes one per embedded block too, also to cwd. Unlike the
-        # main flowgraph .py, nothing ever looks for these in flowgraphs/ -
-        # they're pure disposable clutter, regenerated on every compile,
-        # so the right fix is always to just delete them, never move them
+        # Embedded Python blocks (epy_block): the compiled flowgraph IMPORTS a module per
+        # block, named <flowgraph id>_<block name>.py ("import iss_sstv_rig_freq_poller_0 as
+        # rig_freq_poller_0  # embedded python block"), found next to the main .py. So one of
+        # these is REQUIRED beside the flowgraph - unlike a stray duplicate, it must never
+        # just be deleted: that leaves a flowgraph that compiles fine and then dies at launch
+        # with ModuleNotFoundError. One that landed in cwd is moved into flowgraphs/, and
+        # dropped only when flowgraphs/ already has an equal-or-newer copy.
         try:
             with open(grc_path) as f:
                 grc = yaml.safe_load(f)
             epy_names = [b["name"] for b in grc.get("blocks", []) if b.get("id") == "epy_block"]
+            fg_id = str(grc["options"]["parameters"].get("id") or slug)
         except Exception:
-            epy_names = []
+            epy_names, fg_id = [], slug
         for name in epy_names:
-            stray_companion = f"{slug}_{name}.py"
-            if os.path.exists(stray_companion):
+            for prefix in dict.fromkeys([slug, fg_id]):     # grcc names it after the id; normally == slug
+                stray_companion = f"{prefix}_{name}.py"
+                if not os.path.exists(stray_companion):
+                    continue
                 found_any = True
-                if fix:
-                    os.remove(stray_companion)
-                    print(f"  removed {stray_companion} (disposable, regenerated on every compile)")
+                correct = f"flowgraphs/{stray_companion}"
+                if os.path.exists(correct):
+                    stray_is_newer = os.path.getmtime(stray_companion) > os.path.getmtime(correct)
+                    if fix and stray_is_newer:
+                        shutil.move(stray_companion, correct)
+                        print(f"  moved {stray_companion} -> {correct} (the stray was newer - a fresh compile)")
+                    elif fix:
+                        os.remove(stray_companion)
+                        print(f"  removed {stray_companion} ({correct} is already current or newer)")
+                    elif stray_is_newer:
+                        print(f"  {stray_companion} - newer than {correct}; it's the fresh compile. Move it:")
+                        print(f"    mv {stray_companion} {correct}")
+                    else:
+                        print(f"  {stray_companion} - redundant, {correct} is already current or newer. Safe to remove:")
+                        print(f"    rm {stray_companion}")
                 else:
-                    print(f"  {stray_companion} - disposable companion file for an "
-                          f"embedded Python block, regenerated on every compile:")
-                    print(f"    rm {stray_companion}")
+                    if fix:
+                        shutil.move(stray_companion, correct)
+                        print(f"  moved {stray_companion} -> {correct} (the compiled flowgraph imports this "
+                              f"at launch - it has to sit beside the .py)")
+                    else:
+                        print(f"  {stray_companion} - the embedded block's module; the compiled flowgraph "
+                              f"imports it at launch, so it belongs in flowgraphs/. Move it:")
+                        print(f"    mv {stray_companion} {correct}")
 
     if not found_any:
         print("  none found")

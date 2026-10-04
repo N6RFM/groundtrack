@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -212,6 +213,9 @@ def static_checks(cfg_path):
                   "" if grc_is_stale else
                   f"{grc_path} was edited after {script} was generated - re-run grcc")
 
+        if py_exists:
+            check_embedded_modules(name, script)
+
         if grc_exists:
             check_grc(name, grc_path, sat)
 
@@ -333,6 +337,31 @@ def check_grc(name, grc_path, sat):
                   f"(its .grc isn't wired for record_iq), so Record On Start must be plain True")
 
     check_extra_outputs(name, blocks, sat)
+
+
+EMBEDDED_IMPORT = re.compile(r"^import\s+(\w+)\s+as\s+\w+\s*#\s*embedded python block", re.M)
+
+
+def check_embedded_modules(name, script):
+    """A compiled flowgraph IMPORTS the module GRC generates for each embedded Python block
+    (rig_freq_poller, say) - <id>_<block>.py, found next to the script. Missing, it compiles
+    fine and then dies at launch with ModuleNotFoundError: the kind of failure that otherwise
+    only shows up mid-pass. Reads the imports from the compiled script itself, the authority
+    on what it actually needs."""
+    try:
+        with open(script) as f:
+            mods = EMBEDDED_IMPORT.findall(f.read())
+    except OSError:
+        return
+    if not mods:
+        return
+    folder = os.path.dirname(script) or "."
+    missing = [m for m in mods if not os.path.exists(os.path.join(folder, m + ".py"))]
+    check(f"{name}: embedded-block modules sit next to {script} ({', '.join(mods)})", not missing,
+          "" if not missing else
+          f"missing {', '.join(m + '.py' for m in missing)} - the flowgraph imports "
+          f"{'it' if len(missing) == 1 else 'them'} at launch and would die with ModuleNotFoundError. "
+          f"Regenerate it: ./regen_all.sh (or grcc -o {folder} {script.replace('.py', '.grc')})")
 
 
 def check_extra_outputs(name, blocks, sat):

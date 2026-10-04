@@ -263,10 +263,9 @@ def main():
                  f"nothing will try to launch it until that's fixed and "
                  f"./regen_all.sh (or grcc again) succeeds.")
 
-    # -o above only redirects the main flowgraph's own output - a template
-    # with an embedded Python block (e.g. the record_iq-wired scionx.grc's
-    # rig_freq_poller) still gets that block's own companion .py written to
-    # cwd regardless, so sweep for it rather than leave it as a stray
+    # a safety net on top of -o above: if anything grcc generated (an embedded
+    # block's module - e.g. rig_freq_poller's - which the flowgraph imports at
+    # launch) lands in cwd anyway, move it into flowgraphs/ beside the .py
     check_stray_compiled_files(fix=True)
 
     print(f"\nDone. {args.name} is in satellites.yaml as enabled: false. Next:")
