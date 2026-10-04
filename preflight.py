@@ -274,7 +274,11 @@ def check_grc(name, grc_path, sat):
             check(f"{name}: decoder file left blank (relying on norad lookup)", True, level=WARN)
 
     sink_block = blocks.get("filerepeater_AdvFileSink_0")
-    if sat.get("record_iq_toggle", False) and sink_block is None:
+    from edit_satellite import record_iq_capable
+    toggle_on = record_iq_capable(sat)   # explicit true/false, else read from this .grc's wiring
+    toggle_src = ("record_iq_toggle is set" if sat.get("record_iq_toggle") is True else
+                  "record_iq toggle detected from the .grc - no record_iq_toggle line needed")
+    if toggle_on and sink_block is None:
         check(f"{name}: recordOnStart wired to record_iq (record_iq_toggle "
               f"is set)", False,
               f"record_iq_toggle is true, but this .grc has no "
@@ -284,14 +288,13 @@ def check_grc(name, grc_path, sat):
               f"declared capability")
     elif sink_block:
         record_on_start = str(sink_block["parameters"].get("recordOnStart", ""))
-        if sat.get("record_iq_toggle", False):
+        if toggle_on:
             # this satellite's Record On Start is meant to be the expression
             # bool(record_iq) - a runtime-controllable Parameter block, not a
             # fixed literal - so check that it's actually wired to record_iq,
             # not that it equals the old literal True
             wired = "record_iq" in record_on_start
-            check(f"{name}: recordOnStart wired to record_iq (record_iq_toggle "
-                  f"is set)", wired,
+            check(f"{name}: recordOnStart wired to record_iq ({toggle_src})", wired,
                   f"got {record_on_start!r} - expected something like "
                   f"bool(record_iq) so run_passes.py's --record-iq flag can "
                   f"actually control this satellite")
@@ -316,8 +319,18 @@ def check_grc(name, grc_path, sat):
                           f"from the compiled output entirely, so this would "
                           f"likely fail to compile despite recordOnStart's "
                           f"text looking correct")
+        elif "record_iq" in record_on_start:
+            # wired for the toggle, but explicitly opted out with record_iq_toggle: false
+            default = (blocks.get("record_iq") or {}).get("parameters", {}).get("value", "?")
+            check(f"{name}: record_iq_toggle is false, but the .grc is wired for it", True,
+                  f"run_passes.py never passes --record-iq for this satellite, so recording "
+                  f"follows the record_iq parameter's own default ({default}) - delete the "
+                  f"record_iq_toggle: false line to let run_passes.py control it", level=WARN)
         else:
-            check(f"{name}: recordOnStart is True", record_on_start.lower() == "true")
+            is_true = record_on_start.lower() == "true"
+            check(f"{name}: recordOnStart is True", is_true,
+                  "" if is_true else f"got {record_on_start!r} - this satellite isn't toggle-capable "
+                  f"(its .grc isn't wired for record_iq), so Record On Start must be plain True")
 
     check_extra_outputs(name, blocks, sat)
 

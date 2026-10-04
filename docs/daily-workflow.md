@@ -27,8 +27,8 @@ your daily TLE-refresh routine.
 launched a misconfigured satellite's flowgraph - which died instantly -
 hundreds of times before anyone noticed. `run_passes.py` now caps launch
 retries at 3 and re-verifies at startup the one setting that caused that
-(that a flowgraph really accepts `--record-iq` when `record_iq_toggle` is
-set), but this step is still what catches config problems before a session
+(that a flowgraph really accepts `--record-iq` when its `.grc` is wired for
+the toggle), but this step is still what catches config problems before a session
 instead of during one.
 
 For a deeper check that actually launches each flowgraph briefly (using
@@ -95,7 +95,7 @@ sorted by AOS, with a status column (`past` / `ACTIVE` / `NEXT` /
 `upcoming`), duration, max elevation, and a `RECORD_IQ` column: `ON` or
 `OFF` if that pass has a per-pass override (set with
 `toggle_pass_record_iq.py`), `(default)` if it will follow the session-wide
-`--record-iq`, or `n/a` if that satellite has no `record_iq_toggle`.
+`--record-iq`, or `n/a` if that satellite isn't toggle-capable (its `.grc` isn't wired for it).
 
 To also see unapproved/rejected passes (e.g. ones `plan_passes.py`'s
 overlap resolution dropped):
@@ -220,8 +220,9 @@ Auto-assigns the next free `producer_port`/`consumer_port` (unless
 refuses a NORAD or port collision with another configured satellite, and
 tells you exactly what's still needed afterward. Always adds the
 satellite as `enabled: false` (nothing is built yet);
-`--record-iq-toggle` also writes `record_iq_toggle: true` now, ahead of
-actually wiring the `.grc` later with `wire_record_iq.py`. Otherwise only
+`--record-iq-toggle` also writes an explicit `record_iq_toggle: true` now
+(optional: wiring the `.grc` later with `wire_record_iq.py` is what enables the
+toggle - it's detected from the `.grc`). Otherwise only
 ever touches `satellites.yaml` - never generates or modifies a `.grc`.
 Building `flowgraphs/<name>.grc` is a manual step in GRC every time, same
 as `edit_satellite.py` below and every other `.grc`-shaped thing in this

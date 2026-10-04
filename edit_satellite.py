@@ -96,6 +96,33 @@ def grc_wiring_problem(grc_path):
     return None
 
 
+def record_iq_capable(sat):
+    """Whether run_passes.py may hand this satellite --record-iq, and whether the
+    queue tools treat it as toggleable.
+
+    The .grc itself says whether it's wired, so by default THAT decides - not a
+    hand-maintained line in satellites.yaml. Making every way of creating an entry
+    (the GUI checkbox, the add/template flags, the planner's prompt, a hand edit, a
+    flowgraph you built yourself) remember to repeat a fact the .grc already states
+    was a standing trap: forgetting it showed up only as a bare 'recordOnStart is
+    True' preflight failure, and a satellite that silently never recorded IQ.
+
+    An explicit record_iq_toggle: true / false still wins - false is the opt-out.
+    Anything that isn't a plain boolean is never guessed at (preflight reports it)."""
+    explicit = sat.get("record_iq_toggle")
+    if isinstance(explicit, bool):
+        return explicit
+    if explicit is not None:
+        return False
+    grc_path = str(sat.get("script") or "").replace(".py", ".grc")
+    if not grc_path.endswith(".grc"):
+        return False
+    try:
+        return grc_wiring_problem(grc_path) is None
+    except (yaml.YAMLError, AttributeError, TypeError, OSError):
+        return False
+
+
 def main():
     import station
     station.enter()

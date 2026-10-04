@@ -149,6 +149,54 @@ def script_accepts_flag(script, flag, timeout_s=60):
     return flag in text
 
 
+def verify_record_iq(sat_cfgs, passes, iq_capable):
+    """{norad: ok} for every toggle-capable satellite with something queued: does its
+    COMPILED flowgraph really accept --record-iq? A satellite can be capable (its .grc
+    is wired, or record_iq_toggle: true) while the compiled script isn't - never
+    recompiled after being wired. Passing the flag anyway makes every launch die
+    instantly on an argparse error, so ask each script directly before the run starts
+    and, if it doesn't accept the flag, launch without it (the .grc's own baked-in
+    default applies) rather than crash on every pass."""
+    record_iq_ok = {}
+    for norad, c in sat_cfgs.items():
+        if not iq_capable.get(norad):
+            continue
+        if not any(p["norad"] == norad for p in passes):
+            continue  # nothing queued for it, no need to check
+        print(f"Verifying {c['script']} accepts --record-iq ...")
+        ok = script_accepts_flag(c["script"], "--record-iq")
+        record_iq_ok[norad] = ok is not False
+        if ok is False:
+            print(f"WARNING: {c['name']} supports the IQ toggle (its .grc is wired for it, or "
+                  f"record_iq_toggle: true), but {c['script']} doesn't accept --record-iq - most "
+                  f"likely it wasn't recompiled after being wired: ./regen_all.sh. Launching it "
+                  f"WITHOUT the flag meanwhile; its .grc's own record_iq default applies. (If the "
+                  f".grc isn't actually wired: python3 wire_record_iq.py {c['name']}, or to stop "
+                  f"treating it as toggle-capable: python3 edit_satellite.py {c['name']} "
+                  f"--no-record-iq-toggle)")
+        elif ok is None:
+            print(f"NOTE: couldn't verify {c['script']}'s arguments (timed out or "
+                  f"no usage text) - assuming it accepts --record-iq.")
+    return record_iq_ok
+
+
+def build_launch_command(sat_cfg, pass_rec, session_record_iq, iq_capable, record_iq_ok):
+    """(command, record_iq value) for one pass. The value is None when --record-iq
+    isn't being passed at all - which is every satellite that isn't toggle-capable,
+    and any whose compiled flowgraph turned out not to accept it. A per-pass override
+    in schedule.yaml (set via toggle_pass_record_iq.py) beats the session-wide
+    --record-iq default."""
+    cmd = [sys.executable, "-u", sat_cfg["script"]]
+    record_iq_value = None
+    norad = pass_rec["norad"]
+    if iq_capable.get(norad, False) and record_iq_ok.get(norad, True):
+        per_pass_override = pass_rec.get("record_iq")
+        record_iq_value = (per_pass_override if per_pass_override is not None
+                           else session_record_iq == "yes")
+        cmd += ["--record-iq", "1" if record_iq_value else "0"]
+    return cmd, record_iq_value
+
+
 def acquire_lock():
     """Refuses to start a second run_passes.py against the same folder -
     two instances would fight over rigctld/rotctld and the SDR."""
@@ -529,34 +577,12 @@ def main():
     launch_attempts = {}      # pass_key -> {"count", "last"} - crash-retry accounting
     finished_passes = set()   # pass_keys that ended (or were given up on): never relaunch
 
-    # A satellite can declare record_iq_toggle: true while its compiled
-    # flowgraph doesn't actually accept --record-iq (the .grc was never
-    # wired, or was rewired but not recompiled). Passing the flag anyway
-    # makes every launch die instantly on an argparse error. Ask each
-    # relevant script directly before the run starts, and if it doesn't
-    # accept the flag, launch without it (the .grc's own baked-in
-    # Record On Start applies) rather than crash on every pass.
-    record_iq_ok = {}
-    for norad, c in sat_cfgs.items():
-        if not c.get("record_iq_toggle", False):
-            continue
-        if not any(p["norad"] == norad for p in passes):
-            continue  # nothing queued for it, no need to check
-        print(f"Verifying {c['script']} accepts --record-iq ...")
-        ok = script_accepts_flag(c["script"], "--record-iq")
-        record_iq_ok[norad] = ok is not False
-        if ok is False:
-            print(f"WARNING: {c['name']} has record_iq_toggle: true in satellites.yaml, "
-                  f"but {c['script']} doesn't accept --record-iq - its .grc likely "
-                  f"isn't wired to a record_iq Parameter block (or wasn't recompiled "
-                  f"after being wired). Launching it WITHOUT the flag; its .grc's own "
-                  f"Record On Start applies. To fix: python3 wire_record_iq.py "
-                  f"{c['name']} then ./regen_all.sh - or, if you don't want the "
-                  f"toggle for it: python3 edit_satellite.py {c['name']} "
-                  f"--no-record-iq-toggle")
-        elif ok is None:
-            print(f"NOTE: couldn't verify {c['script']}'s arguments (timed out or "
-                  f"no usage text) - assuming it accepts --record-iq.")
+    # which satellites may be handed --record-iq (explicit record_iq_toggle, else read from
+    # the .grc), and for those with something queued whether the compiled flowgraph really
+    # accepts it - see verify_record_iq
+    from edit_satellite import record_iq_capable   # imported here, not at module level: this file stays loadable on its own
+    iq_capable = {norad: record_iq_capable(c) for norad, c in sat_cfgs.items()}
+    record_iq_ok = verify_record_iq(sat_cfgs, passes, iq_capable)
 
     active_pass = None
     active_proc = None
@@ -701,21 +727,8 @@ def main():
                                  if attempt > 1 else ""))
                         if notify_enabled and attempt == 1:
                             notify("Satellite pass starting", f"{sat_cfg['name']} - AOS")
-                        cmd = [sys.executable, "-u", sat_cfg["script"]]
-                        record_iq_value = None  # None = --record-iq isn't being passed at all
-                        if sat_cfg.get("record_iq_toggle", False) and \
-                                record_iq_ok.get(p["norad"], True):
-                            # only satellites whose compiled flowgraph actually
-                            # accepts --record-iq (verified at startup) get it -
-                            # everything else launches exactly as before.
-                            # A per-pass override in schedule.yaml (set via
-                            # toggle_pass_record_iq.py) takes priority over
-                            # the session-wide --record-iq default, if set.
-                            per_pass_override = p.get("record_iq")
-                            record_iq_value = (per_pass_override
-                                               if per_pass_override is not None
-                                               else args.record_iq == "yes")
-                            cmd += ["--record-iq", "1" if record_iq_value else "0"]
+                        cmd, record_iq_value = build_launch_command(
+                            sat_cfg, p, args.record_iq, iq_capable, record_iq_ok)
                         active_proc = subprocess.Popen(cmd)
                         active_pass = p
                         log_pass_event("started", sat_cfg, p,

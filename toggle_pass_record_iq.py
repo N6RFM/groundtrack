@@ -5,9 +5,10 @@ a per-pass-instance override, independent of which satellite it is.
 Distinct from the two other record_iq mechanisms already in this
 toolkit, and takes priority over both when set:
 
-  1. record_iq_toggle (satellites.yaml, per-satellite) - a capability
-     flag: does this satellite's .grc even have the record_iq Parameter
-     block wired up at all. Doesn't decide yes/no, just whether it CAN.
+  1. Capability (per-satellite) - does this satellite's .grc even have the
+     record_iq Parameter block wired up at all. Doesn't decide yes/no, just
+     whether it CAN. Read from the .grc itself; nothing to declare in
+     satellites.yaml (record_iq_toggle: false there opts a satellite out).
   2. --record-iq (run_passes.py, session-wide) - the default decision
      for every pass launched during one run_passes.py session.
   3. record_iq (schedule.yaml, per-pass) - THIS tool. Overrides #2 for
@@ -47,8 +48,9 @@ def main():
 
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
+    from edit_satellite import record_iq_capable
     capable_norads = {s["norad"] for s in cfg.get("satellites", [])
-                       if s.get("record_iq_toggle", False)}
+                       if record_iq_capable(s)}
 
     now = datetime.now(timezone.utc)
     passes = schedule.get("passes", [])
@@ -89,14 +91,12 @@ def main():
     incapable = [i for i in indices if upcoming[i]["norad"] not in capable_norads]
     if incapable:
         names = sorted({upcoming[i]["name"] for i in incapable})
-        print(f"Skipping {names} - record_iq_toggle isn't set for these "
-              f"satellites, so a per-pass override would have no effect. "
-              f"Enabling it is a two-step thing: the satellite's .grc must first "
-              f"be wired for it - python3 wire_record_iq.py <name> does that in "
-              f"one step, then ./regen_all.sh - and only then: "
-              f"python3 edit_satellite.py <name> --record-iq-toggle "
-              f"(which checks the .grc and refuses if it isn't wired). See "
-              f"docs/adding-satellites.md, 'Toggling IQ recording'.")
+        print(f"Skipping {names} - not toggle-capable, so a per-pass override would "
+              f"have no effect. A satellite is capable once its .grc is wired for the "
+              f"record_iq toggle - python3 wire_record_iq.py <name> does that in one "
+              f"step, then ./regen_all.sh; nothing needs declaring in satellites.yaml "
+              f"(unless record_iq_toggle: false is set there, which opts it out). "
+              f"See docs/adding-satellites.md, 'Toggling IQ recording'.")
         indices = [i for i in indices if i not in incapable]
     if not indices:
         print("Nothing left to toggle.")

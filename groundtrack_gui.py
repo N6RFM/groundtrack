@@ -975,7 +975,7 @@ class GroundtrackGUI(tk.Tk):
         fields["template"] = add_row(9, "Template .grc:", default_template)
         record_iq_var = tk.BooleanVar(value=False)
         record_iq_check = ttk.Checkbutton(
-            win, text="Template is wired for the record_iq toggle - set it for this one too",
+            win, text="Also write record_iq_toggle: true explicitly (optional - a wired template is detected anyway)",
             variable=record_iq_var)
         record_iq_check.grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
 

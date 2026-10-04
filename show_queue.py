@@ -77,8 +77,9 @@ def main():
     try:
         with open("satellites.yaml") as f:
             sat_cfg = yaml.safe_load(f)
+        from edit_satellite import record_iq_capable
         capable_norads = {s["norad"] for s in sat_cfg.get("satellites", [])
-                           if s.get("record_iq_toggle", False)}
+                           if record_iq_capable(s)}
     except FileNotFoundError:
         pass  # record_iq column still shows; capability just can't be checked
 

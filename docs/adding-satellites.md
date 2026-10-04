@@ -100,10 +100,11 @@ is built yet, and a *missing* `enabled` key is treated as `true`
 everywhere else in this toolkit, which would make `preflight.py` (or a
 real `run_passes.py` session) treat the satellite as live immediately and
 fail on a `.grc`/`.py` that doesn't exist yet. `toggle_satellite.py
---enable <name>` turns it on once the steps below are done. Add
-`--record-iq-toggle` to also write `record_iq_toggle: true` now - it
-doesn't wire the `.grc` (which doesn't exist yet either); run
-`wire_record_iq.py` after building it, same as for any other satellite.
+--enable <name>` turns it on once the steps below are done. There's nothing
+to say here about IQ toggling: once the `.grc` is wired (`wire_record_iq.py`,
+or built from an already-wired template) that's detected automatically - see
+"Toggling IQ recording" below. (`--record-iq-toggle` still works; it just writes
+the explicit `record_iq_toggle: true` line.)
 
 **If a record-only satellite's `.grc` would be identical to an existing one
 except for name, NORAD, and frequency** (the common case when adding many
@@ -258,27 +259,38 @@ satellite whose `.grc` uses
 fork of upstream [gr-filerepeater](https://github.com/ghostop14/gr-filerepeater)
 specifically because upstream's `Record On Start` is a locked Yes/No
 dropdown with no way to reference a variable - the fork changes that one
-field's type so it can hold an expression instead. `record_iq_toggle` in
-`satellites.yaml` is a persistent capability flag confirming a
-satellite's `.grc` is wired this way; the actual record-or-not decision
-is normally a session-wide choice made when `run_passes.py` starts.
+field's type so it can hold an expression instead. Whether a satellite
+supports the toggle is read from its `.grc` - wired means the Advanced File
+Sink's Record On Start references `record_iq` and an enabled `record_iq`
+Parameter block exists - so **there is nothing to declare in `satellites.yaml`**.
+(It used to be a hand-maintained `record_iq_toggle: true` line, which every way of
+adding a satellite had to remember; forgetting it showed up as a bare
+`recordOnStart is True` preflight failure and a satellite that silently never
+recorded IQ. An explicit `record_iq_toggle: true` or `false` still wins, if
+present - `false` opts a satellite out.) The actual record-or-not decision is
+normally a session-wide choice made when `run_passes.py` starts.
 
-**Order matters: wire the `.grc` first, then set the flag.** The quick way:
+**Wire the `.grc`, recompile, and you're done.** The quick way:
 ```
 python3 wire_record_iq.py BY70-4 JAMX-01     # shows a diff, asks, keeps a .bak
 ./regen_all.sh
 ```
 By hand in GRC, the same thing is: add a Parameter block with ID
 `record_iq`, type `int`, value `1`; set the Advanced File Sink's Record On
-Start to `bool(record_iq)`; save and recompile. Either way, only then:
+Start to `bool(record_iq)`; save and recompile. Either way that's all - the
+toggle is detected from the `.grc`. Optionally, to write the setting down
+explicitly, or to opt a wired satellite out:
 ```
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 python3 edit_satellite.py ASRTU-1_SSDV --no-record-iq-toggle
 ```
 `--record-iq-toggle` checks the `.grc` and refuses, changing nothing, if
-it isn't wired - the flag is not a harmless note to self. Set on a satellite
-whose flowgraph doesn't accept `--record-iq`, every launch of that satellite
-fails on an argument error. (`preflight.py` checks the same wiring, and
+it isn't wired - an explicit `true` is not a harmless note to self: set on a
+satellite whose flowgraph doesn't accept `--record-iq`, every launch fails on
+an argument error. `--no-record-iq-toggle` writes `record_iq_toggle: false`:
+`run_passes.py` then never passes the flag, so recording follows the
+`record_iq` parameter's own default in the `.grc` (`preflight.py` warns about
+that case and says what the default is). (`preflight.py` checks the same wiring, and
 `run_passes.py` re-verifies the compiled script at startup as a last
 backstop; see [Troubleshooting](troubleshooting.md).)
 See [run_passes.py](scripts-reference.md#run_passespy) for the

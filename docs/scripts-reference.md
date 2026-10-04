@@ -383,15 +383,16 @@ elevation safety-net, or the flowgraph crashing early), the rotor is
 pre-positioned toward wherever the *next* approved pass will actually
 rise, rather than left wherever the finished pass happened to end -
 `--no-preposition` disables this. `--record-iq {yes,no}` (default
-`yes`) is the session-wide default, affecting only satellites with
-`record_iq_toggle: true` set - see
+`yes`) is the session-wide default, affecting only satellites whose `.grc` is wired for
+the toggle (detected automatically; an explicit `record_iq_toggle: true`/`false`
+in `satellites.yaml` overrides) - see
 [Adding a satellite](adding-satellites.md)
 for what that requires. Every other satellite launches exactly as
 before, regardless of this flag. A pass can override this session
 default individually - see `toggle_pass_record_iq.py` below - which
 takes priority over `--record-iq` for that one pass only. Before the run
-starts, `run_passes.py` asks each satellite that has a queued pass and
-`record_iq_toggle: true` whether its compiled script actually accepts
+starts, `run_passes.py` asks each toggle-capable satellite that has a queued pass
+whether its compiled script actually accepts
 `--record-iq` (via the script's own `--help`, which exits before touching any
 hardware); if not, it prints a warning and launches that satellite without
 the flag rather than crashing it every pass. A flowgraph that exits early at
@@ -409,8 +410,8 @@ on AOS/LOS.
 
 Toggles IQ recording on or off for specific upcoming passes in the
 queue - a per-pass-instance override, independent of which satellite it
-is, distinct from both `record_iq_toggle` (the per-satellite capability
-flag) and `run_passes.py`'s own `--record-iq` (the session-wide
+is, distinct from both the per-satellite capability (read from the
+`.grc`) and `run_passes.py`'s own `--record-iq` (the session-wide
 default). Takes priority over the session default for that one pass
 only, when set - unset, that pass just falls back to whatever
 `--record-iq` says:
@@ -421,8 +422,8 @@ Interactive: lists every upcoming approved pass with its current
 override state and whether the satellite is even capable of being
 toggled at all, then prompts for which pass number(s) to change and
 whether to turn recording on, off, or clear back to no override. Skips
-(with a clear explanation) any selected pass whose satellite doesn't
-have `record_iq_toggle` set, since a per-pass override would have no
+(with a clear explanation) any selected pass whose satellite isn't
+toggle-capable, since a per-pass override would have no
 effect there. Only ever writes to `schedule.yaml`, never `satellites.yaml`
 or any `.grc`. `show_queue.py`'s own listing shows each pass's current
 `record_iq` state (`ON`/`OFF`/`(default)`/`n/a`) for a quick look without

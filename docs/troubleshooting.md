@@ -13,8 +13,8 @@ Multi-station mode (a `radios.yaml` exists) - see [Stations](stations.md),
 
 **A satellite's pass "exits early" over and over, with `error: unrecognized
 arguments: --record-iq 1` (or another argument error) printed each time**
-That satellite has `record_iq_toggle: true` in `satellites.yaml`, so
-`run_passes.py` passes it `--record-iq`, but its compiled flowgraph doesn't
+That satellite is toggle-capable (its `.grc` is wired for it, or it has
+`record_iq_toggle: true`), so `run_passes.py` passes it `--record-iq`, but its compiled flowgraph doesn't
 have a `record_iq` Parameter block, so it rejects the flag and exits
 immediately. Two ways out: wire the `.grc` (a `record_iq` Parameter block
 feeding the Advanced File Sink's Record On Start) with `python3
