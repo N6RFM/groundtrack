@@ -395,10 +395,19 @@ def main():
               f"in more than a device string - e.g. the sample rates they offer (as far as I know the\n"
               f"Airspy Mini offers 3 and 6 MS/s where the R2 offers 2.5 and 10) - so a swapped copy would\n"
               f"look right and not work.")
-    print("\nWhen you're happy, commit" + (" (git mv already staged the flowgraph renames):" if plan["use_git"] else ":"))
-    print(f"  git add -A {f} {s} .gitignore")
-    print("  git status          # review: expect renames, plus the new station folder")
-    print("  git commit -m 'move to multi-station layout'")
+    if plan["use_git"]:
+        print("\nWhen you're happy, commit. git mv already staged the flowgraph renames, so normally all that's\n"
+              "left to add is the new station folder:")
+        print(f"  git add {s}")
+        print("  git status          # review: renames staged; your own uncommitted edits still unstaged")
+        print("  git commit -m 'move to multi-station layout'")
+        print(f"(Not 'git add -A {f}': that would also commit any uncommitted flowgraph edits and untracked\n"
+              f"flowgraphs sitting in {f}/flowgraphs - fine if you want them in, but a choice, not a default.)")
+    else:
+        print("\nWhen you're happy, commit:")
+        print(f"  git add -A {f} {s}")
+        print("  git status          # review")
+        print("  git commit -m 'move to multi-station layout'")
     return 0
 
 

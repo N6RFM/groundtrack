@@ -89,10 +89,14 @@ Afterwards:
 ```
 python3 preflight.py --radio r2
 python3 preflight.py --radio mini      # a warning that it has no satellites yet is expected
-git add -A r2 mini .gitignore
-git status                             # review: renames, plus the new folder
+git add mini                           # git mv already staged the renames
+git status                             # review: renames staged; your own uncommitted edits still unstaged
 git commit -m "move to multi-station layout"
 ```
+
+`git add mini`, not `git add -A r2 mini`: the latter would also commit any
+uncommitted edits and untracked flowgraphs sitting in `r2/flowgraphs`. Those are
+yours to commit when you choose - the migration only moves them.
 
 `radios.yaml` itself is gitignored (it's your site's station list); copy
 `radios.example.yaml` to see every field. `default:` names the station the GUI
