@@ -115,8 +115,19 @@ def main():
     now = datetime.now(timezone.utc)
     next_shown = False
 
-    print(f"{'STATUS':13s} {'SATELLITE':12s} {'AOS':22s} {'LOS':22s} {'DUR':8s} {'MAX EL':7s} {'RECORD_IQ':10s}")
-    print("-" * 99)
+    # paired passes (see pair_passes.py): who rides with whom. The column only appears when
+    # something in the queue is paired, so an unpaired queue prints exactly as it always did.
+    ref = lambda r: f"{r.get('norad')}@{r.get('aos')}"
+    name_of = {ref(t[4]): t[2] for t in enriched}
+    riders = {}
+    for t in enriched:
+        if t[4].get("rides_with"):
+            riders.setdefault(t[4]["rides_with"], []).append(t[2])
+    any_pairs = bool(riders)
+    width = 99 + (30 if any_pairs else 0)
+    print(f"{'STATUS':13s} {'SATELLITE':12s} {'AOS':22s} {'LOS':22s} {'DUR':8s} {'MAX EL':7s} {'RECORD_IQ':10s}"
+          + (" TOGETHER" if any_pairs else ""))
+    print("-" * width)
 
     for aos, los, sat, elev, raw in enriched:
         if los and los < now:
@@ -139,12 +150,18 @@ def main():
             iq_str = "(default)"
         else:
             iq_str = "ON" if raw["record_iq"] else "OFF"
+        together = ""
+        if any_pairs:
+            if raw.get("rides_with"):
+                together = f" rides with {name_of.get(raw['rides_with'], '?')}"
+            elif ref(raw) in riders:
+                together = f" steers beam, with {', '.join(riders[ref(raw)])}"
         print(f"{status:13s} {sat:12s} {fmt_dt(aos):22s} {fmt_dt(los):22s} "
-              f"{fmt_duration(aos, los):8s} {elev_str:7s} {iq_str:10s}")
+              f"{fmt_duration(aos, los):8s} {elev_str:7s} {iq_str:10s}{together}")
 
     total = len(enriched)
     remaining = sum(1 for aos, los, *_ in enriched if aos and aos > now)
-    print("-" * 99)
+    print("-" * width)
     print(f"{total} pass(es) shown, {remaining} still upcoming.")
 
 

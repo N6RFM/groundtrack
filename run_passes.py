@@ -521,7 +521,29 @@ def main():
         print("Nothing approved - run plan_passes.py (optionally --interactive) first.")
         return
 
-    rig = Rigctld(cfg["rig_port"])
+    # One rigctld per receiver the schedule needs: this station's own, plus one for any satellite
+    # whose flowgraph polls a different port (a second SDR on the same antenna - see lanes.py).
+    # Which port a satellite's flowgraph polls is read from its .grc, so nothing has to be declared.
+    import lanes
+    station_lane = cfg["rig_port"]
+    sat_lane = {norad: lanes.doppler_port(c, station_lane) for norad, c in sat_cfgs.items()}
+    lane_of = lambda p: sat_lane[p["norad"]]
+    by_ref = {lanes.pass_ref(p): p for p in passes}
+    rigs = {}
+    for port in [station_lane] + sorted({lane_of(p) for p in passes} - {station_lane}):
+        try:
+            rigs[port] = Rigctld(port)
+        except OSError as e:
+            sys.exit(f"Couldn't start rigctld on port {port} ({e}) - is something else already "
+                     f"using it? python3 doctor.py shows who holds each port.")
+    if len(rigs) > 1:
+        print("Doppler channels, one per receiver: " + ", ".join(
+            f"{port}" + (" (this station's main)" if port == station_lane else "") for port in rigs))
+    for p in passes:
+        lead = lanes.leader_of(p, by_ref, lane_of)
+        if lead is not None:
+            print(f"Paired: {sat_cfgs[lead['norad']]['name']} {lead['aos']} steers the beam, and "
+                  f"{sat_cfgs[p['norad']]['name']} {p['aos']} records alongside it on its own receiver.")
     rot = None
     if "rot_host" in cfg and "rot_port" in cfg:
         rot = Rotctld(cfg["rot_host"], cfg["rot_port"])
@@ -540,8 +562,7 @@ def main():
     iq_capable = {norad: record_iq_capable(c) for norad, c in sat_cfgs.items()}
     record_iq_ok = verify_record_iq(sat_cfgs, passes, iq_capable)
 
-    active_pass = None
-    active_proc = None
+    active = {}   # pass_key -> {"pass", "proc", "lane"}, in the order they started
     is_tty = sys.stdout.isatty()
     last_pass_status_print = None   # throttle for the during-pass tracking line
     last_idle_status_print = None   # throttle for the "waiting for next pass" line
@@ -551,19 +572,26 @@ def main():
         while True:
             now = datetime.now(timezone.utc)
             t = ts.now()
+            crashed = False
+            status_parts = []
+            running = [a["pass"] for a in active.values()]
+            # the rotor follows ONE pass: the leader of a pair while it runs, else whichever is running
+            steer = lanes.steering_pass(running, by_ref, lane_of) if running else None
 
-            if active_pass is not None:
-                sat_cfg = sat_cfgs[active_pass["norad"]]
-                sat = tles.get(active_pass["norad"])
+            for key in list(active):
+                a = active[key]
+                p, proc = a["pass"], a["proc"]
+                sat_cfg = sat_cfgs[p["norad"]]
+                sat = tles.get(p["norad"])
                 try:
-                    if active_proc.poll() is not None:
+                    if proc.poll() is not None:
                         if is_tty:
                             clear_line()
-                        rc = active_proc.returncode
-                        outcome, attempt = crash_outcome(
-                            pass_key(active_pass), launch_attempts, finished_passes)
+                        rc = proc.returncode
+                        outcome, attempt = crash_outcome(key, launch_attempts, finished_passes)
                         will_retry = outcome == "retry"
-                        print(f"[{sat_cfg['name']}] flowgraph exited early "
+                        print(f"[{sat_cfg['name']}] flowgraph exited early \
+"
                               f"(code {rc}) - check its output above. "
                               + (f"Attempt {attempt}/{MAX_LAUNCH_ATTEMPTS}; retrying in "
                                  f"{LAUNCH_RETRY_DELAY_S}s." if will_retry else
@@ -574,19 +602,19 @@ def main():
                                    f"{sat_cfg['name']} - flowgraph exited early "
                                    f"(code {rc}), attempt {attempt}/{MAX_LAUNCH_ATTEMPTS}"
                                    + ("" if will_retry else " - giving up"))
-                        log_pass_event("crashed", sat_cfg, active_pass, exit_code=rc,
+                        log_pass_event("crashed", sat_cfg, p, exit_code=rc,
                                        attempt=attempt, will_retry=will_retry)
-                        active_pass, active_proc = None, None
-                        # only move the rotor toward the NEXT pass once we've
-                        # stopped trying this one - pre-positioning away and
-                        # then back on every retry would be pointless motion
-                        if not will_retry and not args.no_preposition:
+                        del active[key]
+                        # only move the rotor toward the NEXT pass once we've stopped trying
+                        # this one - pre-positioning away and then back on every retry would
+                        # be pointless motion - and not while another pass is still running
+                        if not will_retry and not active and not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
-                        time.sleep(1)
+                        crashed = True
                         continue
 
                     el_deg, az_deg = elevation_deg(sat, observer, t)
-                    past_los = now >= active_pass["los_dt"]
+                    past_los = now >= p["los_dt"]
                     below_elev = el_deg < sat_cfg["min_elev_deg"]
                     if past_los or below_elev:
                         if is_tty:
@@ -594,55 +622,36 @@ def main():
                         print(f"[{sat_cfg['name']}] LOS ({'scheduled' if past_los else 'elevation safety net'})")
                         if notify_enabled:
                             notify("Satellite pass ended", f"{sat_cfg['name']} - LOS")
-                        log_pass_event("completed", sat_cfg, active_pass,
+                        log_pass_event("completed", sat_cfg, p,
                                        reason="scheduled" if past_los else "elevation_safety_net")
-                        active_proc.terminate()
+                        proc.terminate()
                         try:
-                            active_proc.wait(timeout=10)
+                            proc.wait(timeout=10)
                         except subprocess.TimeoutExpired:
-                            active_proc.kill()
-                        # this pass is over - without this, an elevation
-                        # safety-net LOS (which fires BEFORE the scheduled
-                        # window closes) would see the pass still "in
-                        # window" and relaunch it immediately
-                        finished_passes.add(pass_key(active_pass))
-                        active_pass, active_proc = None, None
-                        if not args.no_preposition:
+                            proc.kill()
+                        # this pass is over - without this, an elevation safety-net LOS (which
+                        # fires BEFORE the scheduled window closes) would see the pass still
+                        # "in window" and relaunch it immediately
+                        finished_passes.add(key)
+                        del active[key]
+                        if not active and not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
                     else:
                         dop = doppler_hz(sat, observer, t, sat_cfg["freq_hz"])
                         corrected = sat_cfg["freq_hz"] + dop
-                        rig.set_freq(corrected)
-                        maybe_update_rotor(rot, sat, observer, ts, now,
-                                            az_deg, el_deg, active_pass["los_dt"],
-                                            threshold_deg=cfg.get("rot_threshold_deg", 5.0))
+                        rigs[a["lane"]].set_freq(corrected)       # this pass's own Doppler, on its own receiver
+                        if p is steer:
+                            maybe_update_rotor(rot, sat, observer, ts, now,
+                                                az_deg, el_deg, p["los_dt"],
+                                                threshold_deg=cfg.get("rot_threshold_deg", 5.0))
                         if args.verbose:
-                            remaining = format_countdown(active_pass["los_dt"] - now)
-                            status = (f"[{sat_cfg['name']}] el={el_deg:5.1f} az={az_deg:5.1f}  "
-                                      f"freq={corrected:,.0f} Hz (doppler {dop:+.0f} Hz)  "
-                                      f"LOS in {remaining}")
-                            # Doppler correction above still recomputes every
-                            # second regardless; the rotor only actually moves
-                            # when it's drifted enough to warrant a new
-                            # lead-ahead target, not on a fixed cadence. Only
-                            # how often this STATUS LINE gets WRITTEN is
-                            # throttled here, for both paths. For a real terminal, write_status()
-                            # only overwrites the same line, but a terminal
-                            # emulator's own scrollback/copy buffer can still
-                            # preserve every individual \r-updated write as its
-                            # own line - so a live TTY session copied to a text
-                            # file can look like scrolling spam even though the
-                            # on-screen display only ever showed one line
-                            # changing. Throttling how often write_status() is
-                            # even called fixes that too, not just the
-                            # redirected-to-a-file case.
-                            if last_pass_status_print is None or \
-                                    (now - last_pass_status_print).total_seconds() >= args.status_interval:
-                                if is_tty:
-                                    write_status(status)
-                                else:
-                                    print(status)
-                                last_pass_status_print = now
+                            remaining = format_countdown(p["los_dt"] - now)
+                            role = ("" if len(running) < 2 else
+                                    "  (steers the beam)" if p is steer else "  (rides along)")
+                            status_parts.append(
+                                f"[{sat_cfg['name']}] el={el_deg:5.1f} az={az_deg:5.1f}  "
+                                f"freq={corrected:,.0f} Hz (doppler {dop:+.0f} Hz)  "
+                                f"LOS in {remaining}{role}")
                 except Exception as e:
                     if is_tty:
                         clear_line()
@@ -652,47 +661,74 @@ def main():
                     if notify_enabled:
                         notify("Satellite pass FAILED",
                                f"{sat_cfg['name']} - error during tracking: {e!r}")
-                    log_pass_event("error", sat_cfg, active_pass, error=repr(e))
-                    # an exception in the tracking code isn't something a
-                    # blind relaunch fixes - treat the pass as finished so it
-                    # can't loop. (active_pass can already be None here if the
-                    # exception fired after the pass was reset.)
-                    if active_pass is not None:
-                        finished_passes.add(pass_key(active_pass))
+                    log_pass_event("error", sat_cfg, p, error=repr(e))
+                    # an exception in the tracking code isn't something a blind relaunch
+                    # fixes - treat the pass as finished so it can't loop
+                    finished_passes.add(key)
                     try:
-                        active_proc.terminate()
-                        active_proc.wait(timeout=10)
+                        proc.terminate()
+                        proc.wait(timeout=10)
                     except Exception:
                         pass
-                    active_pass, active_proc = None, None
-                    if not args.no_preposition:
+                    active.pop(key, None)
+                    if not active and not args.no_preposition:
                         preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
 
-            if active_pass is None:
-                for p in passes:
-                    if p["aos_dt"] <= now < p["los_dt"]:
-                        key = pass_key(p)
-                        if not launch_allowed(key, now, launch_attempts, finished_passes):
-                            continue  # already ended, given up on, or waiting to retry
-                        if is_tty:
-                            clear_line()
-                        sat_cfg = sat_cfgs[p["norad"]]
-                        attempt = note_launch(key, now, launch_attempts)
-                        print(f"[{sat_cfg['name']}] AOS - launching {sat_cfg['script']}"
-                              + (f" (attempt {attempt}/{MAX_LAUNCH_ATTEMPTS})"
-                                 if attempt > 1 else ""))
-                        if notify_enabled and attempt == 1:
-                            notify("Satellite pass starting", f"{sat_cfg['name']} - AOS")
-                        cmd, record_iq_value = build_launch_command(
-                            sat_cfg, p, args.record_iq, iq_capable, record_iq_ok)
-                        active_proc = subprocess.Popen(cmd)
-                        active_pass = p
-                        log_pass_event("started", sat_cfg, p,
-                                       record_iq=record_iq_value, attempt=attempt)
-                        time.sleep(3)  # let the flowgraph come up before polling rigctld
-                        break
+            # Doppler correction above recomputes every second regardless; the rotor only moves
+            # when it has drifted enough to warrant a new lead-ahead target, not on a fixed
+            # cadence. Only how often the STATUS LINE gets written is throttled here (for a real
+            # terminal, write_status() overwrites one line, but a terminal's scrollback can
+            # still keep every \r-updated write as its own line - so throttling the writes,
+            # not just the redirected-to-a-file case, avoids what looks like scrolling spam).
+            if status_parts and (last_pass_status_print is None or
+                                 (now - last_pass_status_print).total_seconds() >= args.status_interval):
+                status = "   |   ".join(status_parts)
+                if is_tty:
+                    write_status(status)
+                else:
+                    print(status)
+                last_pass_status_print = now
 
-            if active_pass is None:
+            if crashed:
+                time.sleep(1)
+                continue
+
+            for p in passes:
+                if p["aos_dt"] <= now < p["los_dt"]:
+                    key = pass_key(p)
+                    if key in active or not launch_allowed(key, now, launch_attempts, finished_passes):
+                        continue  # running, already ended, given up on, or waiting to retry
+                    running = [a["pass"] for a in active.values()]
+                    if running and not lanes.may_run_alongside(p, running, by_ref, lane_of):
+                        continue  # overlaps something running that it wasn't paired with: waits, as ever
+                    if is_tty:
+                        clear_line()
+                    sat_cfg = sat_cfgs[p["norad"]]
+                    attempt = note_launch(key, now, launch_attempts)
+                    extras = {"lane": lane_of(p)} if len(rigs) > 1 else {}
+                    note = ""
+                    lead = lanes.leader_of(p, by_ref, lane_of)
+                    if lead is not None and any(lead is r for r in running):
+                        extras["role"] = "companion"
+                        note = (f" - rides along with {sat_cfgs[lead['norad']]['name']}, "
+                                f"which steers the beam")
+                    elif any(lanes.leader_of(r, by_ref, lane_of) is p for r in running):
+                        extras["role"] = "leader"
+                        note = " - now steers the beam for the pass already running"
+                    print(f"[{sat_cfg['name']}] AOS - launching {sat_cfg['script']}"
+                          + (f" (attempt {attempt}/{MAX_LAUNCH_ATTEMPTS})"
+                             if attempt > 1 else "") + note)
+                    if notify_enabled and attempt == 1:
+                        notify("Satellite pass starting", f"{sat_cfg['name']} - AOS")
+                    cmd, record_iq_value = build_launch_command(
+                        sat_cfg, p, args.record_iq, iq_capable, record_iq_ok)
+                    active[key] = {"pass": p, "proc": subprocess.Popen(cmd), "lane": lane_of(p)}
+                    log_pass_event("started", sat_cfg, p,
+                                   record_iq=record_iq_value, attempt=attempt, **extras)
+                    time.sleep(3)  # let the flowgraph come up before polling rigctld
+                    break
+
+            if not active:
                 upcoming = [p for p in passes if p["aos_dt"] > now]
                 if upcoming:
                     nxt = upcoming[0]
@@ -714,13 +750,15 @@ def main():
     except KeyboardInterrupt:
         if is_tty:
             clear_line()
-        if active_proc is not None:
-            active_proc.terminate()
+        for a in active.values():
+            a["proc"].terminate()
+        for a in active.values():
             try:
-                active_proc.wait(timeout=10)
+                a["proc"].wait(timeout=10)
             except subprocess.TimeoutExpired:
-                active_proc.kill()
-        rig.stop()
+                a["proc"].kill()
+        for rig in rigs.values():
+            rig.stop()
         print("Stopped.")
 
 

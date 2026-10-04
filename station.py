@@ -413,7 +413,7 @@ def other_stations_ports():
 
 
 def _all_configs():
-    """[(station name or None, config)] for every station's satellites.yaml - or the one in
+    """[(station name or None, config, folder)] for every station's satellites.yaml - or the one in
     the current folder in classic mode. Missing or unreadable files are skipped."""
     out = []
     if multi_station():
@@ -424,13 +424,13 @@ def _all_configs():
         for name, spec in stations.items():
             try:
                 with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
-                    out.append((name, yaml.safe_load(f) or {}))
+                    out.append((name, yaml.safe_load(f) or {}, spec["dir"]))
             except (OSError, yaml.YAMLError):
                 continue
     else:
         try:
             with open("satellites.yaml") as f:
-                out.append((None, yaml.safe_load(f) or {}))
+                out.append((None, yaml.safe_load(f) or {}, "."))
         except (OSError, yaml.YAMLError):
             pass
     return out
@@ -453,12 +453,17 @@ def configured_ports():
             e["labels"].append(label)
         if rig_station:
             e["rig"].add(rig_station)
-    for st, cfg in _all_configs():
+    import lanes
+    for st, cfg, base in _all_configs():
         pre = f"{st}: " if st else ""
         add(cfg.get("rig_port"), f"{pre}rigctld (Doppler)", st)
         if "rot_host" in cfg and "rot_port" in cfg and cfg["rot_host"] in ("127.0.0.1", "localhost", "0.0.0.0", "::1"):
             add(cfg["rot_port"], f"{pre}rotctld (antenna)")
         enabled = [s for s in cfg.get("satellites") or [] if s.get("enabled", True)]
+        for s in enabled:       # a second receiver on the same antenna has its own rigctld (its flowgraph says which port)
+            lane = lanes.doppler_port(s, cfg.get("rig_port"), base)
+            if lane is not None and lane != cfg.get("rig_port"):
+                add(lane, f"{pre}rigctld (Doppler, own receiver)", st)
         for port, detail in _ports_in({"satellites": enabled}):
             add(port, f"{pre}{detail}")
     return [(p, " / ".join(e["labels"]), e["rig"]) for p, e in sorted(found.items())]
@@ -468,7 +473,7 @@ def configured_scripts():
     """Basenames of the compiled flowgraph scripts of every enabled satellite, in every
     station - what doctor.py looks for among the running processes."""
     names = set()
-    for _st, cfg in _all_configs():
+    for _st, cfg, _base in _all_configs():
         for s in cfg.get("satellites") or []:
             if s.get("enabled", True) and s.get("script"):
                 names.add(os.path.basename(str(s["script"])))
@@ -551,6 +556,12 @@ def cross_station_conflicts():
             continue
         if cfg.get("rig_port") is not None:
             note(("rig_port", cfg["rig_port"]), name, "rigctld")
+        import lanes
+        for s in cfg.get("satellites") or []:      # a second receiver's Doppler channel (read from its flowgraph)
+            if s.get("enabled", True):
+                lane = lanes.doppler_port(s, cfg.get("rig_port"), spec["dir"])
+                if lane is not None and lane != cfg.get("rig_port"):
+                    note(("rig_port", lane), name, "rigctld (own receiver)")
         if "rot_host" in cfg and "rot_port" in cfg:
             note(("rotor", str(cfg["rot_host"]), cfg["rot_port"]), name, "the rotor")
         for port, detail in _ports_in(cfg):

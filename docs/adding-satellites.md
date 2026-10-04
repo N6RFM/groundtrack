@@ -183,8 +183,10 @@ telemetry upload agent, but that block needs no entry here at all -
 Multiple satellites feeding the *same* downstream app can share one
 `bridge_port` - `tcp_bridge.py` runs one shared listener per distinct
 port, with each satellite getting its own independent, self-retrying
-upstream connection. Since only one satellite's flowgraph is ever
-actually running at a time (one shared SDR), only one of those upstream
+upstream connection. Since only one satellite's flowgraph is normally
+running at a time (one shared SDR - paired passes on two receivers are the
+exception, so give two satellites that are recorded together their own
+`bridge_port`s), only one of those upstream
 connections is ever actually live in practice, so this is both safe and
 genuinely more convenient: the downstream app never needs its connection
 settings changed depending on which satellite is about to pass.

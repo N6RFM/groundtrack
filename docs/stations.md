@@ -54,11 +54,12 @@ place, and one scheduler is what decides where. Two stations would each plan pas
 with nothing to stop the second recording while the beam points somewhere else - and
 preflight refuses two stations steering one rotor in any case.
 
-What that costs: one flowgraph at a time. A 2 m pass and a 70 cm pass that overlap
-compete (`plan_passes.py` flags it), and one satellite can't be recorded on both bands
-at once. If you do need both bands of one satellite together, give the second receiver
-a station of its own with no rotor configured; the first station then moves the beam
-for both.
+By default that costs one flowgraph at a time: a 2 m pass and a 70 cm pass that overlap
+compete (`plan_passes.py` flags it) - unless you pair them, which is for the rare case of
+two satellites close together, below. One satellite can't be recorded on both bands at
+once from one station (a station keys its satellites on NORAD, so the two entries would
+collide); if you need that, give the second receiver a station of its own with no rotor
+configured, and the first station moves the beam for both.
 
 Each SDR needs its own record-only template, since its device string - and usually its
 sample rate - differs. Name them `_record_only_template.grc` (the default) and
@@ -67,8 +68,45 @@ station's `flowgraphs/`. Given a satellite's frequency, `new_record_only_satelli
 and the GUI's Add dialog pick the template whose own frequency is nearest - 145 MHz
 can't be mistaken for 437 MHz - and say which. `--template` (or choosing in the dialog)
 overrides it, and a frequency exactly between two templates is refused rather than
-guessed. Doppler needs nothing extra: each satellite entry carries its own downlink
-frequency, and the station's one `rigctld` follows whichever satellite is active.
+guessed. `new_record_only_satellite.py --radio BEAM --list-templates` shows each one's
+frequency, band and SDR (and warns about two on the same band); add `--freq HZ` to see which
+one that frequency would pick. Doppler needs nothing declared: each satellite entry carries its own downlink
+frequency, and each flowgraph polls the port in its own `rig_freq_poller` block - the
+station's `rig_port` for the Airspy's, a different one (4531, say) for the RTL-SDR's, which
+`run_passes.py` reads from the `.grc` and gives a `rigctld` of its own.
+
+## Recording two satellites at once
+
+Sometimes two satellites are close together in the sky and you want both - one on 70 cm,
+one on 2 m. You can, if their flowgraphs run on different receivers (the Airspy with Doppler
+on `rig_port` 4532, the RTL-SDR whose flowgraph polls 4531) and you tell the scheduler to
+**pair** the two passes. The beam only points one way, so you choose whose TLE steers it:
+the *leader*. The other, the *companion*, rides along on its own receiver with its own,
+independent Doppler, computed from its own TLE and frequency.
+
+Nothing is declared in `satellites.yaml`: which receiver a satellite uses is read from the
+Doppler port in its flowgraph's `rig_freq_poller` block, and `run_passes.py` starts a
+`rigctld` on each such port. (An explicit `rig_port:` in a satellite's entry overrides what
+the `.grc` says.) Preflight lists the receivers and checks that each port is clear of the
+rotor, the relay ports and every other station.
+
+You decide when the planner finds the overlap - `plan_passes.py --interactive` offers
+"together, X steers the beam" for passes on different receivers - or afterwards with
+`pair_passes.py` (also a button in the GUI):
+```
+python3 pair_passes.py                           # list the candidates, then choose
+python3 pair_passes.py --pair 2 --leader HADES-L
+python3 pair_passes.py --unpair 2
+```
+A pairing is written into `schedule.yaml` as `rides_with: "<norad>@<aos>"` on the companion
+pass, shown by `show_queue.py` in a TOGETHER column, and checked by preflight (a pairing that
+can't hold is reported, and `run_passes.py` ignores it). `run_passes.py` reads the schedule
+when it starts, so restart it after changing pairings.
+
+While both run, each pass's Doppler goes to its own receiver and the rotor follows the
+leader. If the leader ends first the companion takes over the beam; if the companion's AOS
+comes first, it steers until the leader arrives. Overlapping passes that are *not* paired
+are unchanged: the first to start records and the rest wait.
 
 ## Turning it on
 

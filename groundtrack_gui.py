@@ -369,6 +369,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.plan_passes_auto).pack(side="left", padx=4)
         ttk.Button(row4, text="Plan passes (interactive, new window)",
                    command=self.plan_passes_interactive).pack(side="left")
+        ttk.Button(row4, text="Pair overlapping passes (new window)",
+                   command=self.pair_passes).pack(side="left", padx=(8, 0))
         ttk.Button(row4, text="Toggle IQ for pass (new window)",
                    command=self.toggle_pass_record_iq).pack(side="left", padx=4)
         ttk.Button(row4, text="Show pass log",
@@ -794,6 +796,11 @@ class GroundtrackGUI(tk.Tk):
         if not hours:
             return
         self.run_cmd([sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours)])
+
+    def pair_passes(self):
+        """Record two satellites at once: pair overlapping passes that are on different receivers,
+        and say whose TLE steers the beam. Interactive, so it gets its own terminal."""
+        self.spawn_in_terminal([sys.executable, station.script_path("pair_passes.py")])
 
     def plan_passes_interactive(self):
         """--interactive prompts y/n per pass on stdin - same reasoning

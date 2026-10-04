@@ -177,6 +177,7 @@ later, if that becomes worth doing.
 | Show schedule | `show_queue.py` |
 | Plan passes (auto-approve) | prompts for hours-ahead, then `plan_passes.py --hours N` |
 | Plan passes (interactive, new window) | same prompt, then `plan_passes.py --hours N --interactive` in its own terminal (see above) |
+| Pair overlapping passes (new window) | `pair_passes.py` in its own terminal: pair two overlapping passes on different receivers and choose whose TLE steers the beam (see [Stations](docs/stations.md#recording-two-satellites-at-once)) |
 | Toggle IQ for pass (new window) | `toggle_pass_record_iq.py` in its own terminal - needs real stdin for its interactive pass selection, same reasoning as everywhere else that prompts |
 | Show pass log | `show_pass_log.py` |
 | Start relay.py / Start tcp_bridge.py (new window) | `relay.py --verbose` / `tcp_bridge.py --verbose`, each in its own terminal |

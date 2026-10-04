@@ -100,6 +100,13 @@ def static_checks(cfg_path):
         else:
             check("rotor control configured", True, "none configured - running without antenna control", level=WARN)
 
+    import lanes
+    own_lanes = sorted({lanes.doppler_port(s, cfg.get("rig_port")) for s in cfg.get("satellites", [])
+                        if s.get("enabled", True)} - {cfg.get("rig_port"), None})
+    if own_lanes and isinstance(cfg.get("rig_port"), int):
+        check("Doppler channels", True, f"main {cfg['rig_port']}, plus a separate receiver on "
+              + ", ".join(str(p) for p in own_lanes) + " - read from the flowgraphs; run_passes.py starts a rigctld for each")
+
     import station
     if station.current():
         problems = station.cross_station_conflicts()
@@ -243,6 +250,19 @@ def static_checks(cfg_path):
 
         if grc_exists:
             check_grc(name, grc_path, sat)
+
+        # which receiver this satellite's passes use: the Doppler port its flowgraph polls. A port
+        # that isn't this station's main rig_port is a second receiver (own rigctld, own Doppler),
+        # which run_passes.py starts for it - so it mustn't collide with the rotor or a relay port.
+        import lanes, station as _station
+        lane = lanes.doppler_port(sat, cfg.get("rig_port"))
+        if cfg.get("rig_port") is not None and lane != cfg["rig_port"]:
+            claimed = {p for p, _ in _station._ports_in(cfg)} | ({cfg["rot_port"]} if has_rotor else set())
+            clash = lane in claimed
+            check(f"{name}: Doppler channel {lane} - its own receiver (read from the .grc)", not clash,
+                  f"{lane} is also a rotor, relay or bridge port of this station" if clash else
+                  f"separate from this station's main {cfg['rig_port']}; it can record alongside it "
+                  f"when passes are paired (python3 pair_passes.py)")
 
     return cfg
 
@@ -574,6 +594,25 @@ def main():
             for p in sched.get("passes", []):
                 check(f"schedule entry for {p.get('name')} has a known norad",
                       p.get("norad") in known)
+            # paired passes (pair_passes.py): the leader has to exist and the pairing has to hold, or
+            # run_passes.py quietly ignores it and the two just take turns as ever
+            import lanes
+            sat_lane = {s["norad"]: lanes.doppler_port(s, cfg.get("rig_port")) for s in cfg["satellites"]
+                        if s.get("enabled", True)}
+            lane_of = lambda p: sat_lane.get(p["norad"], cfg.get("rig_port"))
+            approved = [p for p in sched.get("passes", []) if p.get("approved")]
+            by_ref = {lanes.pass_ref(p): p for p in approved}
+            for p in sched.get("passes", []):
+                if not p.get("rides_with"):
+                    continue
+                fault = lanes.pair_fault(p, by_ref, lane_of) if p.get("approved") else "this pass isn't approved"
+                if fault:
+                    check(f"pairing: {p['name']} at {p['aos']} rides with {p['rides_with']}", False,
+                          f"{fault} - run_passes.py will ignore this pairing", level=WARN)
+                else:
+                    lead = by_ref[p["rides_with"]]
+                    check(f"pairing: {p['name']} at {p['aos']} rides with {lead['name']}", True,
+                          f"{lead['name']} steers the beam; each records on its own receiver with its own Doppler")
         except yaml.YAMLError as e:
             check("schedule.yaml parses as YAML", False, str(e))
 

@@ -24,11 +24,15 @@ anything you don't want recorded. Nothing is ever recorded on a pass that
 isn't in this approved list.
 
 Note: if two satellites' approved passes overlap, only one can actually
-record (single SDR, no pre-emption). `plan_passes.py` detects this
-automatically after you approve/reject: with `--interactive` it prompts
-you to actively choose which one to keep (or both, or neither); without
-it, it prints a clear warning listing every conflict rather than staying
-silent, and leaves the existing first-started-wins behavior in place.
+record (single SDR, no pre-emption) - unless they're on different receivers
+(an Airspy on 70 cm and an RTL-SDR on 2 m, say) and you pair them, so both
+record with one of them steering the beam: see `pair_passes.py` below.
+`plan_passes.py` detects overlaps automatically after you approve/reject, comparing
+every pair of passes: with `--interactive` it prompts you to actively choose which one to
+keep (or both, or neither - and, for passes on different receivers, to record them
+together with one of them steering the beam); without it, it prints a clear warning
+listing every conflict rather than staying silent, and leaves the existing
+first-started-wins behavior in place.
 
 **`run_passes.py`** - the executor. Reads `schedule.yaml`, and for each
 approved pass: waits for wall-clock AOS, launches that satellite's
@@ -71,7 +75,23 @@ test frames" above.
 
 **`show_queue.py`** - reads `schedule.yaml` and prints the approved pass
 queue (satellite, AOS, LOS, duration, max elevation), independent of
-whether `run_passes.py` is running. See "Checking the pass queue" above.
+whether `run_passes.py` is running. See "Checking the pass queue" above. When any pass is
+paired it adds a TOGETHER column: who steers the beam and who rides along.
+
+**`pair_passes.py`** - record two satellites at once. Lists the overlapping approved passes
+that are on different receivers, and lets you pair them and say whose TLE steers the beam
+(see [Stations](stations.md#recording-two-satellites-at-once)):
+```
+python3 pair_passes.py                           # list, then choose
+python3 pair_passes.py --list
+python3 pair_passes.py --pair 2 --leader 1       # the first satellite listed steers
+python3 pair_passes.py --pair 2 --leader HADES-L # ... or name the one that does
+python3 pair_passes.py --unpair 2                # or: --unpair all
+```
+It refuses pairings that can't work (the same receiver, an unapproved pass, a pass that's
+already in another pair) and says why. `lanes.py` holds the rules - which receiver a satellite
+is on, who may run alongside whom, who steers - shared by this, the planner, `run_passes.py` and
+preflight so they can't disagree.
 
 **`toggle_satellite.py`** - enable or disable a satellite without
 deleting its config:
@@ -343,7 +363,16 @@ for a second SDR on another band. With no `--template`, the tool picks the one w
 frequency is nearest to `--freq`, says which and what the others were, and refuses a
 frequency exactly between two rather than guess. A template that can't be read as one is
 skipped. `--template PATH` always wins, and the GUI's Add dialog does the same thing in its
-template picker. Nothing else - every block,
+template picker.
+
+`--list-templates` shows what you have, changing nothing - each template's own
+frequency and band, the SDR it opens, its sample rate, any that can't be used and why -
+and warns about two on the same band (frequency can't tell those apart, so the nearer one
+wins). Add `--freq HZ` to see which one that frequency would pick:
+```
+python3 new_record_only_satellite.py --radio BEAM --list-templates
+python3 new_record_only_satellite.py --radio BEAM --list-templates --freq 145900000
+``` Nothing else - every block,
 connection, and other parameter is copied from the template exactly as
 `vet_grc.py --fix` and `wire_record_iq.py` already do, `--yes`/`--dry-run`
 work the same way, and it never overwrites an existing satellite's `.grc`.
@@ -386,6 +415,12 @@ The actual execution engine - waits for each approved pass in
 `schedule.yaml`, launches that satellite's flowgraph at AOS, retunes for
 Doppler via `rigctld`, steers the rotor via `rotctld`, and stops the
 flowgraph at LOS. Runs indefinitely; Ctrl-C to stop.
+
+It starts one `rigctld` for the station's `rig_port` and one more for each other Doppler port
+that an approved satellite's flowgraph polls (a second receiver on the same antenna), and
+feeds each pass's Doppler to its own. Passes you've paired with `pair_passes.py` run together,
+the leader's TLE steering the rotor; every other overlap behaves as it always has. With one
+receiver and no pairings its output is exactly what it was.
 ```
 python3 run_passes.py --verbose
 python3 run_passes.py --verbose --status-interval 10

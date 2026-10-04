@@ -14,9 +14,13 @@
   rigctld for the current frequency (`f`) via an embedded Python block
   (`rig_freq_poller_0`) and feeds it into a GRC variable (`freq`) via a
   `Message Pair to Variable` block.
-- Because there's exactly one rigctld for the whole fleet and only one
-  flowgraph is ever alive at a time (single SDR), there's no per-satellite
-  port to manage - every `.grc` points at the same `127.0.0.1:<rig_port>`.
+- Each flowgraph polls the port set in its own `rig_freq_poller_0` block. With one
+  receiver that's always the station's `rig_port` and only one flowgraph is alive at a
+  time, so there's no per-satellite port to manage - every `.grc` points at the same
+  `127.0.0.1:<rig_port>`. A second receiver on the same antenna (an RTL-SDR on 2 m
+  beside an Airspy on 70 cm) polls a different port: `run_passes.py` reads that from
+  the `.grc` and starts a rigctld for it, fed that satellite's own Doppler - see
+  [Recording two satellites at once](stations.md#recording-two-satellites-at-once).
 - This is genuine Hamlib, not a custom protocol, so a real copy of
   Gpredict's radio control window can point at the same address (as a NET
   rigctl rig) purely for a visual read-out if you want one.

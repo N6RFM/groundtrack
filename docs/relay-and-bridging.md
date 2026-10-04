@@ -120,8 +120,10 @@ same downstream app - `ASRTU-1_SSDV` and `BY70-4` both do, since they
 share the same SSDV viewer. `tcp_bridge.py` runs one real listening
 socket per distinct `bridge_port`, with each satellite getting its own
 independent, self-retrying connection to its own flowgraph's
-`TCP_SERVER`. Since only one satellite's flowgraph is ever actually
-running at a time (one shared SDR), only one of those upstream
+`TCP_SERVER`. Since only one satellite's flowgraph is normally
+running at a time (one shared SDR - paired passes on two receivers are the
+exception, so give two satellites that are recorded together their own
+`bridge_port`s), only one of those upstream
 connections is ever actually live in practice - the others just sit
 retrying, harmlessly, until it's their turn. This is a genuine
 improvement over separate ports, not just a shortcut: the downstream app

@@ -189,6 +189,94 @@ def nearest_template(freq_hz, paths=None):
     return ranked[0][0], usable
 
 
+# amateur bands, for naming what a template's frequency is (and for noticing two on the same one)
+BANDS = [(50e6, 54e6, "6 m"), (144e6, 148e6, "2 m"), (222e6, 225e6, "1.25 m"),
+         (420e6, 450e6, "70 cm"), (902e6, 928e6, "33 cm"), (1240e6, 1300e6, "23 cm")]
+
+
+def band_of(hz):
+    return next((name for lo, hi, name in BANDS if lo <= hz <= hi), "")
+
+
+def template_info(path):
+    """What `--list-templates` shows about one template: its own frequency, the SDR it opens,
+    its sample rate - or, if it can't be used as a template, why."""
+    info = {"path": path, "hz": None, "device": None, "samp_rate": None, "error": None}
+    try:
+        with open(path, newline="") as f:
+            text = f.read()
+        info["hz"] = float(discover_fields(text)["freq_value"])
+        for b in yaml.safe_load(text)["blocks"]:
+            params = b.get("parameters") or {}
+            if str(b.get("id", "")).startswith(("osmosdr_source", "soapy")):
+                info["device"] = params.get("args") or params.get("dev") or info["device"]
+            if b.get("name") == "samp_rate":
+                info["samp_rate"] = params.get("value")
+    except Refusal as r:
+        info["error"] = str(r)
+    except Exception as e:
+        info["error"] = f"couldn't read it ({type(e).__name__}: {e})"
+    return info
+
+
+def report_templates(freq_hz=None):
+    """Print the templates in this station, say which sit on which band, warn about any two
+    that frequency can't tell apart, and (given a frequency) which one it would pick. Changes
+    nothing. Returns an exit code: 1 only if a frequency was asked about and no single
+    template can be chosen for it."""
+    paths = list_templates()
+    folder = os.path.join(os.getcwd(), "flowgraphs")
+    if not paths:
+        print(f"No record-only templates in {folder} (looked for {TEMPLATE_PATTERN}).")
+        return 1 if freq_hz is not None else 0
+    infos = [template_info(p) for p in paths]
+    print(f"Templates in {folder}:")
+    for i in infos:
+        default = "  (default)" if os.path.normpath(i["path"]) == os.path.normpath(DEFAULT_TEMPLATE) else ""
+        print(f"  {i['path']}{default}")
+        if i["error"]:
+            print(f"      UNUSABLE as a template: {i['error']}")
+            continue
+        band = band_of(i["hz"])
+        try:
+            rate = f"{float(i['samp_rate']) / 1e6:g} MS/s"
+        except (TypeError, ValueError):
+            rate = str(i["samp_rate"]) if i["samp_rate"] else "?"
+        print(f"      {i['hz'] / 1e6:.3f} MHz{f' ({band})' if band else ''}   "
+              f"SDR: {i['device'] or '(none found)'}   sample rate: {rate}")
+    good = [i for i in infos if not i["error"]]
+    for n, a in enumerate(good):
+        for b in good[n + 1:]:
+            same_band = band_of(a["hz"]) and band_of(a["hz"]) == band_of(b["hz"])
+            close = not band_of(a["hz"]) and not band_of(b["hz"]) and abs(a["hz"] - b["hz"]) < 5e6
+            if abs(a["hz"] - b["hz"]) < 1:
+                print(f"WARNING: {a['path']} and {b['path']} sit on exactly the same frequency - "
+                      f"nothing can tell them apart, so a frequency near both is refused. "
+                      f"Change the frequency inside one, or always say --template.")
+            elif same_band or close:
+                print(f"WARNING: {a['path']} and {b['path']} are both "
+                      f"{band_of(a['hz']) or 'close together'} templates - frequency can't tell them "
+                      f"apart (the nearer one wins). Use --template, or pick in the Add dialog, "
+                      f"when it matters.")
+    if freq_hz is None:
+        return 0
+    print()
+    try:
+        pick = nearest_template(freq_hz, paths)
+    except Refusal as r:
+        print(f"At {freq_hz / 1e6:.3f} MHz: can't choose - {r}")
+        return 1
+    if pick is None:
+        print(f"At {freq_hz / 1e6:.3f} MHz: no usable template.")
+        return 1
+    best, usable = pick
+    others = sorted((abs(hz - freq_hz), p) for p, hz in usable if p != best)
+    print(f"At {freq_hz / 1e6:.3f} MHz a new satellite would be built from {best} "
+          f"({abs(template_hz(best) - freq_hz) / 1e6:.3f} MHz away"
+          + (f"; the next nearest, {others[0][1]}, is {others[0][0] / 1e6:.3f} MHz away" if others else "") + ").")
+    return 0
+
+
 def no_template_message():
     """One line on purpose: the GUI's Add dialog shows only the last line of a failure."""
     return (f"station {station.current()!r} has no record-only template: put a flowgraph you already run on "
@@ -201,11 +289,16 @@ def main():
     station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--name", required=True, help="e.g. NEWSAT-7")
-    ap.add_argument("--norad", required=True, type=int,
+    listing = "--list-templates" in sys.argv[1:]    # a listing needs no satellite; every other run still does
+    ap.add_argument("--name", required=not listing, help="e.g. NEWSAT-7")
+    ap.add_argument("--norad", required=not listing, type=int,
                      help="not present in the .grc at all - used only in satellites.yaml, "
                           "for TLE lookup and pass prediction")
-    ap.add_argument("--freq", required=True, type=int, help="downlink frequency in Hz")
+    ap.add_argument("--freq", required=not listing, type=int,
+                     help="downlink frequency in Hz (with --list-templates: optional - say which template it would pick)")
+    ap.add_argument("--list-templates", action="store_true",
+                     help="show this station's templates (frequency, band, SDR, sample rate), warn about any two "
+                          "that frequency can't tell apart, and with --freq which one would be used; changes nothing")
     ap.add_argument("--min-elev", type=float, default=15.0)
     ap.add_argument("--template", default=None,
                      help=f"defaults to {DEFAULT_TEMPLATE} if it exists, else "
@@ -217,6 +310,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="show what would happen, do nothing")
     ap.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
     args = ap.parse_args()
+    if args.list_templates:
+        sys.exit(report_templates(args.freq))
 
     template = args.template
     if template is None:

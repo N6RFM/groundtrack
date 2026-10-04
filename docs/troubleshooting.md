@@ -200,10 +200,11 @@ cause - the fix would have already resolved it.
   `.py` from what's on screen - silently writes the old copy back over the
   change. Close the flowgraph in GRC (discarding, not saving) before
   running one of these tools, and reopen it afterwards.
-- **Single SDR**: only one flowgraph runs at a time (highest elevation
-  wins among approved, in-window passes; a running satellite is not
-  pre-empted). Extending to multiple SDRs means tracking more than one
-  `(rig, active_proc)` pair in `run_passes.py`.
+- **One flowgraph at a time per receiver**: overlapping passes behave as ever - the
+  first to start records, the rest wait, and a running satellite is not pre-empted.
+  The exception is two passes on *different* receivers that you've paired
+  (`pair_passes.py`): they run together, and the leader's TLE steers the beam. See
+  [Recording two satellites at once](stations.md#recording-two-satellites-at-once).
 - **rigctld's Dummy backend response format**: the poller inside each
   `.grc` expects `f\n` to return a bare number - confirmed working, but
   worth re-checking if you ever change Hamlib versions.

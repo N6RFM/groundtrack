@@ -14,6 +14,7 @@ Usage:
 import argparse
 import os
 import yaml
+import lanes
 from datetime import datetime, timezone
 from skyfield.api import load, wgs84, EarthSatellite
 
@@ -88,27 +89,40 @@ def find_passes(sat, observer, t0, t1, min_elev_deg):
 
 
 def find_overlaps(passes):
-    """Yield (a, b) for every pair of currently-approved passes, sorted by
-    aos, whose [aos, los) windows overlap - the case where the single SDR
-    can only actually record whichever one starts first."""
+    """Yield (a, b) for every pair of currently-approved passes, sorted by aos, whose
+    [aos, los) windows overlap - the case where a single SDR can only actually record whichever
+    one starts first. EVERY pair, not just neighbours: a long pass can overlap two others that
+    don't overlap each other, and with two receivers that matters."""
     approved = sorted((p for p in passes if p["approved"]), key=lambda p: p["aos"])
-    for i in range(len(approved) - 1):
-        a, b = approved[i], approved[i + 1]
-        if b["aos"] < a["los"]:
-            yield a, b
+    for i, a in enumerate(approved):
+        for b in approved[i + 1:]:
+            if b["aos"] < a["los"]:
+                yield a, b
 
 
-def resolve_overlaps(passes, interactive):
+def resolve_overlaps(passes, interactive, lane_of=None):
     """Detect overlapping approved passes and either let the user actively
     choose which one to keep (interactive), or print a clear warning so it's
     not discovered silently later (non-interactive) - see the overlap
-    caveat this replaces."""
+    caveat this replaces.
+
+    lane_of(pass) -> that satellite's receiver (Doppler channel). Two overlapping passes on
+    DIFFERENT receivers can be recorded together if the user pairs them: the satellites have
+    to be close together in the sky, since the beam points one way, so it's always the user's
+    call - which also decides whose TLE steers the beam (see lanes.py)."""
     conflicts = list(find_overlaps(passes))
     if not conflicts:
         return
+    cross = lambda a, b: lane_of is not None and lane_of(a) != lane_of(b)
+    n_cross = sum(1 for a, b in conflicts if cross(a, b))
 
-    print(f"\n{len(conflicts)} overlap(s) among approved passes - only one "
-          f"satellite can record at a time (single SDR, no pre-emption):\n")
+    if n_cross == 0:
+        print(f"\n{len(conflicts)} overlap(s) among approved passes - only one "
+              f"satellite can record at a time (single SDR, no pre-emption):\n")
+    else:
+        print(f"\n{len(conflicts)} overlap(s) among approved passes - unless two are paired, only "
+              f"one satellite records at a time (no pre-emption). {n_cross} of them are on different "
+              f"receivers, so they could be recorded together:\n")
     for a, b in conflicts:
         if not a["approved"] or not b["approved"]:
             continue  # already resolved by an earlier conflict in this same run
@@ -119,14 +133,35 @@ def resolve_overlaps(passes, interactive):
               f"wins (starts first) and {b['name']} will be skipped or "
               f"badly truncated.")
 
+        together = cross(a, b)
+        if together:
+            print(f"  -> {a['name']} is on receiver {lane_of(a)}, {b['name']} on {lane_of(b)}: if the two "
+                  f"satellites are close together you can record both at once, one steering the beam.")
+
         if not interactive:
             print(f"  Re-run with --interactive to choose, or hand-edit "
-                  f"{SCHEDULE_PATH} to set one side's approved: false.\n")
+                  f"{SCHEDULE_PATH} to set one side's approved: false."
+                  + (" To record both together instead: python3 pair_passes.py" if together else "") + "\n")
             continue
 
         while True:
-            choice = input(f"  Keep which? [1] {a['name']}  [2] {b['name']}  "
-                            f"[3] both anyway  [4] neither: ").strip()
+            if together:
+                choice = input(f"  Keep which? [1] {a['name']}  [2] {b['name']}  [3] both anyway  [4] neither  "
+                                f"[5] together, {a['name']} steers the beam  "
+                                f"[6] together, {b['name']} steers the beam: ").strip()
+            else:
+                choice = input(f"  Keep which? [1] {a['name']}  [2] {b['name']}  "
+                                f"[3] both anyway  [4] neither: ").strip()
+            if together and choice in ("5", "6"):
+                leader = a if choice == "5" else b
+                problem = lanes.pairing_problem(a, b, leader, passes, lane_of)
+                if problem:
+                    print(f"  Can't pair these: {problem}")
+                    continue
+                lanes.set_pair(a, b, leader)
+                print(f"  Paired: {leader['name']} steers the beam; "
+                      f"{(b if leader is a else a)['name']} records alongside on its own receiver.")
+                break
             if choice == "1":
                 b["approved"] = False
                 break
@@ -215,7 +250,9 @@ def main():
                          f"(max el {p['max_elevation_deg']})? [Y/n] ").strip().lower()
             p["approved"] = not ans.startswith("n")
 
-    resolve_overlaps(all_passes, args.interactive)
+    station_lane = cfg.get("rig_port")
+    sat_lane = {norad: lanes.doppler_port(c, station_lane) for norad, c in sat_cfgs.items()}
+    resolve_overlaps(all_passes, args.interactive, lambda p: sat_lane.get(p["norad"], station_lane))
 
     # strip the informational (leading-underscore) horizon fields before
     # writing schedule.yaml -- run_passes.py only ever needs aos/los at the
@@ -228,6 +265,10 @@ def main():
 
     n_approved = sum(p["approved"] for p in all_passes)
     print(f"\nWrote {SCHEDULE_PATH}: {n_approved}/{len(all_passes)} approved.")
+    n_paired = sum(1 for p in all_passes if p.get("rides_with"))
+    if n_paired:
+        print(f"{n_paired} pass(es) paired - recorded together, the leader steering the beam "
+              f"(python3 pair_passes.py to change).")
     if not args.interactive:
         print(f"Edit {SCHEDULE_PATH} directly (set approved: false) to skip any of them, "
               f"or rerun with --interactive to be asked about each one.")
