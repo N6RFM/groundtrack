@@ -199,6 +199,10 @@ TLE files.
   on it), the rotor (two stations steering one antenna), and every relay,
   bridge and flowgraph port. It reads the other station's file for you, since
   that's a property of two files nothing else would notice.
+- `doctor.py`'s port and process checks read every station's configuration - each
+  station's `rig_port` and local rotor port, and the relay/bridge ports and
+  compiled scripts of every enabled satellite - and a busy `rig_port` is reported
+  as expected while that station's own `run_passes.py` is running.
 - It also **warns** when enabled satellites in two stations share a NORAD number
   under different names (and says if the stations take its TLE from different
   places). The same number and name on both radios is normal and stays quiet.
@@ -230,8 +234,6 @@ satellites; add one.
 
 ## Known limitations
 
-- `doctor.py`'s port list is hardcoded and predates stations, so it doesn't
-  check the second station's `rig_port`; `preflight.py` does.
 - Nothing separates the two radios' *recordings*: each flowgraph's Advanced File
   Sink writes wherever its own Base Directory says. If both stations record the
   same satellite at once into one folder, check the filenames can't collide.

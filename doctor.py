@@ -22,21 +22,22 @@ import subprocess
 import sys
 import time
 
-FLEET_PORTS = {
-    4532: "rigctld (Doppler)",
-    4533: "rotctld (antenna)",
-    9101: "GEOSCAN-1 producer", 8101: "GEOSCAN-1 consumer",
-    9102: "GEOSCAN-2 producer", 8102: "GEOSCAN-2 consumer",
-    9103: "GEOSCAN-3 producer", 8103: "GEOSCAN-3 consumer",
-    9104: "GEOSCAN-4 producer", 8104: "GEOSCAN-4 consumer",
-    9105: "GEOSCAN-5 producer", 8105: "GEOSCAN-5 consumer",
-    9106: "GEOSCAN-6 producer", 8106: "GEOSCAN-6 consumer",
-}
-FLEET_PROCESS_PATTERNS = [
-    "relay.py", "run_passes.py", "preflight.py",
-    "rigctld", "rotctld",
-    "geoscan1.py", "geoscan2.py", "geoscan3.py", "geoscan4.py", "geoscan5.py", "geoscan6.py",
-]
+# What doctor looks for is read from the configuration (see station.configured_ports() and
+# configured_scripts()), not remembered here: a hardcoded list drifted twice - it listed
+# satellites that weren't configured and knew nothing of a second station's rigctld port.
+BASE_PROCESS_PATTERNS = ["relay.py", "tcp_bridge.py", "run_passes.py", "preflight.py", "rigctld", "rotctld"]
+DEFAULT_PORTS = [(4532, "rigctld (Doppler)", set()), (4533, "rotctld (antenna)", set())]
+
+
+def fleet_ports():
+    import station
+    # no readable configuration at all: still check the standard daemons' ports
+    return station.configured_ports() or DEFAULT_PORTS
+
+
+def fleet_process_patterns():
+    import station
+    return BASE_PROCESS_PATTERNS + sorted(station.configured_scripts())
 
 
 def section(title):
@@ -92,6 +93,7 @@ def find_other_copies(current_real):
 
 def check_processes():
     section("Fleet-related processes currently running")
+    patterns = fleet_process_patterns()
     try:
         out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True, check=True).stdout
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -110,7 +112,7 @@ def check_processes():
         exe_base = os.path.basename(tokens[0])
 
         matched = None
-        if exe_base in ("rigctld", "rotctld") and exe_base in FLEET_PROCESS_PATTERNS:
+        if exe_base in ("rigctld", "rotctld") and exe_base in patterns:
             matched = exe_base
         elif exe_base.startswith("python"):
             # only match a .py pattern if it's actually the script being
@@ -118,7 +120,7 @@ def check_processes():
             # mentioned as an argument to some other command (cp, grep, etc)
             for tok in tokens[1:]:
                 base = os.path.basename(tok)
-                if base in FLEET_PROCESS_PATTERNS:
+                if base in patterns:
                     matched = base
                     break
 
@@ -152,7 +154,10 @@ def port_owner(port):
 
 def check_ports():
     section("Fleet ports")
-    for port, label in sorted(FLEET_PORTS.items()):
+    import station
+    if station.multi_station():
+        print("  (read from every station's configuration)")
+    for port, label, rig_stations in fleet_ports():
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -163,7 +168,11 @@ def check_ports():
             s.close()
             owner = port_owner(port)
             print(f"  {port:5d} ({label}): IN USE - {owner or 'owner unknown'}")
-            print(f"         to free it: kill <PID above>, or pkill -f <process name>")
+            live = [st for st in sorted(rig_stations) if station.run_passes_pid(st)]
+            if live:
+                print(f"         expected: run_passes.py is running for station {', '.join(live)}, and it owns this rigctld")
+            else:
+                print(f"         to free it: kill <PID above>, or pkill -f <process name>")
 
 
 def run_preflight(extra_args):

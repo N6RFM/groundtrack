@@ -409,6 +409,69 @@ def other_stations_ports():
     return used
 
 
+def _all_configs():
+    """[(station name or None, config)] for every station's satellites.yaml - or the one in
+    the current folder in classic mode. Missing or unreadable files are skipped."""
+    out = []
+    if multi_station():
+        try:
+            _default, stations = load_radios()
+        except StationError:
+            return out
+        for name, spec in stations.items():
+            try:
+                with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
+                    out.append((name, yaml.safe_load(f) or {}))
+            except (OSError, yaml.YAMLError):
+                continue
+    else:
+        try:
+            with open("satellites.yaml") as f:
+                out.append((None, yaml.safe_load(f) or {}))
+        except (OSError, yaml.YAMLError):
+            pass
+    return out
+
+
+def configured_ports():
+    """Every local TCP port the configuration claims, for doctor.py's port check:
+    [(port, label, rig_stations)] sorted by port. Read from every station's config (or the
+    one in the current folder), so a station added tomorrow is checked tomorrow - nothing to
+    remember here. Each station's rigctld port, its rotctld port if the rotor is local, and
+    the relay/bridge/flowgraph ports of its ENABLED satellites. rig_stations names the
+    stations whose rigctld that port is (run_passes.py starts it, so it being busy while that
+    station's run_passes.py is alive is expected)."""
+    found = {}
+    def add(port, label, rig_station=None):
+        if not isinstance(port, int) or isinstance(port, bool):
+            return
+        e = found.setdefault(port, {"labels": [], "rig": set()})
+        if label not in e["labels"]:
+            e["labels"].append(label)
+        if rig_station:
+            e["rig"].add(rig_station)
+    for st, cfg in _all_configs():
+        pre = f"{st}: " if st else ""
+        add(cfg.get("rig_port"), f"{pre}rigctld (Doppler)", st)
+        if "rot_host" in cfg and "rot_port" in cfg and cfg["rot_host"] in ("127.0.0.1", "localhost", "0.0.0.0", "::1"):
+            add(cfg["rot_port"], f"{pre}rotctld (antenna)")
+        enabled = [s for s in cfg.get("satellites") or [] if s.get("enabled", True)]
+        for port, detail in _ports_in({"satellites": enabled}):
+            add(port, f"{pre}{detail}")
+    return [(p, " / ".join(e["labels"]), e["rig"]) for p, e in sorted(found.items())]
+
+
+def configured_scripts():
+    """Basenames of the compiled flowgraph scripts of every enabled satellite, in every
+    station - what doctor.py looks for among the running processes."""
+    names = set()
+    for _st, cfg in _all_configs():
+        for s in cfg.get("satellites") or []:
+            if s.get("enabled", True) and s.get("script"):
+                names.add(os.path.basename(str(s["script"])))
+    return names
+
+
 def _norads_in_tle_file(path):
     """NORADs listed in a 3-line TLE file ({} if it's missing or unreadable)."""
     found = set()

@@ -172,7 +172,9 @@ It checks, in order: which folder you're actually running from (and flags
 if it's inside Trash - a real issue we hit once), whether duplicate copies
 of this fleet folder exist elsewhere on disk, which fleet-related
 processes are currently running and from where, which of the fleet's
-ports are free vs. already occupied (and by what), whether any compiled
+ports are free vs. already occupied (and by what; read from your configuration -
+every station's rigctld/rotctld port and each enabled satellite's relay/bridge
+ports - with a station's own running `run_passes.py` recognized as expected), whether any compiled
 flowgraph files have landed at the repo root instead of `flowgraphs/` -
 `grcc` always writes its output to the current directory, ignoring the
 `.grc`'s own folder, for both the main flowgraph and a separate companion
