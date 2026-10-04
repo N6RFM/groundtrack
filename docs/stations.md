@@ -199,6 +199,9 @@ TLE files.
   on it), the rotor (two stations steering one antenna), and every relay,
   bridge and flowgraph port. It reads the other station's file for you, since
   that's a property of two files nothing else would notice.
+- It also **warns** when enabled satellites in two stations share a NORAD number
+  under different names (and says if the stations take its TLE from different
+  places). The same number and name on both radios is normal and stays quiet.
 - `ci_check.py` fails any script that reads station files without choosing a
   station, and any that launches another script through `sys.executable` by a
   bare filename - written literally, or via a variable assigned one (a bare name

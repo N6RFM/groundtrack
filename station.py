@@ -409,6 +409,60 @@ def other_stations_ports():
     return used
 
 
+def _norads_in_tle_file(path):
+    """NORADs listed in a 3-line TLE file ({} if it's missing or unreadable)."""
+    found = set()
+    try:
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+    except OSError:
+        return found
+    for i in range(0, len(lines) - 2, 3):
+        try:
+            found.add(int(lines[i + 1][2:7]))
+        except (ValueError, IndexError):
+            pass
+    return found
+
+
+def cross_station_norad_clashes():
+    """Enabled satellites in different stations that share a NORAD number but carry
+    different names. Tracking one satellite on both radios is normal (same number, same
+    name - not reported). The same number under two names usually means one of the numbers
+    is wrong, and nothing else would notice: each station looks its TLE up on its own, so
+    both quietly run - possibly on different orbits. Returns plain-language warnings."""
+    _default, stations = load_radios()
+    names, source = {}, {}          # norad -> {station: {names}} ; (station, norad) -> where its TLE comes from
+    for st, spec in stations.items():
+        try:
+            with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
+                cfg = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        custom = cfg.get("custom_tle_file")
+        custom_norads = _norads_in_tle_file(
+            custom if custom and os.path.isabs(custom) else os.path.join(spec["dir"], custom)) if custom else set()
+        for sat in cfg.get("satellites") or []:
+            n = sat.get("norad")
+            if n is None or not sat.get("enabled", True):
+                continue
+            names.setdefault(n, {}).setdefault(st, set()).add(str(sat.get("name", "?")))
+            source[(st, n)] = "custom_tle_file" if n in custom_norads else "tle_file"
+    warnings = []
+    for n, by_station in sorted(names.items()):
+        if len(by_station) < 2 or len({nm for s in by_station.values() for nm in s}) < 2:
+            continue
+        who = "; ".join(f"{', '.join(sorted(nms))} in {st}" for st, nms in by_station.items())
+        text = (f"NORAD {n} is {who}. Fine if they're the same satellite; if not, one of the "
+                f"numbers is wrong.")
+        if len({source[(st, n)] for st in by_station}) > 1:
+            text += (" The stations also take its TLE from different places ("
+                     + ", ".join(f"{st}: {source[(st, n)]}" for st in by_station)
+                     + "), so they are tracking different orbits for this number.")
+        warnings.append(text)
+    return warnings
+
+
 def cross_station_conflicts():
     """Things two stations must never share, found by reading every station's
     satellites.yaml: rig_port (two run_passes.py would both try to start

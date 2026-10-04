@@ -105,6 +105,9 @@ def static_checks(cfg_path):
         problems = station.cross_station_conflicts()
         check("nothing is shared with another station", not problems,
               "; ".join(problems) or "rig_port, rotor and relay/bridge ports are all distinct")
+        clashes = station.cross_station_norad_clashes()
+        check("no NORAD names different satellites in different stations", not clashes,
+              " ".join(clashes), level=WARN if clashes else None)
 
     for tool, needed in (("rigctld", True), ("rotctld", has_rotor)):
         found = shutil.which(tool) is not None
