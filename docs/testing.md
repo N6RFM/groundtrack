@@ -63,12 +63,12 @@ the pass may not be approved, or its window may not actually cover "now"
 **From outside the script**, independent of `run_passes.py` - useful to
 confirm rigctld/rotctld are alive even with no pass active:
 ```
-printf 'f\n' | nc 127.0.0.1 4532      # Doppler - current commanded freq
+printf 'f\n' | nc 127.0.0.1 4531      # Doppler - current commanded freq
 printf 'p\n' | nc 127.0.0.1 4533      # Rotor - current commanded az/el
 ```
 or, with Hamlib's own clients:
 ```
-rigctl -m 2 -r 127.0.0.1:4532 f
+rigctl -m 2 -r 127.0.0.1:4531 f
 rotctl -m 2 -r 127.0.0.1:4533 p
 ```
 Query the frequency twice a few seconds apart *during an active pass* -

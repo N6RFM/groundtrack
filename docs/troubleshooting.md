@@ -140,7 +140,7 @@ then `tail -f relay.log` whenever you want to check on it.
 Run `python3 doctor.py` - it identifies the exact PID and command holding
 every fleet port. This has caught real orphaned processes before (e.g. a
 `rigctld` left running from a folder that had since been moved to Trash,
-still holding port 4532 indefinitely). Kill the specific PID it reports,
+still holding port 4531 indefinitely). Kill the specific PID it reports,
 or `pkill -f <name>` for a broader cleanup.
 
 **Config edits don't seem to take effect**

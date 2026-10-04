@@ -26,7 +26,7 @@ import time
 # configured_scripts()), not remembered here: a hardcoded list drifted twice - it listed
 # satellites that weren't configured and knew nothing of a second station's rigctld port.
 BASE_PROCESS_PATTERNS = ["relay.py", "tcp_bridge.py", "run_passes.py", "preflight.py", "rigctld", "rotctld"]
-DEFAULT_PORTS = [(4532, "rigctld (Doppler)", set()), (4533, "rotctld (antenna)", set())]
+DEFAULT_PORTS = [(4531, "rigctld (Doppler)", set()), (4533, "rotctld (antenna)", set())]
 
 
 def fleet_ports():
@@ -241,8 +241,8 @@ def quick_status():
             s.close()
             return "up"
 
-    rig_status = port_status(cfg.get("rig_port", 4532))
-    print(f"rigctld:  {rig_status} (port {cfg.get('rig_port', 4532)})")
+    rig_status = port_status(cfg.get("rig_port", 4531))
+    print(f"rigctld:  {rig_status} (port {cfg.get('rig_port', 4531)})")
     if "rot_port" in cfg:
         rot_status = port_status(cfg["rot_port"])
         print(f"rotctld:  {rot_status} (port {cfg['rot_port']})")

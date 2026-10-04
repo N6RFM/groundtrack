@@ -72,17 +72,20 @@ guessed. `new_record_only_satellite.py --radio BEAM --list-templates` shows each
 frequency, band and SDR (and warns about two on the same band); add `--freq HZ` to see which
 one that frequency would pick. Doppler needs nothing declared: each satellite entry carries its own downlink
 frequency, and each flowgraph polls the port in its own `rig_freq_poller` block - the
-station's `rig_port` for the Airspy's, a different one (4531, say) for the RTL-SDR's, which
+station's `rig_port` for the Airspy's, a different one (4532, say) for the RTL-SDR's, which
 `run_passes.py` reads from the `.grc` and gives a `rigctld` of its own.
 
 ## Recording two satellites at once
 
 Sometimes two satellites are close together in the sky and you want both - one on 70 cm,
 one on 2 m. You can, if their flowgraphs run on different receivers (the Airspy with Doppler
-on `rig_port` 4532, the RTL-SDR whose flowgraph polls 4531) and you tell the scheduler to
+on `rig_port` 4531, the RTL-SDR whose flowgraph polls 4532) and you tell the scheduler to
 **pair** the two passes. The beam only points one way, so you choose whose TLE steers it:
 the *leader*. The other, the *companion*, rides along on its own receiver with its own,
 independent Doppler, computed from its own TLE and frequency.
+
+If your flowgraphs aren't on the ports you want, `set_doppler_ports.py` points each at the right
+one by the SDR it opens (`--sdr airspy=4531 --sdr rtlsdr=4532`): one line per `.grc`, then a rebuild.
 
 Nothing is declared in `satellites.yaml`: which receiver a satellite uses is read from the
 Doppler port in its flowgraph's `rig_freq_poller` block, and `run_passes.py` starts a

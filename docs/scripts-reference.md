@@ -78,6 +78,21 @@ queue (satellite, AOS, LOS, duration, max elevation), independent of
 whether `run_passes.py` is running. See "Checking the pass queue" above. When any pass is
 paired it adds a TOGETHER column: who steers the beam and who rides along.
 
+**`set_doppler_ports.py`** - point every flowgraph's Doppler poller at the right rigctld port,
+decided by which SDR the flowgraph opens, so two receivers on one antenna can't get mixed up:
+```
+python3 set_doppler_ports.py --radio BEAM --sdr airspy=4531 --sdr rtlsdr=4532 --dry-run
+python3 set_doppler_ports.py --radio BEAM --sdr airspy=4531 --sdr rtlsdr=4532 --station-port 4531
+```
+Each `--sdr NAME=PORT` is a rule: a flowgraph whose SDR args contain NAME gets that port. One that
+matches no rule, or several, or has no SDR or poller, is reported and left alone. `--station-port`
+also sets the station's own `rig_port:` in `satellites.yaml`. It changes one line per `.grc` (the
+poller's `rig_port`), rebuilds each changed flowgraph that already has a compiled script - the port is
+baked into it (but never one whose flowgraph id belongs to a different file, such as a template that's a copy of a real
+flowgraph - that would overwrite its compiled script) - refuses while that station's `run_passes.py` is running, checks every edit before
+writing, and tells you which tracked files are safe to commit as they are and which already had
+uncommitted edits of yours.
+
 **`pair_passes.py`** - record two satellites at once. Lists the overlapping approved passes
 that are on different receivers, and lets you pair them and say whose TLE steers the beam
 (see [Stations](stations.md#recording-two-satellites-at-once)):

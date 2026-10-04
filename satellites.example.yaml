@@ -5,7 +5,7 @@ ground_station:
 
 tle_file: tle/amateur.txt   # EDIT: keep this refreshed from Celestrak/Space-Track
 
-rig_port: 4532      # single shared rigctld port used by every satellite
+rig_port: 4531      # this station's main rigctld port - the Doppler channel its flowgraphs share (a flowgraph on a second receiver on the same antenna polls another port and gets its own: see docs/stations.md)
 
 notify: false       # set true for desktop notifications at AOS/LOS (needs notify-send)
 

@@ -201,6 +201,13 @@ def check_config():
                 check(f"{name}: {var} in .grc matches example freq_hz",
                       match, f".grc={grc_val}  yaml={sat.get('freq_hz')}")
 
+        # the example config's rig_port and its flowgraphs' Doppler poller have to agree, or someone who
+        # copies the example gets Doppler on a port nothing is feeding (set_doppler_ports.py fixes a mismatch)
+        import lanes
+        poller_port = lanes.grc_doppler_port(grc_path)
+        check(f"{name}: Doppler port in the .grc matches example rig_port",
+              poller_port == cfg.get("rig_port"), f".grc={poller_port}  yaml={cfg.get('rig_port')}")
+
         sock_block = blocks.get("network_socket_pdu_0")
         if sock_block:
             sock_type = sock_block["parameters"].get("type", "")

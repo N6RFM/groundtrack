@@ -168,6 +168,7 @@ groundtrack/
 ├── tle_util.py              # which TLE a satellite uses: custom_tle_file's entry always beats tle_file's
 ├── lanes.py                 # receivers (Doppler channels) and paired passes - shared rules
 ├── pair_passes.py           # pair overlapping passes on two receivers; choose whose TLE steers the beam
+├── set_doppler_ports.py     # point flowgraphs' Doppler pollers at the right rigctld port, by the SDR each opens
 ├── radios.example.yaml      # copy to radios.yaml to switch multi-station mode on
 ├── migrate_to_stations.py   # one-time: classic layout -> one folder per station (see stations.md)
 ├── wire_record_iq.py        # wires a .grc for the per-run IQ toggle (diff + backup)

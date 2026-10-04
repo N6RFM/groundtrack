@@ -64,7 +64,7 @@ def main():
           "there is never overwritten. Not needed for this setup.)")
 
     print("\n=== Doppler control ===")
-    cfg["rig_port"] = ask("Shared rigctld port", cfg.get("rig_port", 4532), int)
+    cfg["rig_port"] = ask("Shared rigctld port", cfg.get("rig_port", 4531), int)
 
     sats = cfg.get("satellites", [])
     if sats:

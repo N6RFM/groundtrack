@@ -29,7 +29,9 @@ def grc_doppler_port(grc_path):
     there's no poller, or its port isn't a plain number."""
     with open(grc_path) as f:
         grc = yaml.safe_load(f)
-    for block in grc.get("blocks", []):
+    if not isinstance(grc, dict):
+        return None          # an empty file, or not a flowgraph at all
+    for block in grc.get("blocks") or []:
         if block.get("id") == "epy_block" and "rig_freq_poller" in str(block.get("name", "")):
             value = (block.get("parameters") or {}).get("rig_port")
             try:

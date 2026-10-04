@@ -59,8 +59,8 @@ obvious cause, this is the first thing worth re-testing - compare the
 version `doctor.py` now reports before and after, and test with:
 
 ```
-rigctld -m 1 -t 4532 &
-rigctl -m 2 -r 127.0.0.1:4532 f
+rigctld -m 1 -t 4531 &
+rigctl -m 2 -r 127.0.0.1:4531 f
 ```
 
 That should print a bare number. If it prints something else - extra
