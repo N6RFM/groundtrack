@@ -84,6 +84,20 @@ flowgraph with one line swapped would look right and not work. (As far as I
 know the Airspy Mini offers 3 and 6 MS/s where the R2 offers 2.5 and 10.)
 Without the option, `mini/flowgraphs/` is left empty.
 
+**Adding the template after the migration** (the migration only runs once): copy
+a flowgraph you already run on that radio to
+`mini/flowgraphs/_record_only_template.grc`, then check the tool can use it,
+without creating anything:
+
+```
+python3 new_record_only_satellite.py --radio mini --name TEST --norad 99999 --freq 437000000 --dry-run
+```
+
+It shows the flowgraph it would generate, or says exactly what's missing (no
+Advanced File Sink, say). Until a template exists, adding a template-based
+satellite on that station is refused with a message saying so - it never falls
+back to another station's flowgraph.
+
 Afterwards:
 
 ```

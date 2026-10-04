@@ -37,11 +37,13 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 
 import yaml
 
+import station
 from add_satellite import slugify
 from doctor import check_stray_compiled_files
 
@@ -121,6 +123,13 @@ def build_new_text(text, old, new_slug, new_name, new_freq_hz):
     return text
 
 
+def no_template_message():
+    """One line on purpose: the GUI's Add dialog shows only the last line of a failure."""
+    return (f"station {station.current()!r} has no record-only template: put a flowgraph you already run on "
+            f"this radio at {DEFAULT_TEMPLATE} (deliberately not borrowed from another station - radios "
+            f"differ in more than a device string)")
+
+
 def main():
     import station
     station.enter()
@@ -145,9 +154,11 @@ def main():
 
     template = args.template
     if template is None:
-        import os
         if os.path.exists(DEFAULT_TEMPLATE):
             template = DEFAULT_TEMPLATE
+        elif station.current():
+            # inside a station, scionx.grc (if it even exists here) is some OTHER radio's flowgraph
+            sys.exit(no_template_message())
         else:
             template = FALLBACK_TEMPLATE
             print(f"NOTE: using {FALLBACK_TEMPLATE} directly, since {DEFAULT_TEMPLATE} "
@@ -160,6 +171,8 @@ def main():
         with open(template, newline="") as f:
             text = f.read()
     except FileNotFoundError:
+        if station.current() and os.path.normpath(template) == os.path.normpath(DEFAULT_TEMPLATE):
+            sys.exit(no_template_message())   # the GUI always passes --template explicitly
         sys.exit(f"Template not found: {template}")
     if "\r" in text:
         sys.exit(f"{template} has Windows line endings; expected the plain line "
@@ -172,7 +185,6 @@ def main():
 
     slug = slugify(args.name)
     new_grc = f"flowgraphs/{slug}.grc"
-    import os
     if os.path.exists(new_grc):
         sys.exit(f"{new_grc} already exists - this tool only creates new "
                  f"satellites, never overwrites one. Use GRC directly to edit it.")

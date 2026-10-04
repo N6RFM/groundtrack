@@ -961,8 +961,10 @@ class GroundtrackGUI(tk.Tk):
         # a separate manual step. Default matches the standalone tool's own
         # default exactly, so the GUI and the CLI never disagree about which
         # file a bare "Add" would use.
+        # inside a station, scionx.grc is some other radio's flowgraph - never offer it; point at this
+        # station's own template even if it isn't there yet (the tool then says exactly what to do)
         default_template = ("flowgraphs/_record_only_template.grc"
-                            if os.path.exists("flowgraphs/_record_only_template.grc")
+                            if os.path.exists("flowgraphs/_record_only_template.grc") or self.current_station
                             else "flowgraphs/scionx.grc")
         use_template_var = tk.BooleanVar(value=False)
         template_check = ttk.Checkbutton(
