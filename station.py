@@ -15,10 +15,10 @@ touch is shared except the TLE file (see update_tle.py).
 
 radios.yaml, next to this file, is what turns it on:
 
-    default: r2                  # what the GUI opens on
+    default: beam                  # what the GUI opens on
     stations:
-      r2:   {dir: r2,   label: "R2 + beam (Az/El)"}
-      mini: {dir: mini, label: "Mini + helix (fixed)"}
+      beam:  {dir: beam,  label: "Beam (Az/El)"}
+      helix: {dir: helix, label: "Helix (fixed)"}
 
 With no radios.yaml, enter() does nothing at all and every script behaves
 exactly as before - the classic single-folder layout.
@@ -317,10 +317,13 @@ def initial_station():
     Takes --radio off argv. Raises StationError."""
     asked = pop_radio_arg()
     default, stations = load_radios()
+    from_env = not asked and bool(os.environ.get(ENV_VAR))
     name = asked or os.environ.get(ENV_VAR) or default
     matched = _match(name, stations)
     if matched is None:
-        raise StationError(f"unknown station {name!r}. Choose from: {', '.join(stations)}")
+        where = (f" (from {ENV_VAR} in your environment - a stale export after renaming a station? "
+                 f"change it or unset it)" if from_env else " (from --radio)" if asked else " (radios.yaml's default:)")
+        raise StationError(f"unknown station {name!r}{where}. Choose from: {', '.join(stations)}")
     return matched
 
 
@@ -387,7 +390,7 @@ def other_stations_ports():
     """Every port claimed by a station OTHER than the one this process is
     working in (all of them if it isn't in one). For 'next free port': each
     station's own satellites.yaml only knows its own ports, so without this a
-    new satellite on the mini would be handed 9101 - which R2's GEOSCAN-1
+    new satellite on the helix would be handed 9101 - which the beam station's GEOSCAN-1
     already holds - and the clash would only surface later, as preflight's
     cross-station check failing. Empty set in classic single-folder mode."""
     if not multi_station():

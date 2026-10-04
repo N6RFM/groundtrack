@@ -335,7 +335,15 @@ way GRC writes it either way - `437.500e6`, or a quoted integer such as
 `'400500000'` - and the new one is written back in the same form. A template
 with no waterfall display (a flowgraph saved from a decode setup, say) simply has
 no display name to change; one whose waterfall block has a different name is found
-by its type. Nothing else - every block,
+by its type.
+
+**More than one template.** A station can hold several - `_record_only_template.grc`
+(the default) plus `_record_only_template_<anything>.grc`, say `_record_only_template_2m.grc`
+for a second SDR on another band. With no `--template`, the tool picks the one whose own
+frequency is nearest to `--freq`, says which and what the others were, and refuses a
+frequency exactly between two rather than guess. A template that can't be read as one is
+skipped. `--template PATH` always wins, and the GUI's Add dialog does the same thing in its
+template picker. Nothing else - every block,
 connection, and other parameter is copied from the template exactly as
 `vet_grc.py --fix` and `wire_record_iq.py` already do, `--yes`/`--dry-run`
 work the same way, and it never overwrites an existing satellite's `.grc`.
@@ -601,8 +609,8 @@ the GUI opens on. A script picks its station, changes into that folder, and
 from then on runs exactly as it always has - every relative path it already
 used just resolves inside the station. Choosing one:
 ```
-python3 run_passes.py --radio mini
-GROUNDTRACK_STATION=mini python3 run_passes.py
+python3 run_passes.py --radio helix
+GROUNDTRACK_STATION=helix python3 run_passes.py
 python3 run_passes.py          # at a terminal: asks which station
 ```
 `--radio` wins over the environment variable, which wins over being asked;
@@ -645,7 +653,7 @@ becomes the first station, a new empty one is created beside it, and
 ```
 python3 migrate_to_stations.py --second-rig-port 4534 --dry-run
 python3 migrate_to_stations.py --second-rig-port 4534 \
-    --first-label "R2 + beam (Az/El)" --second-label "Mini + helix (fixed)" \
+    --first-label "Beam (Az/El)" --second-label "Helix (fixed)" \
     --second-template ~/my_working_mini_flowgraph.grc
 ```
 `flowgraphs/` moves with `git mv` (history follows the files; compiled and
@@ -672,3 +680,17 @@ disagree: the catalog's entry from `tle_file`, replaced by `custom_tle_file`'s
 for any NORAD listed there, always (see `custom_tle_file` under `update_tle.py`
 above). It also produces the age/staleness notes those scripts print for a custom
 entry that's in use.
+
+## rename_station.py
+
+Renames a station: its name in `radios.yaml`, the `default:` if it named it, and its folder
+(`git mv` when tracked, so history follows). See [Stations](stations.md) for what it
+checks and what to change afterwards.
+```
+python3 rename_station.py r2 BEAM
+python3 rename_station.py mini HELIX --label "Helix (fixed, no rotor)"
+python3 rename_station.py r2 BEAM --dry-run
+```
+It edits `radios.yaml` as plain text (comments survive; the old file is kept as
+`radios.yaml.bak`), refuses while the station's `run_passes.py` is running, and undoes
+itself if any step fails.

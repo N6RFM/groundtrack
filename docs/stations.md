@@ -20,13 +20,13 @@ groundtrack/                  the scripts - one copy, shared
     run_passes.py  plan_passes.py  preflight.py  ...
     radios.yaml               which stations exist (you create it - see below)
     tle/amateur.txt           the ONE thing stations share
-    r2/                       station "r2": the beam
+    beam/                       station "beam": the beam
         satellites.yaml       ... its own satellites, rig_port, rotor
         schedule.yaml
         pass_log.jsonl
-        run_passes.lock       appears while r2's run_passes.py is running
-        flowgraphs/           ... its own .grc files, with R2's device string
-    mini/                     station "mini": the helix
+        run_passes.lock       appears while beam's run_passes.py is running
+        flowgraphs/           ... its own .grc files, with that SDR's device string
+    helix/                     station "helix": the helix
         satellites.yaml       ... its own satellites and rig_port, NO rotor keys
         flowgraphs/
 ```
@@ -45,6 +45,31 @@ some central table: `rig_port` and the rotor (`rot_host`/`rot_port`) in its
 files. **A station with no `rot_host`/`rot_port` never has its antenna
 moved** - the same mechanism that already lets you run with no rotor at all.
 
+## When two receivers share one antenna
+
+A station is one scheduler plus one rotor and Doppler setup - not one SDR. So if a
+second receiver shares the beam (say an RTL-SDR on 2 m behind a diplexer, beside the
+Airspy R2 on 70 cm), keep both in the **same** station. The beam can only point one
+place, and one scheduler is what decides where. Two stations would each plan passes
+with nothing to stop the second recording while the beam points somewhere else - and
+preflight refuses two stations steering one rotor in any case.
+
+What that costs: one flowgraph at a time. A 2 m pass and a 70 cm pass that overlap
+compete (`plan_passes.py` flags it), and one satellite can't be recorded on both bands
+at once. If you do need both bands of one satellite together, give the second receiver
+a station of its own with no rotor configured; the first station then moves the beam
+for both.
+
+Each SDR needs its own record-only template, since its device string - and usually its
+sample rate - differs. Name them `_record_only_template.grc` (the default) and
+`_record_only_template_<anything>.grc` (say `_record_only_template_2m.grc`), all in the
+station's `flowgraphs/`. Given a satellite's frequency, `new_record_only_satellite.py`
+and the GUI's Add dialog pick the template whose own frequency is nearest - 145 MHz
+can't be mistaken for 437 MHz - and say which. `--template` (or choosing in the dialog)
+overrides it, and a frequency exactly between two templates is refused rather than
+guessed. Doppler needs nothing extra: each satellite entry carries its own downlink
+frequency, and the station's one `rigctld` follows whichever satellite is active.
+
 ## Turning it on
 
 Stop `run_passes.py` and `relay.py` first. Then, from the project folder:
@@ -52,13 +77,13 @@ Stop `run_passes.py` and `relay.py` first. Then, from the project folder:
 ```
 python3 migrate_to_stations.py --second-rig-port 4534 --dry-run     # look first
 python3 migrate_to_stations.py --second-rig-port 4534 \
-    --first-label "R2 + beam (Az/El)" --second-label "Mini + helix (fixed)" \
+    --first-label "Beam (Az/El)" --second-label "Helix (fixed)" \
     --second-template ~/my_working_mini_flowgraph.grc
 ```
 
-It moves your whole current fleet into `r2/` (`flowgraphs/` with `git mv`, so
+It moves your whole current fleet into `beam/` (`flowgraphs/` with `git mv`, so
 history follows the files; `satellites.yaml`, `schedule.yaml`, `pass_log.jsonl`
-alongside), creates an empty `mini/` beside it, and writes `radios.yaml`. The
+alongside), creates an empty `helix/` beside it, and writes `radios.yaml`. The
 only edit it makes inside a moved file is prefixing `../` to a relative
 `tle_file`/`custom_tle_file`, since the shared `tle/` folder is now one level
 up - a plain line edit, so your comments and formatting survive. Nothing else
@@ -82,15 +107,15 @@ differ in more than a device string - the sample rates they offer, and so the
 decimation and filter settings that follow - so a copy of the other radio's
 flowgraph with one line swapped would look right and not work. (As far as I
 know the Airspy Mini offers 3 and 6 MS/s where the R2 offers 2.5 and 10.)
-Without the option, `mini/flowgraphs/` is left empty.
+Without the option, `helix/flowgraphs/` is left empty.
 
 **Adding the template after the migration** (the migration only runs once): copy
 a flowgraph you already run on that radio to
-`mini/flowgraphs/_record_only_template.grc`, then check the tool can use it,
+`helix/flowgraphs/_record_only_template.grc`, then check the tool can use it,
 without creating anything:
 
 ```
-python3 new_record_only_satellite.py --radio mini --name TEST --norad 99999 --freq 437000000 --dry-run
+python3 new_record_only_satellite.py --radio helix --name TEST --norad 99999 --freq 437000000 --dry-run
 ```
 
 It shows the flowgraph it would generate, or says exactly what's missing (no
@@ -101,15 +126,15 @@ back to another station's flowgraph.
 Afterwards:
 
 ```
-python3 preflight.py --radio r2
-python3 preflight.py --radio mini      # a warning that it has no satellites yet is expected
-git add mini                           # git mv already staged the renames
+python3 preflight.py --radio beam
+python3 preflight.py --radio helix      # a warning that it has no satellites yet is expected
+git add helix                           # git mv already staged the renames
 git status                             # review: renames staged; your own uncommitted edits still unstaged
 git commit -m "move to multi-station layout"
 ```
 
-`git add mini`, not `git add -A r2 mini`: the latter would also commit any
-uncommitted edits and untracked flowgraphs sitting in `r2/flowgraphs`. Those are
+`git add helix`, not `git add -A beam helix`: the latter would also commit any
+uncommitted edits and untracked flowgraphs sitting in `beam/flowgraphs`. Those are
 yours to commit when you choose - the migration only moves them.
 
 `radios.yaml` itself is gitignored (it's your site's station list); copy
@@ -118,10 +143,10 @@ opens on.
 
 ## Using it: the GUI
 
-The window opens on `radios.yaml`'s default station (R2, the beam) every time,
+The window opens on `radios.yaml`'s default station (the beam, in the examples here) every time,
 without asking, and never remembers the last session's choice - being surprised
 about which radio you're pointed at is the wrong kind of surprise. `python3
-groundtrack_gui.py --radio mini` opens on a specific one.
+groundtrack_gui.py --radio helix` opens on a specific one.
 
 The **Active station** bar at the top is a switch: click a station to point the
 whole window at it. The active one is green and sunken, and the bar says what
@@ -135,7 +160,7 @@ that choice means physically:
   `run_passes.py RUNNING (PID ...)` in the info line. These are re-read every
   few seconds, since runs start and stop in terminals the window doesn't control.
 
-Switching changes the working folder, the table, the window title (`[mini]`),
+Switching changes the working folder, the table, the window title (`[helix]`),
 and clears the output pane - leftover output from the other radio, sitting
 there after a switch, is exactly what gets misread as current. If the station
 you're switching to already has a `run_passes.py` running, you get an
@@ -153,10 +178,10 @@ Every script takes `--radio NAME`, or reads `GROUNDTRACK_STATION`, or - at a
 real terminal only - asks:
 
 ```
-python3 run_passes.py --radio mini --verbose
-GROUNDTRACK_STATION=mini python3 plan_passes.py
+python3 run_passes.py --radio helix --verbose
+GROUNDTRACK_STATION=helix python3 plan_passes.py
 python3 preflight.py            # asks: Which station?
-./regen_all.sh --radio mini     # also: GROUNDTRACK_STATION=mini make check
+./regen_all.sh --radio helix     # also: GROUNDTRACK_STATION=helix make check
 ```
 
 `--radio` beats the environment variable, which beats being asked. There is
@@ -175,9 +200,9 @@ then again on the other. Each has its own lock, its own schedule, its own
 The GUI's **Add satellite...** and the command-line tools all act on the
 station you're in. Each station keeps its own `_record_only_template.grc`
 carrying that radio's device string, so `new_record_only_satellite.py --radio
-mini` builds a mini flowgraph and `--radio r2` an R2 one, from the same tool.
+helix` builds a helix flowgraph and `--radio beam` a beam one, from the same tool.
 Automatic port assignment ("next free port") also looks at the *other*
-stations' ports, so a new satellite on the mini isn't handed 9101 when R2's
+stations' ports, so a new satellite on the helix isn't handed 9101 when the beam's
 GEOSCAN-1 already holds it.
 
 ## The shared TLE file
@@ -227,7 +252,7 @@ too, as an explicit choice - `--radio` beats it.)
 `radios.yaml`, unless `--radio` or `GROUNDTRACK_STATION` says otherwise. The
 title bar and badge always show where you are.
 
-**`preflight.py --radio mini` warns "none yet"** - expected for a station with no
+**`preflight.py --radio helix` warns "none yet"** - expected for a station with no
 satellites; add one.
 
 **`stations disagree about tle_file`** - point every station at the same file.
@@ -240,10 +265,27 @@ satellites; add one.
 - `ground_station` (lat/lon/alt) is repeated in each station's `satellites.yaml`;
   it never changes, but if it ever does, change both.
 
+## Renaming a station
+
+```
+python3 rename_station.py r2 BEAM
+python3 rename_station.py mini HELIX --label "Helix (fixed, no rotor)"
+python3 rename_station.py r2 BEAM --dry-run
+```
+
+This changes the name in `radios.yaml` (what the GUI's buttons and `--radio` use), the
+`default:` if it named that station, and the folder - to the new name lowercased unless
+you pass `--dir` - with `git mv` when the folder holds tracked files, so history follows
+and the renames are staged for you to commit. It checks first and reports every problem
+together (a station that's running, a name already taken, a folder that exists), keeps
+your comments in `radios.yaml`, and undoes itself if any step fails. Afterwards, change
+any `GROUNDTRACK_STATION` export in `~/.bashrc` or a launcher - a stale one makes the GUI
+refuse with "unknown station" - and restart the GUI.
+
 ## Going back
 
-Stop everything, then reverse the move: `git mv r2/flowgraphs flowgraphs`, move
-`r2/satellites.yaml`, `schedule.yaml` and `pass_log.jsonl` back to the project
+Stop everything, then reverse the move: `git mv beam/flowgraphs flowgraphs`, move
+`beam/satellites.yaml`, `schedule.yaml` and `pass_log.jsonl` back to the project
 root, remove the `../` from `tle_file`/`custom_tle_file` (or copy back the
 original from `.pre_stations_backup/satellites.yaml`), and delete `radios.yaml`.
 The scripts behave as before the moment `radios.yaml` is gone.

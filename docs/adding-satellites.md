@@ -118,7 +118,9 @@ structure (decoder, relay block, `kiss_encode_pdu`) that caused the
 original bugs, so there's nothing for a templating tool to get wrong in
 the same way. (With more than one radio - see [Stations](stations.md) - every
 command on this page acts on the station you're in, each station keeps its own
-`_record_only_template.grc` carrying that radio's device string, and "next free
+`_record_only_template.grc` carrying that radio's device string (plus a
+`_record_only_template_<band>.grc` for another SDR on the same antenna - the
+nearest-frequency one is picked), and "next free
 port" also avoids the other stations' ports.)
 
 **extra_outputs** - for a satellite with a

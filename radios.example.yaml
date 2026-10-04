@@ -19,15 +19,20 @@
 # tle_file (and custom_tle_file, if you use one) at the same path, e.g.
 # "../tle/amateur.txt". update_tle.py refreshes it for all stations at once.
 #
+# One station can hold SEVERAL SDRs that share an antenna (say an Airspy on 70 cm and an
+# RTL-SDR on 2 m behind a diplexer, on one beam): keep them in the same station, since
+# the beam can only point one place and one scheduler is what decides where. Each SDR
+# just gets its own record-only template (see docs/stations.md).
+#
 # With no radios.yaml at all, nothing changes: the classic single-folder
 # layout works exactly as before.
 
-default: r2                      # which station the GUI opens on
+default: beam                      # which station the GUI opens on
 
 stations:
-  r2:
-    dir: r2                      # relative to the project root, or absolute
-    label: R2 + beam antenna (Az/El)
-  mini:
-    dir: mini
-    label: Mini + helix (fixed, no rotor)
+  beam:
+    dir: beam                      # relative to the project root, or absolute
+    label: Beam antenna (Az/El)
+  helix:
+    dir: helix
+    label: Helix (fixed, no rotor)

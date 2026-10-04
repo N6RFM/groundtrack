@@ -271,5 +271,5 @@ regenerates every `flowgraphs/*.grc` into its `.py` via `grcc`, then runs
 individually. Other targets: `make check`, `make check-live`,
 `make status`, `make doctor`. In multi-station mode (see
 [scripts-reference.md](scripts-reference.md), `station.py`) these act on one
-station: `./regen_all.sh --radio mini`, or `GROUNDTRACK_STATION=mini make check`.
+station: `./regen_all.sh --radio helix`, or `GROUNDTRACK_STATION=helix make check`.
 

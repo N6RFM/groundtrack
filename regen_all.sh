@@ -4,7 +4,7 @@
 # new one - "forgot to grcc" has been a real, repeated source of confusion.
 #
 # With radios.yaml (multi-station mode) this acts on ONE station:
-#     ./regen_all.sh --radio mini        (or be asked)
+#     ./regen_all.sh --radio helix        (or be asked)
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

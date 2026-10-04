@@ -212,7 +212,7 @@ groundtrack/
 With `radios.yaml` (see [Stations](stations.md)), the project root keeps only
 the scripts, `tle/` and `radios.yaml`; `satellites.yaml`, `schedule.yaml`,
 `pass_log.jsonl` and `flowgraphs/` above live inside a station folder instead
-(`r2/`, `mini/`), laid out exactly like the old root.
+(`beam/`, `helix/`), laid out exactly like the old root.
 
 ## Why every `.grc` needs a `kiss_encode_pdu` block
 

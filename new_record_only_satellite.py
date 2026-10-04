@@ -61,7 +61,12 @@ def discover_fields(text):
     basefile, waterfall name, and shared freq/nfreq value - these become
     the exact find-patterns for the text substitution, so this never
     depends on a hardcoded assumption about what the template contains."""
-    grc = yaml.safe_load(text)
+    try:
+        grc = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise Refusal(f"isn't valid YAML, so it can't be a GRC flowgraph ({str(e).splitlines()[0]})")
+    if not isinstance(grc, dict) or not isinstance(grc.get("blocks"), list):
+        raise Refusal("isn't a GRC flowgraph (no list of blocks in it)")
     blocks = {b["name"]: b for b in grc.get("blocks", [])}
 
     opt_id = grc.get("options", {}).get("parameters", {}).get("id")
@@ -147,6 +152,43 @@ def build_new_text(text, old, new_slug, new_name, new_freq_hz):
     return text
 
 
+TEMPLATE_PATTERN = "flowgraphs/_record_only_template*.grc"
+
+
+def list_templates():
+    """Every record-only template in this folder's flowgraphs/: the default
+    (_record_only_template.grc) first, then any _record_only_template_<anything>.grc - say
+    _record_only_template_2m.grc for a second band on a different SDR."""
+    import glob
+    default = os.path.normpath(DEFAULT_TEMPLATE)
+    return sorted(glob.glob(TEMPLATE_PATTERN), key=lambda p: (os.path.normpath(p) != default, p))
+
+
+def template_hz(path):
+    """The frequency the template itself sits on (what it was copied from), in Hz - or None
+    if it can't be read as a template at all."""
+    try:
+        with open(path, newline="") as f:
+            return float(discover_fields(f.read())["freq_value"])
+    except Exception:
+        return None     # a probe: anything that stops it reading as a template means "not usable"
+
+
+def nearest_template(freq_hz, paths=None):
+    """(best path, [(path, its Hz), ...]) - the usable template whose own frequency is nearest to
+    freq_hz; None if none is usable. A frequency is what tells a 2 m template from a 70 cm one,
+    so nothing else has to be said. Two templates equally near can't be told apart, so that's a
+    Refusal, not a coin toss."""
+    usable = [(p, hz) for p, hz in ((p, template_hz(p)) for p in (paths if paths is not None else list_templates())) if hz is not None]
+    if not usable:
+        return None
+    ranked = sorted(usable, key=lambda t: abs(t[1] - freq_hz))
+    if len(ranked) > 1 and abs(abs(ranked[0][1] - freq_hz) - abs(ranked[1][1] - freq_hz)) < 1:
+        raise Refusal(f"{ranked[0][0]} and {ranked[1][0]} are equally near {freq_hz / 1e6:.3f} MHz - "
+                      f"say which with --template")
+    return ranked[0][0], usable
+
+
 def no_template_message():
     """One line on purpose: the GUI's Add dialog shows only the last line of a failure."""
     return (f"station {station.current()!r} has no record-only template: put a flowgraph you already run on "
@@ -178,8 +220,22 @@ def main():
 
     template = args.template
     if template is None:
-        if os.path.exists(DEFAULT_TEMPLATE):
-            template = DEFAULT_TEMPLATE
+        found = list_templates()
+        if len(found) > 1:
+            try:
+                pick = nearest_template(args.freq, found)
+            except Refusal as r:
+                sys.exit(str(r))
+            if pick:
+                template, usable = pick
+                print(f"NOTE: {len(found)} templates here - using {template} (its "
+                      f"{template_hz(template) / 1e6:.3f} MHz is the nearest to {args.freq / 1e6:.3f} MHz). Others: "
+                      + ", ".join(f"{p} ({hz / 1e6:.3f} MHz)" for p, hz in usable if p != template)
+                      + ". --template overrides.")
+            else:
+                template = found[0]     # none usable: let the normal error say why
+        elif found:
+            template = found[0]
         elif station.current():
             # inside a station, scionx.grc (if it even exists here) is some OTHER radio's flowgraph
             sys.exit(no_template_message())

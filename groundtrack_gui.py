@@ -996,11 +996,36 @@ class GroundtrackGUI(tk.Tk):
                             else "flowgraphs/scionx.grc")
         use_template_var = tk.BooleanVar(value=False)
         template_check = ttk.Checkbutton(
-            win, text="Also build its .grc from a template (name/freq only differ)",
+            win, text="Also build its .grc from a template (name/freq only differ; the nearest-frequency one is picked)",
             variable=use_template_var, command=lambda: toggle_fields())
         template_check.grid(row=8, column=0, columnspan=2, sticky="w", padx=10, pady=(4, 0))
 
-        fields["template"] = add_row(9, "Template .grc:", default_template)
+        # one or several templates in this station (e.g. a 70 cm one and a 2 m one on another SDR):
+        # the one whose own frequency is nearest to what you type is picked for you; choose or
+        # type another and your choice sticks
+        import new_record_only_satellite as nros
+        templates = nros.list_templates() or [default_template]
+        ttk.Label(win, text="Template .grc:").grid(row=9, column=0, sticky="e", padx=(10, 4), pady=4)
+        template_box = ttk.Combobox(win, width=36, values=templates)
+        template_box.set(default_template)
+        template_box.grid(row=9, column=1, padx=(0, 10), pady=4, sticky="w")
+        fields["template"] = template_box
+        template_chosen = {"by_hand": False}
+
+        def suggest_template(*_):
+            if template_chosen["by_hand"] or len(templates) < 2:
+                return
+            try:
+                pick = nros.nearest_template(float(fields["freq"].get().strip()), templates)
+            except (ValueError, nros.Refusal):
+                return
+            if pick:
+                template_box.set(pick[0])
+
+        fields["freq"].bind("<KeyRelease>", suggest_template, add="+")
+        fields["freq"].bind("<FocusOut>", suggest_template, add="+")
+        template_box.bind("<<ComboboxSelected>>", lambda e: template_chosen.update(by_hand=True))
+        template_box.bind("<KeyRelease>", lambda e: template_chosen.update(by_hand=True))
         record_iq_var = tk.BooleanVar(value=False)
         record_iq_check = ttk.Checkbutton(
             win, text="Also write record_iq_toggle: true explicitly (optional - a wired template is detected anyway)",

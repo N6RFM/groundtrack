@@ -50,6 +50,7 @@ STATION_EXEMPT = {
     "station.py": "defines station selection",
     "ci_check.py": "checks the repo's own example files, not a station's",
     "migrate_to_stations.py": "runs once, from the project root, before any station exists",
+    "rename_station.py": "edits radios.yaml itself, from the project root",
 }
 STATION_STATE = re.compile(r"satellites\.yaml|schedule\.yaml|flowgraphs/|"
                            r"run_passes\.lock|pass_log\.jsonl|CONFIG_PATH|SCHEDULE_PATH")

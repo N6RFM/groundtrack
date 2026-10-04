@@ -25,7 +25,7 @@ modification times for the "Gaps found" column.
 
 With more than one radio/antenna system (see [Stations](docs/stations.md)), a
 row across the top - **Active station** - switches the whole window between
-them. It opens on `radios.yaml`'s default (R2, the beam) every time, never on
+them. It opens on `radios.yaml`'s default (the beam, in the examples) every time, never on
 whatever you used last; `--radio NAME` opens it on another. The active
 station is green and sunken, with a badge you can't miss: orange **BEAM
 CONTROL ON (host:port)** if that station has a rotor, muted **no rotor -
@@ -33,7 +33,7 @@ antenna never moved** if not. A **●** marks any station whose `run_passes.py`
 is running (re-read every few seconds - those runs live in terminals this
 window doesn't control).
 
-Switching changes the working folder, the table, the title (`[mini]`), and
+Switching changes the working folder, the table, the title (`[helix]`), and
 clears the output pane. Switching to a station that's already running
 `run_passes.py` tells you so - it only changes what this window shows; that
 run carries on untouched - and **Start run_passes.py** on such a station is
@@ -50,7 +50,7 @@ by a divider:
 | Button | What it actually runs |
 |---|---|
 | Refresh | (read-only - re-parses `satellites.yaml` and re-checks each satellite's files) |
-| Add satellite... | `add_satellite.py --name ... --norad ... --freq ...` (plus `--record-only` if checked, plus `--producer-port`/`--consumer-port` if you've overridden the suggested defaults) - or, if Recording-only and "Also build its .grc from a template" are both checked, `new_record_only_satellite.py --name ... --norad ... --freq ... --template ... --yes` instead (plus `--record-iq-toggle` if checked), which builds the .grc, adds the entry, and compiles it in one step |
+| Add satellite... | `add_satellite.py --name ... --norad ... --freq ...` (plus `--record-only` if checked, plus `--producer-port`/`--consumer-port` if you've overridden the suggested defaults) - or, if Recording-only and "Also build its .grc from a template" are both checked, `new_record_only_satellite.py --name ... --norad ... --freq ... --template ... --yes` instead (plus `--record-iq-toggle` if checked), which builds the .grc, adds the entry, and compiles it in one step (the template box is a picker: the template whose own frequency is nearest to the downlink you typed is chosen for you, 2 m versus 70 cm, and a choice of your own sticks) |
 | Edit selected | `edit_satellite.py NAME` with whichever fields you changed - see below |
 | Enable / Disable selected | `toggle_satellite.py --enable/--disable NAME` |
 | Regenerate .grc for selected | `grcc flowgraphs/<name>.grc` |

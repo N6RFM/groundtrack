@@ -2,18 +2,18 @@
 """
 One-time move from the classic single-folder layout to multi-station mode.
 
-Your whole current fleet becomes the first station (say r2, the beam), and a
-second, empty station (say mini) is created beside it:
+Your whole current fleet becomes the first station (say beam), and a
+second, empty station (say helix) is created beside it:
 
     before                          after
     ------                          -----
     satellites.yaml                 radios.yaml            (new)
-    schedule.yaml                   r2/satellites.yaml     (moved)
-    pass_log.jsonl                  r2/schedule.yaml       (moved)
-    flowgraphs/                     r2/pass_log.jsonl      (moved)
-    tle/                            r2/flowgraphs/         (moved - git mv, history kept)
-    *.py (the scripts)              mini/satellites.yaml   (new skeleton)
-                                    mini/flowgraphs/       (new, empty)
+    schedule.yaml                   beam/satellites.yaml     (moved)
+    pass_log.jsonl                  beam/schedule.yaml       (moved)
+    flowgraphs/                     beam/pass_log.jsonl      (moved)
+    tle/                            beam/flowgraphs/         (moved - git mv, history kept)
+    *.py (the scripts)              helix/satellites.yaml   (new skeleton)
+                                    helix/flowgraphs/       (new, empty)
                                     tle/                   (stays: shared by every station)
                                     *.py                   (stay: shared, never duplicated)
 
@@ -39,7 +39,7 @@ Usage:
     python3 migrate_to_stations.py --second-rig-port 4534 --dry-run
     python3 migrate_to_stations.py --second-rig-port 4534
     python3 migrate_to_stations.py --second-rig-port 4534 \\
-        --first-label "R2 + beam (Az/El)" --second-label "Mini + helix (fixed)" \\
+        --first-label "Beam (Az/El)" --second-label "Helix (fixed)" \\
         --second-template ~/my_working_mini_flowgraph.grc
 
 --second-template installs a flowgraph you already run on the second radio as
@@ -345,10 +345,10 @@ def execute(plan, a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--first", default="r2", help="name for your existing fleet's station (default: r2)")
-    ap.add_argument("--second", default="mini", help="name for the new, empty station (default: mini)")
-    ap.add_argument("--first-label", help="shown in the GUI, e.g. 'R2 + beam (Az/El)'")
-    ap.add_argument("--second-label", help="shown in the GUI, e.g. 'Mini + helix (fixed)'")
+    ap.add_argument("--first", default="beam", help="name for your existing fleet's station (default: beam)")
+    ap.add_argument("--second", default="helix", help="name for the new, empty station (default: helix)")
+    ap.add_argument("--first-label", help="shown in the GUI, e.g. 'Beam (Az/El)'")
+    ap.add_argument("--second-label", help="shown in the GUI, e.g. 'Helix (fixed)'")
     ap.add_argument("--second-rig-port", type=int, required=True,
                     help="the new station's Doppler (rigctld) port - must differ from the first's")
     ap.add_argument("--second-template",

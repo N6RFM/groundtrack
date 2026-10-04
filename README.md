@@ -38,13 +38,13 @@ that Hamlib doesn't already support.
 git clone git@github.com:n6rfm/groundtrack.git
 cd groundtrack
 cp radios.example.yaml radios.yaml        # the repo ships in the multi-station layout
-cp satellites.example.yaml r2/satellites.yaml
-export GROUNDTRACK_STATION=r2             # one radio? set this once and forget it
+cp satellites.example.yaml beam/satellites.yaml
+export GROUNDTRACK_STATION=beam             # one radio? set this once and forget it
 python3 setup_station.py                  # your coordinates; points the station at the shared TLE folder
 python3 doctor.py
 ```
-Each radio/antenna system is a "station" - a folder of its own (`r2/` holds the
-shipped example flowgraphs); with one radio you simply use `r2` (delete the `mini:`
+Each radio/antenna system is a "station" - a folder of its own (`beam/` holds the
+shipped example flowgraphs); with one radio you simply use `beam` (delete the `helix:`
 block from `radios.yaml`). See [Stations](docs/stations.md).
 
 See [Setup](docs/setup.md) for the full walkthrough, and
