@@ -386,8 +386,9 @@ class GroundtrackGUI(tk.Tk):
         ttk.Button(row6, text="Start run_passes.py (new window)",
                    command=self.start_run_passes).pack(side="left")
         self.preposition_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row6, text="Pre-position rotor for next pass",
-                         variable=self.preposition_var).pack(side="left", padx=(8, 0))
+        self.preposition_check = ttk.Checkbutton(row6, text=self.PREPOSITION_TEXT,
+                                                  variable=self.preposition_var)
+        self.preposition_check.pack(side="left", padx=(8, 0))
         self.record_iq_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(row6, text="Record IQ",
                          variable=self.record_iq_var).pack(side="left", padx=(8, 0))
@@ -470,8 +471,35 @@ class GroundtrackGUI(tk.Tk):
         self.log(f"$ {_show(args)}\n\n{output}")
         return returncode, output
 
+    PREPOSITION_TEXT = "Pre-position rotor for next pass"
+
+    def _has_rotor(self):
+        """Does the active station steer an antenna? The test run_passes.py itself uses: both
+        rot_host and rot_port in its config (the current folder's, once a station is active).
+        If the config can't be read there's nothing to go on, so say yes - the box then stays
+        as it always was."""
+        try:
+            with open(CONFIG_PATH) as f:
+                cfg = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            return True
+        return "rot_host" in cfg and "rot_port" in cfg
+
+    def _update_rotor_controls(self):
+        """Pre-positioning moves a rotor, so on a station without one the box is meaningless:
+        grey it out and say why. Its ticked/unticked state is left alone, so the choice made
+        for the beam station is still there when you switch back to it."""
+        if not hasattr(self, "preposition_check"):
+            return
+        if self._has_rotor():
+            self.preposition_check.configure(state="normal", text=self.PREPOSITION_TEXT)
+        else:
+            self.preposition_check.configure(
+                state="disabled", text=f"{self.PREPOSITION_TEXT} (no rotor on this station)")
+
     def refresh(self):
         self._update_station_bar()
+        self._update_rotor_controls()
         self.tree.delete(*self.tree.get_children())
         sats = load_satellites()
         if not sats and not os.path.exists(CONFIG_PATH):
@@ -745,8 +773,8 @@ class GroundtrackGUI(tk.Tk):
             return
         cmd = [sys.executable, station.script_path("run_passes.py"), "--verbose",
                "--status-interval", str(interval)]
-        if not self.preposition_var.get():
-            cmd.append("--no-preposition")
+        if self._has_rotor() and not self.preposition_var.get():
+            cmd.append("--no-preposition")      # nothing to pre-position on a station with no rotor
         cmd += ["--record-iq", "yes" if self.record_iq_var.get() else "no"]
         self.spawn_in_terminal(cmd)
 

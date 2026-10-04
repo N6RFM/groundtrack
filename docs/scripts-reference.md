@@ -170,7 +170,8 @@ python3 doctor.py
 ```
 It checks, in order: which folder you're actually running from (and flags
 if it's inside Trash - a real issue we hit once), whether duplicate copies
-of this fleet folder exist elsewhere on disk, which fleet-related
+of this project folder exist elsewhere on disk (a folder holding the scripts and at
+least one `satellites.yaml`, in either layout), which fleet-related
 processes are currently running and from where, which of the fleet's
 ports are free vs. already occupied (and by what; read from your configuration -
 every station's rigctld/rotctld port and each enabled satellite's relay/bridge

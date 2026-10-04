@@ -185,7 +185,10 @@ later, if that becomes worth doing.
 Two checkboxes sit next to that button. **Pre-position rotor for next
 pass** (checked by default) moves the rotor toward wherever the next
 approved pass will rise as soon as the current one ends, instead of
-leaving it wherever the pass happened to finish. **Record IQ** (checked
+leaving it wherever the pass happened to finish. On a station with no rotor
+(no `rot_host`/`rot_port` in its config) it's greyed out and says so, and
+`--no-preposition` is never passed for it; the tick you chose for the beam
+station is still there when you switch back. **Record IQ** (checked
 by default) only actually affects satellites whose `.grc` is wired for
 the toggle (detected automatically) - see
 [Adding a satellite](docs/adding-satellites.md)

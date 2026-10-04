@@ -60,9 +60,16 @@ def where_are_we():
 
 
 def find_other_copies(current_real):
-    section("Looking for other copies of this fleet folder")
+    """Copies of this project folder under the home directory. A project folder is one that
+    holds the scripts (run_passes.py and station.py) AND some personal config: a
+    satellites.yaml at its root (the classic layout) or in a folder one level down (one per
+    station). A pristine clone with no config of its own isn't what this is hunting for; a
+    second configured copy is - two of them is how you end up editing one and running the
+    other. (It used to look only for run_passes.py beside satellites.yaml, which no folder
+    satisfies once the configs live in station folders - so it went blind.)"""
+    section("Looking for other copies of this project folder")
     home = os.path.expanduser("~")
-    found = []
+    found = {}      # real path -> [folders holding a satellites.yaml, "" meaning the root itself]
     skip_dirs = {".cache", ".git", "node_modules"}
     for root, dirs, files in os.walk(home):
         dirs[:] = [d for d in dirs if d not in skip_dirs]
@@ -70,22 +77,28 @@ def find_other_copies(current_real):
         if depth > 6:
             dirs[:] = []
             continue
-        if "satellites.yaml" in files and "run_passes.py" in files:
-            found.append(os.path.realpath(root))
-    found = sorted(set(found))
+        if "run_passes.py" in files and "station.py" in files:
+            holders = ([""] if "satellites.yaml" in files else []) + sorted(
+                d for d in dirs if os.path.exists(os.path.join(root, d, "satellites.yaml")))
+            if holders:
+                found[os.path.realpath(root)] = holders
     if not found:
-        print("No fleet folders found under your home directory at all - odd, but not this script's problem.")
+        print("No configured project folders found under your home directory at all - odd, but not this script's problem.")
         return
-    for path in found:
-        marker = "  <- you are here" if path == current_real else ""
-        in_trash = "  *** IN TRASH ***" if "Trash" in path else ""
+    import datetime
+    for path in sorted(found):
+        holders = found[path]
         try:
-            mtime = os.path.getmtime(os.path.join(path, "satellites.yaml"))
-            import datetime
-            mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            newest = max(os.path.getmtime(os.path.join(path, h, "satellites.yaml")) for h in holders)
+            mtime_str = datetime.datetime.fromtimestamp(newest).strftime("%Y-%m-%d %H:%M")
         except OSError:
             mtime_str = "?"
-        print(f"  {path}  (satellites.yaml modified {mtime_str}){marker}{in_trash}")
+        stations = [h for h in holders if h]
+        what = (f"stations: {', '.join(stations)}; newest satellites.yaml modified {mtime_str}" if stations
+                else f"satellites.yaml modified {mtime_str}")
+        marker = "  <- you are here" if path == current_real else ""
+        in_trash = "  *** IN TRASH ***" if "Trash" in path else ""
+        print(f"  {path}  ({what}){marker}{in_trash}")
     if len(found) > 1:
         print(f"\n{len(found)} copies found - make sure you always cd into the same "
               f"one, and consider deleting/archiving the others to avoid confusion.")
@@ -171,6 +184,8 @@ def check_ports():
             live = [st for st in sorted(rig_stations) if station.run_passes_pid(st)]
             if live:
                 print(f"         expected: run_passes.py is running for station {', '.join(live)}, and it owns this rigctld")
+            elif "rotctld (antenna)" in label and "rotctld" in (owner or ""):
+                print(f"         expected: rotctld is running (you start it yourself for the beam)")
             else:
                 print(f"         to free it: kill <PID above>, or pkill -f <process name>")
 
@@ -388,7 +403,10 @@ def main():
 
     extra_args = argv  # passed straight through to preflight.py
     real = where_are_we()
-    find_other_copies(real)
+    import station
+    # "you are here" is the project folder (where the scripts live) - not the station
+    # folder this process has since changed into
+    find_other_copies(os.path.realpath(station.SCRIPT_DIR))
     check_processes()
     check_ports()
     check_stray_compiled_files(fix=fix)
