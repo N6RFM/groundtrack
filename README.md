@@ -57,6 +57,7 @@ split by what you're actually trying to do:
 | [Adding a Satellite](docs/adding-satellites.md) | Decode-and-relay vs. recording-only vs. `extra_outputs` (a satellite output that bypasses the relay and connects straight to its own downstream app), editing, enabling/disabling |
 | [Architecture](docs/architecture.md) | How the pieces fit together, `kiss_encode_pdu`, folder layout |
 | [Relay and Bridging](docs/relay-and-bridging.md) | `relay.py`, `tcp_bridge.py`, which one a satellite actually uses, port conventions |
+| [Stations](docs/stations.md) | More than one radio/antenna system: a folder per station, the GUI's station switch, running them side by side, sharing one TLE file |
 | [Tracking Control](docs/tracking-control.md) | Doppler control, antenna/rotor control, lead-ahead targeting, measuring and configuring your rotor's real limits |
 | [Scripts Reference](docs/scripts-reference.md) | What every script does, including `doctor.py` in depth |
 | [Testing](docs/testing.md) | The full end-to-end test recipe, sending test frames, verifying Doppler/rotor without a real pass |

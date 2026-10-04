@@ -166,6 +166,7 @@ groundtrack/
 ├── show_queue.py            # prints the approved pass queue from schedule.yaml
 ├── station.py               # multi-radio setups: picks which station's folder a script works in
 ├── radios.example.yaml      # copy to radios.yaml to switch multi-station mode on
+├── migrate_to_stations.py   # one-time: classic layout -> one folder per station (see stations.md)
 ├── wire_record_iq.py        # wires a .grc for the per-run IQ toggle (diff + backup)
 ├── toggle_pass_record_iq.py # per-pass IQ recording override in the queue
 ├── show_pass_log.py         # summarizes pass_log.jsonl - what actually happened per pass
@@ -206,6 +207,11 @@ groundtrack/
                              #   for SatNOGS/Celestrak; name is up to you, set as
                              #   custom_tle_file in satellites.yaml
 ```
+
+With `radios.yaml` (see [Stations](stations.md)), the project root keeps only
+the scripts, `tle/` and `radios.yaml`; `satellites.yaml`, `schedule.yaml`,
+`pass_log.jsonl` and `flowgraphs/` above live inside a station folder instead
+(`r2/`, `mini/`), laid out exactly like the old root.
 
 ## Why every `.grc` needs a `kiss_encode_pdu` block
 

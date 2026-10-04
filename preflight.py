@@ -91,7 +91,19 @@ def static_checks(cfg_path):
     if has_rotor:
         check("rot_port is set", isinstance(cfg.get("rot_port"), int))
     else:
-        check("rotor control configured", True, "none configured - running without antenna control", level=WARN)
+        import station
+        if station.current():
+            # a station with no rotor is a design choice (a fixed helix, say),
+            # not something to warn about on every single run
+            check("rotor control", True, f"none - station {station.current()!r} doesn't steer an antenna")
+        else:
+            check("rotor control configured", True, "none configured - running without antenna control", level=WARN)
+
+    import station
+    if station.current():
+        problems = station.cross_station_conflicts()
+        check("nothing is shared with another station", not problems,
+              "; ".join(problems) or "rig_port, rotor and relay/bridge ports are all distinct")
 
     for tool, needed in (("rigctld", True), ("rotctld", has_rotor)):
         found = shutil.which(tool) is not None
@@ -108,7 +120,14 @@ def static_checks(cfg_path):
                   "pip install skyfield pyyaml --break-system-packages")
 
     sats = cfg.get("satellites", [])
-    check("at least one satellite configured", len(sats) > 0)
+    import station
+    if sats or not station.current():
+        check("at least one satellite configured", len(sats) > 0)
+    else:
+        # a station just created has none yet - that's a to-do, not a broken config
+        check("at least one satellite configured", False,
+              f"none yet in station {station.current()!r} - add one (the GUI's Add satellite..., "
+              f"or add_satellite.py)", level=WARN)
 
     all_norads, all_ports = set(), {}
     tle_names = set()

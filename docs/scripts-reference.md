@@ -611,4 +611,38 @@ The one thing stations share is the TLE file: point every station's
 - it refuses, rather than guess, if two stations name different TLE files.
 
 `python3 station.py --list` shows what's configured; `--shell` prints the
-`export`/`cd` lines `regen_all.sh` evals.
+`export`/`cd` lines `regen_all.sh` evals. The GUI switches station while
+running (`station.switch()`) instead of choosing once at start-up, and
+`preflight.py` inside a station also runs `station.cross_station_conflicts()`:
+`rig_port`, rotor and relay/bridge ports must not be shared with another
+station. Automatic "next free port" (`add_satellite.py`, the GUI's Add
+dialog, `plan_passes.py --add-satellite`) likewise avoids every other
+station's ports.
+
+## migrate_to_stations.py
+
+The one-time move from the classic single-folder layout to multi-station mode
+(see [Stations](stations.md) for the whole picture): your current fleet
+becomes the first station, a new empty one is created beside it, and
+`radios.yaml` is written.
+```
+python3 migrate_to_stations.py --second-rig-port 4534 --dry-run
+python3 migrate_to_stations.py --second-rig-port 4534 \
+    --first-label "R2 + beam (Az/El)" --second-label "Mini + helix (fixed)" \
+    --second-template ~/my_working_mini_flowgraph.grc
+```
+`flowgraphs/` moves with `git mv` (history follows the files; compiled and
+untracked files travel too), `satellites.yaml`/`schedule.yaml`/
+`pass_log.jsonl` move alongside, and the only edit inside a moved file is
+prefixing `../` to a relative `tle_file`/`custom_tle_file`, done as a plain
+line edit so comments and quote style survive. Every precondition is checked
+first and all problems reported at once: a live `run_passes.py`, compiled
+flowgraphs stranded in the project root (`doctor.py --fix` first), a station
+folder that already exists, a `rig_port` clash, an unusable template. The
+files git doesn't track are copied to `.pre_stations_backup/` first, and if
+any step fails the ones already done are undone. `--dry-run` changes nothing.
+
+`--second-template` installs a flowgraph you already run on the second radio
+as its `_record_only_template.grc`, after proving `new_record_only_satellite.py`
+can actually generate from it. It's deliberately not derived from the first
+station's flowgraph - the radios differ in more than a device string.

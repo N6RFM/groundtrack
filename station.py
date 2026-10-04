@@ -34,6 +34,7 @@ kind of mistake worth one extra keystroke.
         # prints export/cd lines for a shell script to eval (regen_all.sh)
 """
 
+import errno
 import os
 import shlex
 import sys
@@ -289,6 +290,165 @@ def merged_tle_config():
     merged["satellites"] = list(sats.values())
     merged["_stations"] = by_station
     return merged
+
+
+def switch(name):
+    """The in-process version of enter(), for a long-running program (the
+    GUI) that changes station while it runs. Changes into the station's
+    folder and updates GROUNDTRACK_STATION so anything it launches next
+    inherits the choice. Raises StationError. Returns the station's real name."""
+    global _entered
+    _default, stations = load_radios()
+    matched = _match(name, stations)
+    if matched is None:
+        raise StationError(f"unknown station {name!r}. Choose from: {', '.join(stations)}")
+    spec = stations[matched]
+    if not os.path.isdir(spec["dir"]):
+        raise StationError(f"station {matched!r}: its folder {spec['dir']} doesn't exist")
+    os.chdir(spec["dir"])
+    os.environ[ENV_VAR] = matched
+    _entered = matched
+    return matched
+
+
+def initial_station():
+    """Which station a program that never prompts (the GUI) should start on:
+    --radio, then GROUNDTRACK_STATION, then radios.yaml's own 'default:'.
+    Takes --radio off argv. Raises StationError."""
+    asked = pop_radio_arg()
+    default, stations = load_radios()
+    name = asked or os.environ.get(ENV_VAR) or default
+    matched = _match(name, stations)
+    if matched is None:
+        raise StationError(f"unknown station {name!r}. Choose from: {', '.join(stations)}")
+    return matched
+
+
+def run_passes_pid(name):
+    """PID of a live run_passes.py working in that station's folder, or None.
+    The same liveness test run_passes.py's own acquire_lock() uses (signal 0;
+    EPERM means alive but owned by someone else) - so the lock file, which is
+    per-folder and therefore per-station for free, is the single source of
+    truth, and a stale lock left by a crash correctly reads as 'not running'."""
+    _default, stations = load_radios()
+    matched = _match(name, stations)
+    if matched is None:
+        return None
+    try:
+        with open(os.path.join(stations[matched]["dir"], "run_passes.lock")) as f:
+            pid = int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError as e:
+        return pid if e.errno == errno.EPERM else None
+    return pid
+
+
+def describe(name):
+    """What the GUI shows about a station, read from the station's own
+    satellites.yaml: label, folder, rig_port, rotor ('host:port', or None if
+    it has none - the same test run_passes.py applies), and any running PID."""
+    _default, stations = load_radios()
+    matched = _match(name, stations)
+    if matched is None:
+        raise StationError(f"unknown station {name!r}")
+    spec = stations[matched]
+    cfg = {}
+    try:
+        with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
+            cfg = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        pass
+    rotor = (f"{cfg['rot_host']}:{cfg['rot_port']}"
+             if "rot_host" in cfg and "rot_port" in cfg else None)
+    return {"name": matched, "label": spec["label"], "dir": spec["dir"],
+            "rig_port": cfg.get("rig_port"), "rotor": rotor,
+            "running_pid": run_passes_pid(matched)}
+
+
+def _ports_in(cfg):
+    """Every relay/bridge/flowgraph TCP port one satellites.yaml claims, as
+    [(port, 'SAT key'), ...]."""
+    found = []
+    for sat in cfg.get("satellites") or []:
+        for key in ("producer_port", "consumer_port"):
+            if sat.get(key) is not None:
+                found.append((sat[key], f"{sat.get('name', '?')} {key}"))
+        for out in sat.get("extra_outputs") or []:
+            for key in ("port", "bridge_port"):
+                if out.get(key) is not None:
+                    found.append((out[key], f"{sat.get('name', '?')} {out.get('name', '?')} {key}"))
+    return found
+
+
+def other_stations_ports():
+    """Every port claimed by a station OTHER than the one this process is
+    working in (all of them if it isn't in one). For 'next free port': each
+    station's own satellites.yaml only knows its own ports, so without this a
+    new satellite on the mini would be handed 9101 - which R2's GEOSCAN-1
+    already holds - and the clash would only surface later, as preflight's
+    cross-station check failing. Empty set in classic single-folder mode."""
+    if not multi_station():
+        return set()
+    try:
+        _default, stations = load_radios()
+    except StationError:
+        return set()
+    used = set()
+    for name, spec in stations.items():
+        if name == _entered:
+            continue
+        try:
+            with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
+                cfg = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        used.update(p for p, _ in _ports_in(cfg) if isinstance(p, int))
+    return used
+
+
+def cross_station_conflicts():
+    """Things two stations must never share, found by reading every station's
+    satellites.yaml: rig_port (two run_passes.py would both try to start
+    rigctld on it), a rotor (two stations steering one antenna), and relay /
+    bridge ports (two processes can't bind the same one). Returns plain-language
+    problems; [] means the stations are properly independent.
+
+    This exists because 'independent' is the whole point of having stations -
+    and it's a property of two separate config files, which nothing else is
+    positioned to notice."""
+    _default, stations = load_radios()
+    seen = {}      # what -> {station: detail}
+    def note(key, who, detail):
+        seen.setdefault(key, {}).setdefault(who, detail)
+    for name, spec in stations.items():
+        try:
+            with open(os.path.join(spec["dir"], "satellites.yaml")) as f:
+                cfg = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if cfg.get("rig_port") is not None:
+            note(("rig_port", cfg["rig_port"]), name, "rigctld")
+        if "rot_host" in cfg and "rot_port" in cfg:
+            note(("rotor", str(cfg["rot_host"]), cfg["rot_port"]), name, "the rotor")
+        for port, detail in _ports_in(cfg):
+            note(("port", port), name, detail)
+    problems = []
+    for key, who in seen.items():
+        if len(who) < 2:
+            continue
+        names = " and ".join(f"{s} ({d})" for s, d in who.items())
+        if key[0] == "rig_port":
+            problems.append(f"rig_port {key[1]} is used by both {' and '.join(who)} - two "
+                            f"run_passes.py would both try to start rigctld on it")
+        elif key[0] == "rotor":
+            problems.append(f"{' and '.join(who)} both steer the rotor at {key[1]}:{key[2]} - "
+                            f"only one station should ever control a given antenna")
+        else:
+            problems.append(f"port {key[1]} is used by {names}")
+    return problems
 
 
 def _cli(argv):

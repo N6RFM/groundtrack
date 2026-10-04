@@ -11,6 +11,7 @@ Usage:
     python3 ci_check.py
 """
 
+import ast
 import glob
 import os
 import py_compile
@@ -48,11 +49,60 @@ def check_python_syntax():
 STATION_EXEMPT = {
     "station.py": "defines station selection",
     "ci_check.py": "checks the repo's own example files, not a station's",
-    "groundtrack_gui.py": "not station-aware yet - being done as its own step "
-                          "(it needs a runtime switch, not a start-up choice)",
+    "migrate_to_stations.py": "runs once, from the project root, before any station exists",
 }
 STATION_STATE = re.compile(r"satellites\.yaml|schedule\.yaml|flowgraphs/|"
                            r"run_passes\.lock|pass_log\.jsonl|CONFIG_PATH|SCHEDULE_PATH")
+
+
+# A script launching another by bare name ([sys.executable, "add_satellite.py"])
+# stops working the moment it has changed into a station folder, where that
+# file doesn't exist. station.script_path("add_satellite.py") works from anywhere.
+def bare_launches(src):
+    """Line numbers where a command list starts with sys.executable and its
+    script is a bare filename - written literally ([sys.executable, "x.py"]) or
+    through a name that's assigned one (tool = "x.py" ... [sys.executable, tool]).
+    Parsed rather than pattern-matched, so comments and docstrings can't trip it.
+    Deliberately not flagged: station.script_path(...) (the right way), and
+    anything computed at run time (a satellite's own script: path is meant to be
+    relative to its station). It can't see a filename built dynamically."""
+    tree = ast.parse(src)
+    py_literals = {}
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+                and isinstance(n.value.value, str) and n.value.value.endswith(".py")):
+            for t in n.targets:
+                if isinstance(t, ast.Name):
+                    py_literals[t.id] = n.value.value
+    hits = []
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.List) and n.elts):
+            continue
+        head = n.elts[0]
+        if not (isinstance(head, ast.Attribute) and head.attr == "executable"
+                and isinstance(head.value, ast.Name) and head.value.id == "sys"):
+            continue
+        rest = n.elts[1:]
+        if rest and isinstance(rest[0], ast.Constant) and rest[0].value == "-u":
+            rest = rest[1:]
+        if not rest:
+            continue
+        first = rest[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str) and first.value.endswith(".py"):
+            hits.append(first.lineno)
+        elif isinstance(first, ast.Name) and first.id in py_literals:
+            hits.append(first.lineno)
+    return hits
+
+
+def find_grc(path):
+    """The example satellites' flowgraphs live in flowgraphs/ in a classic
+    layout, or in <station>/flowgraphs/ once migrated to multi-station mode
+    (radios.yaml itself is gitignored, so CI can't consult it - look in both)."""
+    for candidate in [path] + sorted(glob.glob(f"*/{path}")):
+        if os.path.exists(candidate):
+            return candidate
+    return path
 
 
 def check_station_wiring():
@@ -64,13 +114,29 @@ def check_station_wiring():
             src = f.read()
         if not STATION_STATE.search(src):
             continue
-        wired = "station.enter()" in src or "station.enter_all()" in src
+        # enter(): picks a station at start-up. enter_all(): spans every one
+        # (update_tle.py). switch(): changes station while running (the GUI).
+        wired = any(call in src for call in
+                    ("station.enter()", "station.enter_all()", "station.switch("))
         check(f"{path} chooses a station", wired,
               "" if wired else "reads station files (satellites.yaml, flowgraphs/, ...) "
               "but never calls station.enter() - in multi-station mode it would look "
               "in the project root and find nothing. Add `import station` and "
               "`station.enter()` as the first lines of main(), or list it in "
               "STATION_EXEMPT with the reason.")
+
+    offenders = []
+    for path in sorted(glob.glob("*.py")):
+        with open(path) as f:
+            try:
+                lines = bare_launches(f.read())
+            except SyntaxError:
+                continue   # reported by the compile check above
+        if lines:
+            offenders.append(f"{path}:{','.join(map(str, lines))}")
+    check("no script launches another by bare filename", not offenders,
+          f"{', '.join(offenders)} - use station.script_path(...), a bare name isn't "
+          f"found once the script has changed into a station folder" if offenders else "")
 
     try:
         import station
@@ -113,7 +179,7 @@ def check_config():
                       not dup, "" if not dup else f"also used by {all_ports.get(p)}")
                 all_ports[p] = f"{name}.{port_field}"
 
-        grc_path = sat.get("script", "").replace(".py", ".grc")
+        grc_path = find_grc(sat.get("script", "").replace(".py", ".grc"))
         try:
             with open(grc_path) as f:
                 grc = yaml.safe_load(f)

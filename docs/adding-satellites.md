@@ -115,7 +115,10 @@ this is safe in a way the old, general-purpose `.grc` auto-generation
 (described above) wasn't: a record-only flowgraph has none of the
 structure (decoder, relay block, `kiss_encode_pdu`) that caused the
 original bugs, so there's nothing for a templating tool to get wrong in
-the same way.
+the same way. (With more than one radio - see [Stations](stations.md) - every
+command on this page acts on the station you're in, each station keeps its own
+`_record_only_template.grc` carrying that radio's device string, and "next free
+port" also avoids the other stations' ports.)
 
 **extra_outputs** - for a satellite with a
 second live output that a specific downstream app connects to, separate

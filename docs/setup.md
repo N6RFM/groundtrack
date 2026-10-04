@@ -89,3 +89,8 @@
    lesson about the measurement tool's own `--tolerance` setting that's
    worth reading before trusting its output.
 
+
+8. **If you have more than one radio** (say a beam-steered SDR and a fixed
+   helix one running at the same time), see [Stations](stations.md): one folder
+   per radio, a station switch in the GUI, and a one-time
+   `migrate_to_stations.py` to move an existing setup. With one radio, skip it.

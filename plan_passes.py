@@ -286,6 +286,8 @@ def add_satellite(cfg):
     min_elev = float(input("Minimum elevation to record (deg) [15]: ").strip() or "15")
     used_ports = ({s["producer_port"] for s in cfg.get("satellites", []) if "producer_port" in s}
                   | {s["consumer_port"] for s in cfg.get("satellites", []) if "consumer_port" in s})
+    import station
+    used_ports |= station.other_stations_ports()   # empty unless multi-station
     producer_port, consumer_port = 9101, 8101
     while producer_port in used_ports:
         producer_port += 1

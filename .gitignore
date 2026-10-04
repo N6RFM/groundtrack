@@ -49,5 +49,6 @@ pass_log.jsonl
 # site-specific, and compiled flowgraphs now live one level down, inside each
 # station folder - the root-anchored patterns above no longer reach them.
 radios.yaml
+.pre_stations_backup/
 */flowgraphs/*.py
 !*/flowgraphs/kiss_encode_pdu.py

@@ -21,6 +21,26 @@ things the GUI does entirely on its own are read-only: parsing
 `satellites.yaml` to build the table, and checking file existence/
 modification times for the "Gaps found" column.
 
+## Stations (only when `radios.yaml` exists)
+
+With more than one radio/antenna system (see [Stations](docs/stations.md)), a
+row across the top - **Active station** - switches the whole window between
+them. It opens on `radios.yaml`'s default (R2, the beam) every time, never on
+whatever you used last; `--radio NAME` opens it on another. The active
+station is green and sunken, with a badge you can't miss: orange **BEAM
+CONTROL ON (host:port)** if that station has a rotor, muted **no rotor -
+antenna never moved** if not. A **●** marks any station whose `run_passes.py`
+is running (re-read every few seconds - those runs live in terminals this
+window doesn't control).
+
+Switching changes the working folder, the table, the title (`[mini]`), and
+clears the output pane. Switching to a station that's already running
+`run_passes.py` tells you so - it only changes what this window shows; that
+run carries on untouched - and **Start run_passes.py** on such a station is
+refused up front rather than in a terminal that opens and immediately fails.
+Every button below acts on the active station. With no `radios.yaml` none of
+this appears and nothing changes.
+
 ## Satellite management
 
 Left to right, the buttons run roughly in workflow order - view, create,
@@ -212,8 +232,10 @@ what was there before.
 - No confirmation dialog before Enable/Disable fires - it runs the
   moment you click (Delete and removing an `extra_outputs` entry both
   do confirm first)
-- No live status for anything launched in a new window (relay, execution,
-  interactive planning) - see above
+- No live *output* for anything launched in a new window (relay, execution,
+  interactive planning) - see above. (With stations, the station bar does
+  show whether a station's `run_passes.py` is running, via its lock file -
+  but not what it's doing.)
 - The table's slug-guessing (turning a satellite's `script:` field back
   into its likely `.grc`/`.py` names) is a rough approximation of
   `add_satellite.py`'s real slugify logic, close enough for display but
@@ -226,6 +248,7 @@ cd groundtrack
 python3 groundtrack_gui.py
 ```
 
-Same as every other script here: run it from the repo root, since it
-reads `satellites.yaml` and calls the other scripts using relative
-paths.
+In the classic single-folder layout, run it from the repo root, since it
+reads `satellites.yaml` there. With `radios.yaml` it works from anywhere:
+it changes into the active station's folder itself, and launches every
+other script by absolute path.

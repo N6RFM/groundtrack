@@ -40,6 +40,10 @@ def next_free_ports(cfg):
                       if "producer_port" in s}
     used_consumer = {s["consumer_port"] for s in cfg.get("satellites", [])
                       if "consumer_port" in s}
+    import station
+    elsewhere = station.other_stations_ports()   # empty unless multi-station
+    used_producer |= elsewhere
+    used_consumer |= elsewhere
     prod = 9101
     while prod in used_producer:
         prod += 1

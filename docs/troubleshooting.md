@@ -6,6 +6,11 @@
 
 Symptoms we've actually hit, in the order worth checking:
 
+**`station: no station selected, and there's no terminal to ask on` (or
+`unknown station`, or `stations disagree about tle_file`)**
+Multi-station mode (a `radios.yaml` exists) - see [Stations](stations.md),
+"Troubleshooting". Pass `--radio NAME` or set `GROUNDTRACK_STATION`.
+
 **A satellite's pass "exits early" over and over, with `error: unrecognized
 arguments: --record-iq 1` (or another argument error) printed each time**
 That satellite has `record_iq_toggle: true` in `satellites.yaml`, so

@@ -2,6 +2,10 @@
 
 [← back to README](../README.md)
 
+> **More than one radio?** Everything below acts on one station at a time -
+> `--radio NAME` on any command, the GUI's station switch, or you'll be asked.
+> See [Stations](stations.md).
+
 ## Preflight checks (run this before every session)
 
 `preflight.py` catches exactly the class of bugs we've hit already - typos

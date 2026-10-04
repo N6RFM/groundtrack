@@ -31,6 +31,7 @@ from tkinter import ttk, messagebox, simpledialog, filedialog
 
 import yaml
 
+import station
 from doctor import check_stray_compiled_files
 
 CONFIG_PATH = "satellites.yaml"
@@ -58,6 +59,9 @@ def suggest_next_ports(sats):
     independently when actually called."""
     used_producer = {s["producer_port"] for s in sats if "producer_port" in s}
     used_consumer = {s["consumer_port"] for s in sats if "consumer_port" in s}
+    elsewhere = station.other_stations_ports()   # empty unless multi-station
+    used_producer |= elsewhere
+    used_consumer |= elsewhere
     prod = 9101
     while prod in used_producer:
         prod += 1
@@ -108,18 +112,150 @@ def find_terminal():
     return None
 
 
+def _show(args):
+    """A command as it should read in the output pane. Scripts are launched
+    by absolute path now - a bare 'preflight.py' wouldn't be found from
+    inside a station folder - but the full path on every line would bury the
+    command, so the project directory is trimmed back off for display."""
+    return " ".join(args).replace(station.SCRIPT_DIR + os.sep, "")
+
+
 class GroundtrackGUI(tk.Tk):
     def __init__(self):
+        # Before any window exists, so a bad --radio fails cleanly instead of
+        # leaving a half-built window behind.
+        initial = self._startup_station()
         super().__init__()
         self.title("groundtrack - fleet overview")
         self.geometry("900x600")
 
+        # None = classic single-folder mode: no station bar, nothing changes.
+        self.stations = station.load_radios()[1] if initial else None
+        self.current_station = initial
+
+        self._build_station_bar()      # packed first, so it stays pinned above the scrolling area
         self._build_scroll_container()
         self.repo_root = os.getcwd()
         self._build_table()
         self._build_actions()
         self._build_output()
+        if initial:
+            self._station_changed()
+            self._poll_stations()
+        else:
+            self.refresh()
+
+    # ---- stations (only when radios.yaml exists) ---------------------------
+
+    def _startup_station(self):
+        """Classic mode (no radios.yaml): returns None, leaving everything
+        exactly as it was. Otherwise works out which station to open on and
+        changes into it. Never prompts - --radio, then GROUNDTRACK_STATION,
+        then radios.yaml's own default (R2, the beam system) - and never
+        remembers the last session's choice: being surprised about which radio
+        you're pointed at is the wrong kind of surprise."""
+        if not station.multi_station():
+            if station.pop_radio_arg():
+                raise station.StationError("--radio was given, but there's no radios.yaml")
+            return None
+        name = station.initial_station()
+        station.switch(name)
+        return name
+
+    def _build_station_bar(self):
+        self.station_var = tk.StringVar()
+        self.station_buttons = {}
+        if not self.stations:
+            return
+        # Which radio you're pointed at has physical consequences - run_passes
+        # on the beam station moves an antenna - so the active one has to be
+        # unmistakable at a glance, not a subtle thin border: bold, a strong
+        # colour, sunken. (Style named Station.Toolbutton to inherit the
+        # Toolbutton layout, which is what makes a Radiobutton look like a
+        # push-in switch rather than a dot and a label.)
+        from tkinter import font as tkfont
+        self._station_font = tkfont.nametofont("TkDefaultFont").copy()
+        self._station_font.configure(weight="bold", size=self._station_font.cget("size") + 1)
+        style = ttk.Style(self)
+        style.configure("Station.Toolbutton", padding=(16, 6), font=self._station_font)
+        style.map("Station.Toolbutton",
+                  background=[("selected", "#8fd18f"), ("active", "#e6e6e6")],
+                  relief=[("selected", "sunken"), ("!selected", "raised")])
+
+        bar = ttk.Frame(self, padding=(8, 6))
+        bar.pack(side="top", fill="x")
+        ttk.Label(bar, text="Active station:").pack(side="left")
+        for name in self.stations:
+            btn = ttk.Radiobutton(bar, text=name, value=name, variable=self.station_var,
+                                  style="Station.Toolbutton",
+                                  command=lambda n=name: self.switch_station(n))
+            btn.pack(side="left", padx=(8, 0))
+            self.station_buttons[name] = btn
+        # the one thing that most needs to be visible: does this station move an antenna?
+        self.rotor_badge = tk.Label(bar, text="", padx=10, pady=3, font=self._station_font)
+        self.rotor_badge.pack(side="left", padx=(14, 0))
+        self.station_info = ttk.Label(bar, text="")
+        self.station_info.pack(side="left", padx=12)
+        ttk.Separator(self, orient="horizontal").pack(side="top", fill="x")
+
+    def switch_station(self, name):
+        if name == self.current_station:
+            return
+        pid = station.run_passes_pid(name)
+        if pid:
+            messagebox.showinfo(
+                "Already running",
+                f"run_passes.py is already running for station '{name}' (PID {pid}).\n\n"
+                f"Switching here only changes what this window shows and controls - "
+                f"that run carries on, untouched, in its own terminal. Starting a "
+                f"second one for '{name}' would be refused automatically.")
+        try:
+            station.switch(name)
+        except station.StationError as e:
+            messagebox.showerror("Can't switch station", str(e))
+            self.station_var.set(self.current_station)  # put the toggle back
+            return
+        self.current_station = name
+        self.repo_root = os.getcwd()
+        # leftover output from the other radio, sitting there after a switch,
+        # is exactly the kind of thing that gets misread as current
+        self.clear_output()
+        self._station_changed()
+
+    def _station_changed(self):
+        self.title(f"groundtrack - fleet overview [{self.current_station}]")
+        self.station_var.set(self.current_station)
         self.refresh()
+
+    def _update_station_bar(self):
+        """Running markers on every station's button, and the active station's
+        details (rotor or none, rig port, whether run_passes.py is live)."""
+        if not self.stations:
+            return
+        try:
+            for name, btn in self.station_buttons.items():
+                btn.config(text=f"{name}  \u25cf" if station.run_passes_pid(name) else name)
+            d = station.describe(self.current_station)
+        except station.StationError:
+            return
+        if d["rotor"]:
+            self.rotor_badge.config(text=f"BEAM CONTROL ON  ({d['rotor']})",
+                                    background="#f4a259", foreground="#000000")
+        else:
+            self.rotor_badge.config(text="no rotor - antenna never moved",
+                                    background="#dcdcdc", foreground="#333333")
+        rig = f"rig port {d['rig_port']}" if d["rig_port"] else "rig port not set"
+        text = f"{d['label']}   -   {rig}"
+        if d["running_pid"]:
+            text += f"   -   run_passes.py RUNNING (PID {d['running_pid']})"
+        self.station_info.config(text=text,
+                                 foreground="#b35900" if d["running_pid"] else "#444444")
+
+    def _poll_stations(self):
+        """run_passes.py starts and stops in terminals this window doesn't
+        control, so the markers are re-read every few seconds."""
+        self._update_station_bar()
+        self.after(3000, self._poll_stations)
 
     def _build_scroll_container(self):
         """Wraps everything below in a scrollable area with a slider on
@@ -321,7 +457,7 @@ class GroundtrackGUI(tk.Tk):
         a retry) can check returncode rather than guessing from text."""
         if args and args[0] == sys.executable and "-u" not in args:
             args = [args[0], "-u"] + args[1:]
-        self.log(f"$ {' '.join(args)}\n\n(running...)\n")
+        self.log(f"$ {_show(args)}\n\n(running...)\n")
         self.update_idletasks()
         try:
             result = subprocess.run(args, capture_output=True, text=True,
@@ -331,15 +467,21 @@ class GroundtrackGUI(tk.Tk):
         except Exception as e:
             output = f"Failed to run: {e}"
             returncode = -1
-        self.log(f"$ {' '.join(args)}\n\n{output}")
+        self.log(f"$ {_show(args)}\n\n{output}")
         return returncode, output
 
     def refresh(self):
+        self._update_station_bar()
         self.tree.delete(*self.tree.get_children())
         sats = load_satellites()
         if not sats and not os.path.exists(CONFIG_PATH):
-            self.log(f"No {CONFIG_PATH} found in the current directory.\n"
-                      f"Run this GUI from the repo root, same as every other script.")
+            if self.current_station:
+                self.log(f"No {CONFIG_PATH} found for station '{self.current_station}' "
+                          f"(looked in {os.getcwd()}).\n"
+                          f"Create one there - copy satellites.example.yaml and edit it.")
+            else:
+                self.log(f"No {CONFIG_PATH} found in the current directory.\n"
+                          f"Run this GUI from the repo root, same as every other script.")
             return
         for sat in sats:
             name = sat.get("name", "?")
@@ -372,7 +514,7 @@ class GroundtrackGUI(tk.Tk):
         if not name:
             return
         flag = "--enable" if enable else "--disable"
-        self.run_cmd([sys.executable, "toggle_satellite.py", flag, name])
+        self.run_cmd([sys.executable, station.script_path("toggle_satellite.py"), flag, name])
         self.refresh()
 
     def regen_selected(self):
@@ -461,7 +603,7 @@ class GroundtrackGUI(tk.Tk):
         name, grc_path = self._grc_path_for_selected()
         if not grc_path:
             return
-        self.run_cmd([sys.executable, "vet_grc.py", grc_path])
+        self.run_cmd([sys.executable, station.script_path("vet_grc.py"), grc_path])
 
     def vet_fix_selected(self):
         name, grc_path = self._grc_path_for_selected()
@@ -475,7 +617,7 @@ class GroundtrackGUI(tk.Tk):
             f"and the exact diff will be shown in the output pane below.")
         if not confirmed:
             return
-        self.run_cmd([sys.executable, "vet_grc.py", "--fix", grc_path])
+        self.run_cmd([sys.executable, station.script_path("vet_grc.py"), "--fix", grc_path])
 
     def suggest_extra_outputs_selected(self):
         """Interactive (prompts for a name, and for tcp_bridge candidates a
@@ -485,7 +627,7 @@ class GroundtrackGUI(tk.Tk):
         name, grc_path = self._grc_path_for_selected()
         if not grc_path:
             return
-        self.spawn_in_terminal([sys.executable, "suggest_extra_outputs.py", name])
+        self.spawn_in_terminal([sys.executable, station.script_path("suggest_extra_outputs.py"), name])
 
     def delete_selected(self):
         name = self.selected_name()
@@ -498,17 +640,17 @@ class GroundtrackGUI(tk.Tk):
             f"entry goes away.")
         if not confirmed:
             return
-        self.run_cmd([sys.executable, "delete_satellite.py", name, "--yes"])
+        self.run_cmd([sys.executable, station.script_path("delete_satellite.py"), name, "--yes"])
         self.refresh()
 
     def run_preflight(self):
-        self.run_cmd([sys.executable, "preflight.py"])
+        self.run_cmd([sys.executable, station.script_path("preflight.py")])
 
     def run_doctor(self):
-        self.run_cmd([sys.executable, "doctor.py"])
+        self.run_cmd([sys.executable, station.script_path("doctor.py")])
 
     def run_doctor_fix(self):
-        self.run_cmd([sys.executable, "doctor.py", "--fix"])
+        self.run_cmd([sys.executable, station.script_path("doctor.py"), "--fix"])
         self.refresh()
 
     def spawn_in_terminal(self, cmd):
@@ -532,8 +674,14 @@ class GroundtrackGUI(tk.Tk):
             return False
 
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
+        # Exported inside the shell line rather than relying on this process's
+        # environment: gnome-terminal's client/server model doesn't reliably
+        # pass the launcher's environment through any more than it does its
+        # working directory (the same reason for the explicit cd below).
+        env_line = (f"export GROUNDTRACK_STATION={shlex.quote(self.current_station)}; "
+                    if self.current_station else "")
         shell_line = (
-            f"cd {shlex.quote(self.repo_root)} && {quoted_cmd}; "
+            f"{env_line}cd {shlex.quote(self.repo_root)} && {quoted_cmd}; "
             f"echo; echo '--- process exited (see above for any error) ---'; "
             f"echo 'Press Ctrl-C or close this window to dismiss.'; "
             f"sleep infinity"
@@ -541,7 +689,7 @@ class GroundtrackGUI(tk.Tk):
         try:
             subprocess.Popen(prefix + ["bash", "-c", shell_line])
             self.log(f"Launched in a new window (in {self.repo_root}):\n"
-                     f"$ {' '.join(cmd)}\n\n"
+                     f"$ {_show(cmd)}\n\n"
                      f"This GUI does not control it from here - use that "
                      f"window's own terminal to watch it, read any error, "
                      f"or Ctrl-C it. The window stays open after it exits "
@@ -556,13 +704,13 @@ class GroundtrackGUI(tk.Tk):
         never exits on its own - same reasoning as run_passes.py, this
         needs its own detached terminal, not a captured/blocking call
         that would freeze the GUI the moment it's clicked."""
-        self.spawn_in_terminal([sys.executable, "relay.py", "--verbose"])
+        self.spawn_in_terminal([sys.executable, station.script_path("relay.py"), "--verbose"])
 
     def start_tcp_bridge(self):
         """Same reasoning as relay.py - a persistent process for
         satellites whose flowgraph runs its own TCP_SERVER instead of
         connecting out as a client, needing its own detached terminal."""
-        self.spawn_in_terminal([sys.executable, "tcp_bridge.py", "--verbose"])
+        self.spawn_in_terminal([sys.executable, station.script_path("tcp_bridge.py"), "--verbose"])
 
     def start_run_passes(self):
         """run_passes.py waits indefinitely for AOS and never exits on its
@@ -570,6 +718,19 @@ class GroundtrackGUI(tk.Tk):
         freeze the whole GUI until it was killed. It needs its own
         detached process with its own visible terminal instead, so you
         can watch its live output and Ctrl-C it independently."""
+        if self.current_station:
+            pid = station.run_passes_pid(self.current_station)
+            if pid:
+                # run_passes.py would refuse on its own (same lock file) - this
+                # just says so now, instead of in a terminal window that opens,
+                # prints an error and sits there
+                messagebox.showwarning(
+                    "Already running",
+                    f"run_passes.py is already running for station "
+                    f"'{self.current_station}' (PID {pid}).\n\nA second one would "
+                    f"refuse to start - they'd fight over rigctld/rotctld and the "
+                    f"SDR. Use that run's own terminal window, or Ctrl-C it first.")
+                return
         interval = simpledialog.askfloat(
             "Start run_passes.py",
             "Status line update interval (seconds) - how often the "
@@ -582,7 +743,7 @@ class GroundtrackGUI(tk.Tk):
             initialvalue=5.0, minvalue=0.1)
         if interval is None:
             return
-        cmd = [sys.executable, "run_passes.py", "--verbose",
+        cmd = [sys.executable, station.script_path("run_passes.py"), "--verbose",
                "--status-interval", str(interval)]
         if not self.preposition_var.get():
             cmd.append("--no-preposition")
@@ -590,21 +751,21 @@ class GroundtrackGUI(tk.Tk):
         self.spawn_in_terminal(cmd)
 
     def run_update_tle(self):
-        self.run_cmd([sys.executable, "update_tle.py"])
+        self.run_cmd([sys.executable, station.script_path("update_tle.py")])
         self.refresh()
 
     def show_schedule(self):
-        self.run_cmd([sys.executable, "show_queue.py"])
+        self.run_cmd([sys.executable, station.script_path("show_queue.py")])
 
     def show_pass_log(self):
-        self.run_cmd([sys.executable, "show_pass_log.py"])
+        self.run_cmd([sys.executable, station.script_path("show_pass_log.py")])
 
     def plan_passes_auto(self):
         hours = simpledialog.askinteger(
             "Plan passes", "Hours ahead to predict:", initialvalue=24, minvalue=1)
         if not hours:
             return
-        self.run_cmd([sys.executable, "plan_passes.py", "--hours", str(hours)])
+        self.run_cmd([sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours)])
 
     def plan_passes_interactive(self):
         """--interactive prompts y/n per pass on stdin - same reasoning
@@ -615,7 +776,7 @@ class GroundtrackGUI(tk.Tk):
             initialvalue=24, minvalue=1)
         if not hours:
             return
-        cmd = [sys.executable, "plan_passes.py", "--hours", str(hours), "--interactive"]
+        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--interactive"]
         if self.spawn_in_terminal(cmd):
             self.log(self.output.get("1.0", tk.END) +
                      "\nApprove/reject passes there, then use 'Show schedule' "
@@ -625,7 +786,7 @@ class GroundtrackGUI(tk.Tk):
         """Interactive - lists the queue and prompts for pass number(s) and
         on/off/clear, same reasoning as everywhere else that reads from
         stdin: needs a real terminal, not a captured subprocess."""
-        cmd = [sys.executable, "toggle_pass_record_iq.py"]
+        cmd = [sys.executable, station.script_path("toggle_pass_record_iq.py")]
         self.spawn_in_terminal(cmd)
 
     def _extra_output_form(self, parent):
@@ -854,14 +1015,14 @@ class GroundtrackGUI(tk.Tk):
                 # itself) has no way to answer
                 template = fields["template"].get().strip()
                 tool_name = "new_record_only_satellite.py"
-                args = [sys.executable, tool_name, "--name", name, "--norad", norad,
+                args = [sys.executable, station.script_path(tool_name), "--name", name, "--norad", norad,
                         "--freq", freq, "--min-elev", min_elev,
                         "--template", template, "--yes"]
                 if record_iq_var.get():
                     args += ["--record-iq-toggle"]
             else:
                 tool_name = "add_satellite.py"
-                args = [sys.executable, tool_name, "--name", name,
+                args = [sys.executable, station.script_path(tool_name), "--name", name,
                         "--norad", norad, "--freq", freq, "--min-elev", min_elev]
                 if record_only_var.get():
                     args += ["--record-only"]
@@ -970,7 +1131,7 @@ class GroundtrackGUI(tk.Tk):
             result = self._extra_output_form(win)
             if result is None:
                 return
-            args = [sys.executable, "edit_satellite.py", name,
+            args = [sys.executable, station.script_path("edit_satellite.py"), name,
                     "--extra-output-name", result["name"],
                     "--extra-output-protocol", result["protocol"],
                     "--extra-output-block", result["block"],
@@ -994,7 +1155,7 @@ class GroundtrackGUI(tk.Tk):
             if not messagebox.askyesno("Remove extra output",
                                         f"Remove '{entry.get('name')}' from {name}?"):
                 return
-            returncode, output = self.run_cmd([sys.executable, "edit_satellite.py", name,
+            returncode, output = self.run_cmd([sys.executable, station.script_path("edit_satellite.py"), name,
                                                 "--remove-extra-output", entry.get("name")])
             if returncode == 0:
                 sat = next(s for s in load_satellites() if s["name"] == name)
@@ -1019,7 +1180,7 @@ class GroundtrackGUI(tk.Tk):
         button_row.grid(row=11, column=0, columnspan=2, pady=10)
 
         def submit():
-            args = [sys.executable, "edit_satellite.py", name]
+            args = [sys.executable, station.script_path("edit_satellite.py"), name]
 
             norad = fields["norad"].get().strip()
             if norad and int(norad) != sat.get("norad"):
@@ -1066,4 +1227,8 @@ class GroundtrackGUI(tk.Tk):
 
 
 if __name__ == "__main__":
-    GroundtrackGUI().mainloop()
+    try:
+        app = GroundtrackGUI()
+    except station.StationError as e:
+        sys.exit(f"station: {e}")
+    app.mainloop()
