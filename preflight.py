@@ -147,6 +147,17 @@ def static_checks(cfg_path):
     if custom_tle_exists:
         collect_norads(custom_tle_path)
 
+    # which satellites will use a TLE from custom_tle_file (it always beats tle_file's),
+    # and how stale each is. Best effort: a malformed TLE or no skyfield just means no extra lines.
+    custom_info = {}
+    if custom_tle_exists and tle_exists:
+        try:
+            from tle_util import custom_overrides
+            custom_info = {i["norad"]: i for i in custom_overrides(
+                cfg, {s.get("norad") for s in sats if s.get("norad") is not None})}
+        except Exception:
+            custom_info = {}
+
     for sat in sats:
         name = sat.get("name", "<unnamed>")
         if not sat.get("enabled", True):
@@ -173,6 +184,17 @@ def static_checks(cfg_path):
             check(f"{name}.norad ({norad}) is unique", not dup)
             all_norads.add(norad)
             check(f"{name}.norad ({norad}) found in TLE file", norad in tle_names)
+            ci = custom_info.get(norad)
+            if ci:
+                stale = ci["age_days"] > 14 or ci["catalog_newer"]
+                check(f"{name}: TLE comes from custom_tle_file (epoch {ci['epoch']}, "
+                      f"{ci['age_days']:.1f} days old) - used in preference to tle_file",
+                      not stale,
+                      "" if not stale else
+                      ("older than 14 days" if ci["age_days"] > 14 else
+                       f"tle_file has a newer one (epoch {ci['catalog_epoch']}) but yours still wins")
+                      + " - refresh the custom entry, or delete it to follow the catalog",
+                      level=WARN if stale else None)
 
         for port_field in ("producer_port", "consumer_port"):
             p = sat.get(port_field)

@@ -218,14 +218,16 @@ python3 update_tle.py           # auto-covers every configured satellite, no fla
 python3 preflight.py
 ```
 If the satellite is too new for `update_tle.py`'s sources (SatNOGS,
-Celestrak) to have it at all, set `custom_tle_file` in `satellites.yaml`
-to a file you maintain by hand with its TLE. `update_tle.py` never writes
-to that file, but it's a stopgap, not a standing override: once the
-public sources do catch up, their entry's TLE epoch is newer than your
-one-time hand-entered one, and `plan_passes.py`/`run_passes.py` use epoch
-to resolve the overlap automatically - your custom entry just stops being
-used, with no action needed on your part. See
-[scripts-reference.md](scripts-reference.md) for the full explanation.
+Celestrak) to have it at all - or you simply know better than they do - set
+`custom_tle_file` in `satellites.yaml` to a file you maintain by hand with its
+TLE. `update_tle.py` never writes to that file. A NORAD number listed there
+**always uses your entry**, whatever its epoch and whatever the name line says;
+only the catalog number on the TLE lines counts, and it has to match the
+satellite's `norad` in `satellites.yaml`. Because it never ages out on its own,
+`plan_passes.py`/`run_passes.py` print how old it is each time, and
+`preflight.py` warns once it passes 14 days or the catalog has newer data -
+delete the entry when you want to follow the catalog again. See
+[scripts-reference.md](scripts-reference.md) for details.
 ```
 ```
 

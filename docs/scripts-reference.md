@@ -112,17 +112,19 @@ check it: a satellite covered there is never reported `MISSING`, and
 during a real fetch, one not found in SatNOGS or Celestrak but present in
 `custom_tle_file` is reported separately rather than failing the run.
 
-**`custom_tle_file` is a stopgap, not a standing override.** `plan_passes.py`
-and `run_passes.py` (which actually use the TLE data, not this script)
-resolve a NORAD present in both files by comparing TLE epoch - whichever
-entry's orbital data is genuinely more recent wins, regardless of which
-file it's in. Leaving a satellite's entry in `custom_tle_file` after
-SatNOGS or Celestrak catches up is harmless: `update_tle.py` keeps
-`tle_file` current from then on, and since that entry's epoch keeps
-advancing while the untouched custom one doesn't, `tle_file`'s copy
-starts winning automatically, with a printed note explaining why.
-Removing the stale custom entry at that point is just housekeeping, not
-required for correctness.
+**`custom_tle_file` always wins.** `plan_passes.py` and `run_passes.py` (which
+actually use the TLE data, not this script) use the custom file's entry for any
+NORAD listed there - whatever its epoch, and whatever name line it carries.
+Only the catalog number on the TLE lines counts, and it must equal the
+satellite's `norad` in its station's `satellites.yaml`; the name is never
+compared. (This replaced an earlier "newest epoch wins" rule, which only let
+your entry win until the catalog published something newer.) Because an
+override never ages out on its own, every use prints a NOTE with the entry's
+age, says so when the catalog has newer data, and warns once the entry is more
+than 14 days old; `preflight.py` shows the same per satellite, as a `[warn]`.
+When you'd rather follow the catalog again, delete the entry from your custom
+file. The rule itself lives in `tle_util.py`, shared by `plan_passes.py`,
+`run_passes.py` and `preflight.py` so they can't disagree.
 Validates the download before overwriting the real file, and reports
 exactly which configured satellites are missing afterward rather than
 failing silently later inside `plan_passes.py`.
@@ -652,3 +654,12 @@ any step fails the ones already done are undone. `--dry-run` changes nothing.
 as its `_record_only_template.grc`, after proving `new_record_only_satellite.py`
 can actually generate from it. It's deliberately not derived from the first
 station's flowgraph - the radios differ in more than a device string.
+
+## tle_util.py
+
+Not run directly. The one place that decides which TLE a satellite uses, imported by
+`plan_passes.py`, `run_passes.py` and `preflight.py` so the three can never
+disagree: the catalog's entry from `tle_file`, replaced by `custom_tle_file`'s
+for any NORAD listed there, always (see `custom_tle_file` under `update_tle.py`
+above). It also produces the age/staleness notes those scripts print for a custom
+entry that's in use.

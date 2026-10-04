@@ -165,6 +165,7 @@ groundtrack/
 ├── relay.py                # persistent TCP relay, for satellites configured to use one
 ├── show_queue.py            # prints the approved pass queue from schedule.yaml
 ├── station.py               # multi-radio setups: picks which station's folder a script works in
+├── tle_util.py              # which TLE a satellite uses: custom_tle_file's entry always beats tle_file's
 ├── radios.example.yaml      # copy to radios.yaml to switch multi-station mode on
 ├── migrate_to_stations.py   # one-time: classic layout -> one folder per station (see stations.md)
 ├── wire_record_iq.py        # wires a .grc for the per-run IQ toggle (diff + backup)

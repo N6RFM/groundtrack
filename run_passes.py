@@ -226,54 +226,10 @@ def load_yaml(path):
 
 
 def load_tles(cfg, wanted_norads):
-    """Reads tle_file, then custom_tle_file if it's configured AND exists -
-    for a satellite recently launched and not yet in Celestrak or SatNOGS,
-    so update_tle.py (which only ever writes tle_file) has nothing to
-    overwrite it with. custom_tle_file is entirely optional: unset, or set
-    but not yet existing, is not an error - it's the normal state before
-    you've needed one.
-
-    A NORAD present in both files is resolved by TLE epoch, not by which
-    file it came from: whichever entry's orbital data is actually more
-    recent wins. custom_tle_file is a stopgap for a gap in the public
-    catalogs, not a standing override - once SatNOGS or Celestrak actually
-    has newer data for that satellite, update_tle.py's regular fetches
-    keep tle_file current while a hand-entered custom_tle_file entry just
-    sits there unchanged, so it must be allowed to age out automatically
-    rather than keep permanently shadowing a source that has since caught
-    up."""
-    sats = {}
-    ts = load.timescale()
-
-    def read_one(path):
-        entries = {}
-        with open(path) as f:
-            lines = [l.strip() for l in f if l.strip()]
-        for i in range(0, len(lines), 3):
-            name, l1, l2 = lines[i], lines[i + 1], lines[i + 2]
-            sat = EarthSatellite(l1, l2, name, ts)
-            if sat.model.satnum in wanted_norads:
-                entries[sat.model.satnum] = sat
-        return entries
-
-    sats.update(read_one(cfg["tle_file"]))
-    custom_path = cfg.get("custom_tle_file")
-    if custom_path:
-        if os.path.exists(custom_path):
-            for norad, custom_sat in read_one(custom_path).items():
-                existing = sats.get(norad)
-                if existing is None or custom_sat.epoch.tt > existing.epoch.tt:
-                    sats[norad] = custom_sat
-                else:
-                    print(f"NOTE: custom_tle_file has an entry for NORAD {norad}, "
-                          f"but tle_file's is newer ({existing.epoch.utc_iso()} vs "
-                          f"{custom_sat.epoch.utc_iso()}) - using tle_file's. "
-                          f"The public catalog has caught up; the custom entry "
-                          f"can be removed.")
-        else:
-            print(f"NOTE: custom_tle_file is set to {custom_path!r} but that "
-                  f"file doesn't exist yet - continuing without it.")
-    return sats
+    """Which TLE each satellite uses - decided in tle_util.py, shared with the other scripts
+    so they can't disagree. A NORAD listed in custom_tle_file always uses that entry."""
+    from tle_util import load_tles as pick
+    return pick(cfg, wanted_norads)
 
 
 def parse_iso(s):
