@@ -79,7 +79,7 @@ def find_other_copies(current_real):
             continue
         if "run_passes.py" in files and "station.py" in files:
             holders = ([""] if "satellites.yaml" in files else []) + sorted(
-                d for d in dirs if os.path.exists(os.path.join(root, d, "satellites.yaml")))
+                d for d in dirs if not d.startswith(".") and os.path.exists(os.path.join(root, d, "satellites.yaml")))
             if holders:
                 found[os.path.realpath(root)] = holders
     if not found:
