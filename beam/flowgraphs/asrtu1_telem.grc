@@ -114,7 +114,7 @@ blocks:
     alias: ''
     autostartFreqChange: 'False'
     basedir: /home/bob/Desktop/IQ_Files/
-    basefile: ASRTU-1_beam_SSDV
+    basefile: ASRTU-1_beam_TELEM
     bits_per_sample: '8'
     comment: ''
     honorFreqChange: 'False'

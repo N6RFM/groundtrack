@@ -317,7 +317,7 @@ blocks:
     alias: ''
     beta: '6.76'
     comment: ''
-    cutoff_freq: '20000'
+    cutoff_freq: '25000'
     decim: '50'
     gain: '1'
     interp: '1'
