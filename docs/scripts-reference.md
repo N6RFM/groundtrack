@@ -130,6 +130,9 @@ SatNOGS didn't have:
 python3 update_tle.py
 python3 update_tle.py --check-only    # report coverage/age, don't download
 ```
+Every request identifies itself with `User-Agent: groundtrack/0.1
+(+https://github.com/N6RFM/groundtrack)` (the `USER_AGENT` constant in the
+script) - SatNOGS blocks Python's default urllib agent.
 Nothing to specify per-satellite - every satellite in `satellites.yaml`
 is covered automatically by both sources, so there's no flag to remember
 to pass when a new one gets added. With `radios.yaml` (multi-station mode -

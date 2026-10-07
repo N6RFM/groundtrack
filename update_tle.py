@@ -49,6 +49,18 @@ CONFIG_PATH = "satellites.yaml"
 SATNOGS_TLE_URL = "https://db.satnogs.org/api/tle/?format=json"
 CELESTRAK_CATNR_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=tle"
 
+# Identify ourselves honestly on every request. Python's default
+# "Python-urllib/3.x" agent is commonly blocked by servers (SatNOGS
+# did exactly that), and a descriptive agent with a project URL lets
+# the operators see who is calling and contact us if needed.
+USER_AGENT = "groundtrack/0.1 (+https://github.com/N6RFM/groundtrack)"
+
+
+def _open(url, timeout):
+    """urlopen() with our User-Agent header attached."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    return urllib.request.urlopen(req, timeout=timeout)
+
 
 def load_cfg():
     with open(CONFIG_PATH) as f:
@@ -64,7 +76,7 @@ def fetch_satnogs():
     tle2)}, or an empty dict on any failure."""
     print(f"Downloading SatNOGS TLE catalog ({SATNOGS_TLE_URL}) ...")
     try:
-        with urllib.request.urlopen(SATNOGS_TLE_URL, timeout=30) as resp:
+        with _open(SATNOGS_TLE_URL, 30) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         entries = json.loads(raw)
     except Exception as e:
@@ -87,7 +99,7 @@ def fetch_celestrak_one(norad):
     (tle0, tle1, tle2) or None."""
     url = CELESTRAK_CATNR_URL.format(catnr=norad)
     try:
-        with urllib.request.urlopen(url, timeout=15) as resp:
+        with _open(url, 15) as resp:
             data = resp.read().decode("utf-8", errors="replace")
     except Exception as e:
         print(f"    Celestrak fallback for {norad} failed: {e}")
