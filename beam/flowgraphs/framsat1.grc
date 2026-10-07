@@ -1,0 +1,925 @@
+options:
+  parameters:
+    author: N6RFM
+    catch_exceptions: 'True'
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: ''
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: framsat1
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: framsat1
+    window_size: (1000,1000)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 8]
+    rotation: 0
+    state: enabled
+
+blocks:
+- name: BFO
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: ''
+    label: ''
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-15000'
+    step: '100'
+    stop: '15000'
+    value: '0'
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [560, 4.0]
+    rotation: 0
+    state: true
+- name: samp_rate
+  id: variable
+  parameters:
+    comment: ''
+    value: 2.5e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [193, 7]
+    rotation: 0
+    state: enabled
+- name: analog_sig_source_x_0
+  id: analog_sig_source_x
+  parameters:
+    affinity: ''
+    alias: ''
+    amp: '1'
+    comment: ''
+    freq: -(freq-nfreq+offset)+BFO
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    offset: '0'
+    phase: '0'
+    samp_rate: '2500000'
+    showports: 'False'
+    type: complex
+    waveform: analog.GR_COS_WAVE
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [88, 476.0]
+    rotation: 0
+    state: enabled
+- name: blocks_multiply_x_0
+  id: blocks_multiply_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [336, 344.0]
+    rotation: 0
+    state: enabled
+- name: epy_block_0_0
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\nEmbedded Python Block for GNU Radio: consumes deframed\
+      \ AX.25/FS1.0 PDUs\n(from gr-satellites' AX.25 Deframer, or your own custom\
+      \ deframer) on its\n'pdu' message input, and prints decoded FramSat-1 telemetry.\n\
+      \nParsing logic ported verbatim from framsat1_iq_decoder.py, which was\nverified\
+      \ byte-for-byte against the real repo's framsat1_decoder.py and\nagainst a ground-truth\
+      \ framsat1.kss capture.\n\nOptional log_file constructor parameter (shows up\
+      \ as a block property in\nGRC's properties dialog automatically): if set to\
+      \ a path, every frame's\nexact console output is also appended to that file,\
+      \ flushed immediately.\nLeave it blank ('') for console-only output (the original\
+      \ behavior).\n\"\"\"\n\nimport struct\nfrom datetime import datetime, timezone\n\
+      \nimport pmt\nfrom gnuradio import gr\n\nSIGNATURE = b\"FS1.0\"\nEXPECTED_CALLSIGN\
+      \ = \"LA1ORB\"\nHEALTH_FMT = \">5sBBBHBHHI\"\nHEALTH_SIZE = struct.calcsize(HEALTH_FMT)\n\
+      SENSOR_SAMPLE_FMT = \">BHHHHBBBBBHI\"\nSENSOR_SAMPLE_SIZE = struct.calcsize(SENSOR_SAMPLE_FMT)\n\
+      \n\ndef parse_fs1_telemetry(payload):\n    if len(payload) < HEALTH_SIZE:\n\
+      \        return None\n    sign, bcn_id, bcn_type, rssi, cmd_count, eps_flags,\
+      \ reboots, v_mv, uptime = \\\n        struct.unpack(HEALTH_FMT, payload[:HEALTH_SIZE])\n\
+      \    result = {\n        \"signature\": sign.decode(\"ascii\", errors=\"replace\"\
+      ),\n        \"beacon_id\": bcn_id,\n        \"operating_mode\": \"LEOP (Launch\
+      \ / Deployment Mode)\" if bcn_type == 2 else \"DEFAULT (Nominal Orbit)\",\n\
+      \        \"satellite_uplink_rssi\": f\"-{rssi} dBm\" if rssi > 0 else \"N/A\
+      \ (No uplink signal received)\",\n        \"telecommands_accepted\": cmd_count,\n\
+      \        \"eps_flags\": f\"0x{eps_flags:02X}\",\n        \"reboot_count\": reboots,\n\
+      \        \"battery_voltage_v\": v_mv / 1000.0,\n        \"battery_voltage_mv\"\
+      : v_mv,\n        \"uptime_sec\": uptime,\n        \"uptime_hours\": uptime /\
+      \ 3600.0,\n    }\n    raw_sensors = payload[HEALTH_SIZE:-4] if len(payload)\
+      \ >= HEALTH_SIZE + 4 else payload[HEALTH_SIZE:]\n    trailer = payload[-4:]\
+      \ if len(payload) >= HEALTH_SIZE + 4 else b\"\"\n    result[\"trailer_hex\"\
+      ] = trailer.hex().upper()\n    if bcn_type == 2 and all(b == 0 for b in raw_sensors):\n\
+      \        result[\"sensor_status\"] = f\"Sensors unpowered during deployment\
+      \ ({len(raw_sensors)} bytes zero-padded).\"\n        result[\"sensors\"] = []\n\
+      \        return result\n    sensors = []\n    n_samples = len(raw_sensors) //\
+      \ SENSOR_SAMPLE_SIZE\n    for i in range(min(n_samples, 9)):\n        chunk\
+      \ = raw_sensors[i * SENSOR_SAMPLE_SIZE:(i + 1) * SENSOR_SAMPLE_SIZE]\n     \
+      \   if len(chunk) == SENSOR_SAMPLE_SIZE:\n            s_id, g_a, g_b, g_c, g_d,\
+      \ e_x, e_y, i1, i2, i3, s_size, s_time = \\\n                struct.unpack(SENSOR_SAMPLE_FMT,\
+      \ chunk)\n            sensors.append({\"sample\": i + 1, \"time_s\": s_time,\
+      \ \"gss\": (g_a, g_b, g_c, g_d),\n                             \"ess_xy\": (e_x,\
+      \ e_y), \"ess_illum\": (i1, i2, i3)})\n    result[\"sensors\"] = sensors\n \
+      \   result[\"sensor_status\"] = None\n    return result\n\n\ndef format_decoded_frame(payload):\n\
+      \    \"\"\"Builds the full display text for one frame as a single string\n \
+      \   (used for both console printing and file logging, guaranteeing they\n  \
+      \  are always byte-for-byte identical to each other).\"\"\"\n    lines = []\n\
+      \n    def emit(s=\"\"):\n        lines.append(s)\n\n    ts_str = datetime.now(timezone.utc).strftime(\"\
+      %Y-%m-%d %H:%M:%S\") + \" UTC\"\n    emit(\"\\n\" + \"=\" * 65)\n    emit(f\"\
+      \\U0001F6F0\\uFE0F  FramSat-1 Frame Received at {ts_str}\")\n    emit(f\"  \
+      \ Total Frame Length: {len(payload)} bytes\")\n\n    idx = payload.find(SIGNATURE)\n\
+      \    if idx == -1:\n        emit(f\"   Payload Raw Hex:    {payload.hex().upper()}\"\
+      )\n        emit(\"=\" * 65 + \"\\n\")\n        return \"\\n\".join(lines) +\
+      \ \"\\n\"\n\n    emit(f\"   Telemetry Found:    Offset index {idx}\")\n    if\
+      \ idx >= 16:\n        dest_call = \"\".join(chr(b >> 1) for b in payload[0:6]).strip()\n\
+      \        src_call = \"\".join(chr(b >> 1) for b in payload[7:13]).strip()\n\
+      \        emit(f\"   Encapsulation:      AX.25 UI-Frame ({src_call} -> {dest_call})\"\
+      )\n        emit(f\"   Source:             {src_call} (Expected: {EXPECTED_CALLSIGN})\"\
+      )\n    elif idx > 0:\n        emit(f\"   Transport Header:   {payload[:idx].hex().upper()}\
+      \ ({idx} bytes)\")\n    else:\n        emit(\"   Encapsulation:      Direct\
+      \ HDLC (Payload starts at offset 0)\")\n\n    tlm = parse_fs1_telemetry(payload[idx:])\n\
+      \    if tlm is None:\n        emit(f\"   Payload Raw Hex: {payload[idx:].hex().upper()}\"\
+      )\n        emit(\"=\" * 65 + \"\\n\")\n        return \"\\n\".join(lines) +\
+      \ \"\\n\"\n\n    emit(\"\\n   \\u2500\\u2500\\u2500 [ FramSat-1 Housekeeping\
+      \ Telemetry ] \\u2500\\u2500\\u2500\")\n    emit(f\"   Signature:          \
+      \   {tlm['signature']}\")\n    emit(f\"   Beacon ID:             #{tlm['beacon_id']}\"\
+      )\n    emit(f\"   Operating Mode:        {tlm['operating_mode']}\")\n    emit(f\"\
+      \   Satellite Uplink RSSI: {tlm['satellite_uplink_rssi']}\")\n    emit(f\" \
+      \  Telecommands Accepted: {tlm['telecommands_accepted']}\")\n    emit(f\"  \
+      \ EPS Flags:             {tlm['eps_flags']}\")\n    emit(f\"   OBC / EPS Reboot\
+      \ Count:{tlm['reboot_count']}\")\n    emit(f\"   Battery Voltage:       {tlm['battery_voltage_v']:.3f}\
+      \ V ({tlm['battery_voltage_mv']} mV)\")\n    emit(f\"   Satellite Uptime:  \
+      \    {tlm['uptime_sec']} s ({tlm['uptime_hours']:.2f} hours)\")\n\n    if tlm[\"\
+      sensor_status\"]:\n        emit(f\"\\n   \\u2500\\u2500\\u2500 [ Attitude Sensors\
+      \ (LEOP Mode) ] \\u2500\\u2500\\u2500\")\n        emit(f\"   Status:       \
+      \        {tlm['sensor_status']}\")\n    elif tlm[\"sensors\"]:\n        emit(f\"\
+      \\n   \\u2500\\u2500\\u2500 [ Attitude Sensors: {len(tlm['sensors'])}x Samples\
+      \ ] \\u2500\\u2500\\u2500\")\n        emit(\"   # | Time (s)    | Sun Sensor\
+      \ GSS (a, b, c, d)            | Earth Sensor ESS (x, y, illum)\")\n        emit(\"\
+      \  \u2500\u2500\u2500+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500\u2500+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+      \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\")\n        for\
+      \ s in tlm[\"sensors\"]:\n            g_a, g_b, g_c, g_d = s[\"gss\"]\n    \
+      \        e_x, e_y = s[\"ess_xy\"]\n            i1, i2, i3 = s[\"ess_illum\"\
+      ]\n            gss_str = f\"{g_a:5d}, {g_b:5d}, {g_c:5d}, {g_d:5d}\"\n     \
+      \       ess_str = f\"X={e_x:3d}, Y={e_y:3d}, Illum=[{i1},{i2},{i3}]\"\n    \
+      \        emit(f\"   {s['sample']:1d} | {s['time_s']:<11d} | {gss_str:<38s} |\
+      \ {ess_str}\")\n\n    emit(\"=\" * 65 + \"\\n\")\n    return \"\\n\".join(lines)\
+      \ + \"\\n\"\n\n\nclass blk(gr.basic_block):\n    \"\"\"FS1.0 Telemetry Sink\
+      \ -- message-only block, no stream I/O.\n\n    log_file: optional path (GRC\
+      \ block parameter). If non-empty, every\n    frame's output is also appended\
+      \ there, flushed immediately -- useful\n    for keeping a guaranteed-plain-text\
+      \ record independent of whatever is\n    capturing/rendering the console (screenshots,\
+      \ GUI consoles, etc. can\n    all mis-render monospace text; a file opened later\
+      \ in any genuinely\n    monospace viewer settles that).\n    \"\"\"\n\n    def\
+      \ __init__(self, log_file=\"\"):\n        gr.basic_block.__init__(self, name=\"\
+      FS1.0 Telemetry Sink\", in_sig=[], out_sig=[])\n        self.message_port_register_in(pmt.intern(\"\
+      pdu\"))\n        self.set_msg_handler(pmt.intern(\"pdu\"), self.handle_msg)\n\
+      \        self._log_fh = open(log_file, \"a\", encoding=\"utf-8\") if log_file\
+      \ else None\n\n    def handle_msg(self, msg):\n        try:\n            payload\
+      \ = bytes(pmt.u8vector_elements(pmt.cdr(msg)))\n        except Exception:\n\
+      \            return\n        text = format_decoded_frame(payload)\n        print(text,\
+      \ end=\"\")\n        if self._log_fh is not None:\n            self._log_fh.write(text)\n\
+      \            self._log_fh.flush()\n\n    def stop(self):\n        if self._log_fh\
+      \ is not None:\n            self._log_fh.close()\n            self._log_fh =\
+      \ None\n        return True\n"
+    affinity: ''
+    alias: ''
+    comment: 'Fully self-contained: this block''s code is embedded directly in this
+      .grc file (not pasted in separately), so opening this file in GRC always gives
+      the current, verified FS1.0 parsing/printing logic -- no separate copy-paste
+      step to go stale.'
+    log_file: '"/home/bob/framsat1_log5.txt"'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    _io_cache: '(''FS1.0 Telemetry Sink'', ''blk'', [(''log_file'', "''''")], [(''pdu'',
+      ''message'', 1)], [], "FS1.0 Telemetry Sink -- message-only block, no stream
+      I/O.\n\n    log_file: optional path (GRC block parameter). If non-empty, every\n    frame''s
+      output is also appended there, flushed immediately -- useful\n    for keeping
+      a guaranteed-plain-text record independent of whatever is\n    capturing/rendering
+      the console (screenshots, GUI consoles, etc. can\n    all mis-render monospace
+      text; a file opened later in any genuinely\n    monospace viewer settles that).\n    ",
+      [])'
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1480.0, 120]
+    rotation: 90
+    state: true
+- name: filerepeater_AdvFileSink_0
+  id: filerepeater_AdvFileSink
+  parameters:
+    affinity: ''
+    alias: ''
+    autostartFreqChange: 'False'
+    basedir: /home/bob/Desktop/IQ_Files/
+    basefile: framsat1
+    bits_per_sample: '8'
+    comment: ''
+    honorFreqChange: 'False'
+    honorFreqTags: 'False'
+    maxSize: '0'
+    maxTimeSec: '0'
+    radioCenterFreq: freq
+    recordOnStart: bool(record_iq)
+    sampleRate: '50000'
+    type: complex
+    unbuffered: 'False'
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [664, 356.0]
+    rotation: 0
+    state: enabled
+- name: freq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: frequency
+    short_id: f
+    type: eng_float
+    value: '435141000'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [297, 11]
+    rotation: 0
+    state: enabled
+- name: gpredict_MsgPairToVar_0
+  id: gpredict_MsgPairToVar
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    target: freq
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1344, 40.0]
+    rotation: 0
+    state: true
+- name: gpredict_port
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: GPredict port
+    short_id: ''
+    type: intx
+    value: '4531'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [416, 12]
+    rotation: 0
+    state: enabled
+- name: low_pass_filter_0
+  id: low_pass_filter
+  parameters:
+    affinity: ''
+    alias: ''
+    beta: '6.76'
+    comment: ''
+    cutoff_freq: '25000'
+    decim: '50'
+    gain: '1'
+    interp: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samp_rate: samp_rate
+    type: fir_filter_ccf
+    width: '600'
+    win: window.WIN_HAMMING
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [440, 148.0]
+    rotation: 0
+    state: enabled
+- name: nfreq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: Nominal Frequency
+    short_id: ''
+    type: eng_float
+    value: '435141000'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [902, 9]
+    rotation: 0
+    state: enabled
+- name: note_1_0
+  id: note
+  parameters:
+    alias: ''
+    comment: ''
+    note: NOTE SSDV
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [64, 128.0]
+    rotation: 0
+    state: true
+- name: offset
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: centre frequency offset
+    short_id: ''
+    type: eng_float
+    value: 50e3
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [712, 12.0]
+    rotation: 0
+    state: enabled
+- name: osmosdr_source_0
+  id: osmosdr_source
+  parameters:
+    affinity: ''
+    alias: ''
+    ant0: ''
+    ant1: ''
+    ant10: ''
+    ant11: ''
+    ant12: ''
+    ant13: ''
+    ant14: ''
+    ant15: ''
+    ant16: ''
+    ant17: ''
+    ant18: ''
+    ant19: ''
+    ant2: ''
+    ant20: ''
+    ant21: ''
+    ant22: ''
+    ant23: ''
+    ant24: ''
+    ant25: ''
+    ant26: ''
+    ant27: ''
+    ant28: ''
+    ant29: ''
+    ant3: ''
+    ant30: ''
+    ant31: ''
+    ant4: ''
+    ant5: ''
+    ant6: ''
+    ant7: ''
+    ant8: ''
+    ant9: ''
+    args: driver=airspy,serial=466c64c8323184c7,soapy=0
+    bb_gain0: '20'
+    bb_gain1: '20'
+    bb_gain10: '20'
+    bb_gain11: '20'
+    bb_gain12: '20'
+    bb_gain13: '20'
+    bb_gain14: '20'
+    bb_gain15: '20'
+    bb_gain16: '20'
+    bb_gain17: '20'
+    bb_gain18: '20'
+    bb_gain19: '20'
+    bb_gain2: '20'
+    bb_gain20: '20'
+    bb_gain21: '20'
+    bb_gain22: '20'
+    bb_gain23: '20'
+    bb_gain24: '20'
+    bb_gain25: '20'
+    bb_gain26: '20'
+    bb_gain27: '20'
+    bb_gain28: '20'
+    bb_gain29: '20'
+    bb_gain3: '20'
+    bb_gain30: '20'
+    bb_gain31: '20'
+    bb_gain4: '20'
+    bb_gain5: '20'
+    bb_gain6: '20'
+    bb_gain7: '20'
+    bb_gain8: '20'
+    bb_gain9: '20'
+    biast: 'False'
+    bw0: '0'
+    bw1: '0'
+    bw10: '0'
+    bw11: '0'
+    bw12: '0'
+    bw13: '0'
+    bw14: '0'
+    bw15: '0'
+    bw16: '0'
+    bw17: '0'
+    bw18: '0'
+    bw19: '0'
+    bw2: '0'
+    bw20: '0'
+    bw21: '0'
+    bw22: '0'
+    bw23: '0'
+    bw24: '0'
+    bw25: '0'
+    bw26: '0'
+    bw27: '0'
+    bw28: '0'
+    bw29: '0'
+    bw3: '0'
+    bw30: '0'
+    bw31: '0'
+    bw4: '0'
+    bw5: '0'
+    bw6: '0'
+    bw7: '0'
+    bw8: '0'
+    bw9: '0'
+    clock_source0: ''
+    clock_source1: ''
+    clock_source2: ''
+    clock_source3: ''
+    clock_source4: ''
+    clock_source5: ''
+    clock_source6: ''
+    clock_source7: ''
+    comment: ''
+    corr0: '0'
+    corr1: '0'
+    corr10: '0'
+    corr11: '0'
+    corr12: '0'
+    corr13: '0'
+    corr14: '0'
+    corr15: '0'
+    corr16: '0'
+    corr17: '0'
+    corr18: '0'
+    corr19: '0'
+    corr2: '0'
+    corr20: '0'
+    corr21: '0'
+    corr22: '0'
+    corr23: '0'
+    corr24: '0'
+    corr25: '0'
+    corr26: '0'
+    corr27: '0'
+    corr28: '0'
+    corr29: '0'
+    corr3: '0'
+    corr30: '0'
+    corr31: '0'
+    corr4: '0'
+    corr5: '0'
+    corr6: '0'
+    corr7: '0'
+    corr8: '0'
+    corr9: '0'
+    dc_offset_mode0: '0'
+    dc_offset_mode1: '0'
+    dc_offset_mode10: '0'
+    dc_offset_mode11: '0'
+    dc_offset_mode12: '0'
+    dc_offset_mode13: '0'
+    dc_offset_mode14: '0'
+    dc_offset_mode15: '0'
+    dc_offset_mode16: '0'
+    dc_offset_mode17: '0'
+    dc_offset_mode18: '0'
+    dc_offset_mode19: '0'
+    dc_offset_mode2: '0'
+    dc_offset_mode20: '0'
+    dc_offset_mode21: '0'
+    dc_offset_mode22: '0'
+    dc_offset_mode23: '0'
+    dc_offset_mode24: '0'
+    dc_offset_mode25: '0'
+    dc_offset_mode26: '0'
+    dc_offset_mode27: '0'
+    dc_offset_mode28: '0'
+    dc_offset_mode29: '0'
+    dc_offset_mode3: '0'
+    dc_offset_mode30: '0'
+    dc_offset_mode31: '0'
+    dc_offset_mode4: '0'
+    dc_offset_mode5: '0'
+    dc_offset_mode6: '0'
+    dc_offset_mode7: '0'
+    dc_offset_mode8: '0'
+    dc_offset_mode9: '0'
+    freq0: nfreq-offset
+    freq1: 100e6
+    freq10: 100e6
+    freq11: 100e6
+    freq12: 100e6
+    freq13: 100e6
+    freq14: 100e6
+    freq15: 100e6
+    freq16: 100e6
+    freq17: 100e6
+    freq18: 100e6
+    freq19: 100e6
+    freq2: 100e6
+    freq20: 100e6
+    freq21: 100e6
+    freq22: 100e6
+    freq23: 100e6
+    freq24: 100e6
+    freq25: 100e6
+    freq26: 100e6
+    freq27: 100e6
+    freq28: 100e6
+    freq29: 100e6
+    freq3: 100e6
+    freq30: 100e6
+    freq31: 100e6
+    freq4: 100e6
+    freq5: 100e6
+    freq6: 100e6
+    freq7: 100e6
+    freq8: 100e6
+    freq9: 100e6
+    gain0: '20'
+    gain1: '10'
+    gain10: '10'
+    gain11: '10'
+    gain12: '10'
+    gain13: '10'
+    gain14: '10'
+    gain15: '10'
+    gain16: '10'
+    gain17: '10'
+    gain18: '10'
+    gain19: '10'
+    gain2: '10'
+    gain20: '10'
+    gain21: '10'
+    gain22: '10'
+    gain23: '10'
+    gain24: '10'
+    gain25: '10'
+    gain26: '10'
+    gain27: '10'
+    gain28: '10'
+    gain29: '10'
+    gain3: '10'
+    gain30: '10'
+    gain31: '10'
+    gain4: '10'
+    gain5: '10'
+    gain6: '10'
+    gain7: '10'
+    gain8: '10'
+    gain9: '10'
+    gain_mode0: 'False'
+    gain_mode1: 'False'
+    gain_mode10: 'False'
+    gain_mode11: 'False'
+    gain_mode12: 'False'
+    gain_mode13: 'False'
+    gain_mode14: 'False'
+    gain_mode15: 'False'
+    gain_mode16: 'False'
+    gain_mode17: 'False'
+    gain_mode18: 'False'
+    gain_mode19: 'False'
+    gain_mode2: 'False'
+    gain_mode20: 'False'
+    gain_mode21: 'False'
+    gain_mode22: 'False'
+    gain_mode23: 'False'
+    gain_mode24: 'False'
+    gain_mode25: 'False'
+    gain_mode26: 'False'
+    gain_mode27: 'False'
+    gain_mode28: 'False'
+    gain_mode29: 'False'
+    gain_mode3: 'False'
+    gain_mode30: 'False'
+    gain_mode31: 'False'
+    gain_mode4: 'False'
+    gain_mode5: 'False'
+    gain_mode6: 'False'
+    gain_mode7: 'False'
+    gain_mode8: 'False'
+    gain_mode9: 'False'
+    gain_table: ''
+    if_gain0: '20'
+    if_gain1: '20'
+    if_gain10: '20'
+    if_gain11: '20'
+    if_gain12: '20'
+    if_gain13: '20'
+    if_gain14: '20'
+    if_gain15: '20'
+    if_gain16: '20'
+    if_gain17: '20'
+    if_gain18: '20'
+    if_gain19: '20'
+    if_gain2: '20'
+    if_gain20: '20'
+    if_gain21: '20'
+    if_gain22: '20'
+    if_gain23: '20'
+    if_gain24: '20'
+    if_gain25: '20'
+    if_gain26: '20'
+    if_gain27: '20'
+    if_gain28: '20'
+    if_gain29: '20'
+    if_gain3: '20'
+    if_gain30: '20'
+    if_gain31: '20'
+    if_gain4: '20'
+    if_gain5: '20'
+    if_gain6: '20'
+    if_gain7: '20'
+    if_gain8: '20'
+    if_gain9: '20'
+    iq_balance_mode0: '0'
+    iq_balance_mode1: '0'
+    iq_balance_mode10: '0'
+    iq_balance_mode11: '0'
+    iq_balance_mode12: '0'
+    iq_balance_mode13: '0'
+    iq_balance_mode14: '0'
+    iq_balance_mode15: '0'
+    iq_balance_mode16: '0'
+    iq_balance_mode17: '0'
+    iq_balance_mode18: '0'
+    iq_balance_mode19: '0'
+    iq_balance_mode2: '0'
+    iq_balance_mode20: '0'
+    iq_balance_mode21: '0'
+    iq_balance_mode22: '0'
+    iq_balance_mode23: '0'
+    iq_balance_mode24: '0'
+    iq_balance_mode25: '0'
+    iq_balance_mode26: '0'
+    iq_balance_mode27: '0'
+    iq_balance_mode28: '0'
+    iq_balance_mode29: '0'
+    iq_balance_mode3: '0'
+    iq_balance_mode30: '0'
+    iq_balance_mode31: '0'
+    iq_balance_mode4: '0'
+    iq_balance_mode5: '0'
+    iq_balance_mode6: '0'
+    iq_balance_mode7: '0'
+    iq_balance_mode8: '0'
+    iq_balance_mode9: '0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    nchan: '1'
+    num_mboards: '1'
+    sample_rate: samp_rate
+    sync: sync
+    time_source0: ''
+    time_source1: ''
+    time_source2: ''
+    time_source3: ''
+    time_source4: ''
+    time_source5: ''
+    time_source6: ''
+    time_source7: ''
+    type: fc32
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [56, 196.0]
+    rotation: 0
+    state: enabled
+- name: record_iq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: record_iq
+    short_id: ''
+    type: intx
+    value: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [456, 432.0]
+    rotation: 0
+    state: enabled
+- name: rig_freq_poller_0
+  id: epy_block
+  parameters:
+    _source_code: "import threading, time, socket\nfrom gnuradio import gr\nimport\
+      \ pmt\n\nclass blk(gr.basic_block):\n    def __init__(self, rig_host='127.0.0.1',\
+      \ rig_port=4532, poll_interval_s=0.5):\n        gr.basic_block.__init__(self,\
+      \ name='rig_freq_poller', in_sig=None, out_sig=None)\n        self.message_port_register_out(pmt.intern('freq'))\n\
+      \        self.rig_host = rig_host\n        self.rig_port = rig_port\n      \
+      \  self.poll_interval_s = poll_interval_s\n        self._stop = threading.Event()\n\
+      \        self._thread = threading.Thread(target=self._loop, daemon=True)\n\n\
+      \    def start(self):\n        self._thread.start()\n        return True\n\n\
+      \    def stop(self):\n        self._stop.set()\n        return True\n\n    def\
+      \ _loop(self):\n        sock = None\n        last = None\n        while not\
+      \ self._stop.is_set():\n            try:\n                if sock is None:\n\
+      \                    sock = socket.create_connection((self.rig_host, self.rig_port),\
+      \ timeout=2)\n                sock.sendall(b'f\\n')\n                freq =\
+      \ float(sock.recv(64).decode().strip())\n                if freq != last:\n\
+      \                    last = freq\n                    self.message_port_pub(pmt.intern('freq'),\n\
+      \                                           pmt.cons(pmt.intern('freq'), pmt.from_double(freq)))\n\
+      \            except (OSError, ValueError):\n                sock = None\n  \
+      \          time.sleep(self.poll_interval_s)\n"
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    poll_interval_s: '0.5'
+    rig_host: '''127.0.0.1'''
+    rig_port: '4531'
+  states:
+    _io_cache: ('rig_freq_poller', 'blk', [('rig_host', "'127.0.0.1'"), ('rig_port',
+      '4532'), ('poll_interval_s', '0.5')], [], [('freq', 'message', 1)], '', ['poll_interval_s',
+      'rig_host', 'rig_port'])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1096, 8.0]
+    rotation: 0
+    state: enabled
+- name: satellites_ax25_deframer_0_0
+  id: satellites_ax25_deframer
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    g3ruh_scrambler: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    options: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [848, 192.0]
+    rotation: 0
+    state: true
+- name: satellites_fsk_demodulator_0
+  id: satellites_fsk_demodulator
+  parameters:
+    affinity: ''
+    alias: ''
+    baudrate: '9600'
+    comment: ''
+    iq: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    options: '""'
+    samp_rate: '50000'
+    subaudio: 'False'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [672, 176.0]
+    rotation: 0
+    state: true
+- name: satellites_kiss_file_sink_0
+  id: satellites_kiss_file_sink
+  parameters:
+    affinity: ''
+    alias: ''
+    append: 'True'
+    comment: ''
+    file: /home/bob/Desktop/framsat1b.kss
+    options: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1256, 336.0]
+    rotation: 0
+    state: enabled
+- name: satellites_pdu_length_filter_0
+  id: satellites_pdu_length_filter
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    max: '250'
+    maxoutbuf: '0'
+    min: '175'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1016, 288.0]
+    rotation: 0
+    state: enabled
+- name: satellites_print_timestamp_0
+  id: satellites_print_timestamp
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    count: 'True'
+    fmt: '%Y-%m-%d %H:%M:%S'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1232, 208.0]
+    rotation: 0
+    state: true
+- name: satellites_telemetry_submit_0
+  id: satellites_telemetry_submit
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    norad: '98914'
+    options: '""'
+    port: '0'
+    server: '"SatNOGS"'
+    url: ''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1216, 120.0]
+    rotation: 0
+    state: true
+
+connections:
+- [analog_sig_source_x_0, '0', blocks_multiply_x_0, '1']
+- [blocks_multiply_x_0, '0', low_pass_filter_0, '0']
+- [low_pass_filter_0, '0', filerepeater_AdvFileSink_0, '0']
+- [low_pass_filter_0, '0', satellites_fsk_demodulator_0, '0']
+- [osmosdr_source_0, '0', blocks_multiply_x_0, '0']
+- [rig_freq_poller_0, freq, gpredict_MsgPairToVar_0, inpair]
+- [satellites_ax25_deframer_0_0, out, satellites_pdu_length_filter_0, in]
+- [satellites_fsk_demodulator_0, '0', satellites_ax25_deframer_0_0, '0']
+- [satellites_pdu_length_filter_0, out, satellites_kiss_file_sink_0, in]
+- [satellites_pdu_length_filter_0, out, satellites_print_timestamp_0, in]
+- [satellites_pdu_length_filter_0, out, satellites_telemetry_submit_0, in]
+- [satellites_print_timestamp_0, out, epy_block_0_0, pdu]
+
+metadata:
+  file_format: 1
+  grc_version: 3.10.9.2
