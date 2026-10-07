@@ -52,3 +52,4 @@ radios.yaml
 .pre_stations_backup/
 */flowgraphs/*.py
 !*/flowgraphs/kiss_encode_pdu.py
+*.zip
