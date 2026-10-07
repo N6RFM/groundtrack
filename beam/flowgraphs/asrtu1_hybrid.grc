@@ -868,7 +868,7 @@ blocks:
     minoutbuf: '0'
     poll_interval_s: '0.5'
     rig_host: '''127.0.0.1'''
-    rig_port: '4532'
+    rig_port: '4531'
   states:
     _io_cache: ('rig_freq_poller', 'blk', [('rig_host', "'127.0.0.1'"), ('rig_port',
       '4532'), ('poll_interval_s', '0.5')], [], [('freq', 'message', 1)], '', ['poll_interval_s',
