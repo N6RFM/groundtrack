@@ -660,6 +660,23 @@ blocks:
     coordinate: [760, 136.0]
     rotation: 0
     state: enabled
+- name: record_iq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: record IQ on this run? 1 = yes, 0 = no
+    hide: none
+    label: record_iq
+    short_id: ''
+    type: intx
+    value: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [528, 384.0]
+    rotation: 0
+    state: enabled
 - name: rig_freq_poller_0
   id: epy_block
   parameters:
@@ -697,23 +714,6 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1056, 24.0]
-    rotation: 0
-    state: enabled
-- name: record_iq
-  id: parameter
-  parameters:
-    alias: ''
-    comment: 'record IQ on this run? 1 = yes, 0 = no'
-    hide: none
-    label: record_iq
-    short_id: ''
-    type: intx
-    value: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [72, 616.0]
     rotation: 0
     state: enabled
 
