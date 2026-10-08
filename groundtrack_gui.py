@@ -1162,8 +1162,13 @@ class GroundtrackGUI(tk.Tk):
                 row=4, column=0, columnspan=2, padx=10, sticky="w")
 
         enabled_var = tk.BooleanVar(value=sat.get("enabled", True))
-        ttk.Checkbutton(win, text="Enabled", variable=enabled_var).grid(
-            row=6, column=0, columnspan=2, sticky="w", padx=10, pady=(8, 4))
+        dup_var = tk.BooleanVar(value=False)
+        flags_row = ttk.Frame(win)
+        flags_row.grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=(8, 4))
+        ttk.Checkbutton(flags_row, text="Enabled", variable=enabled_var).pack(side="left")
+        ttk.Checkbutton(flags_row, text="Allow duplicate NORAD (same satellite, other "
+                                        "frequency)", variable=dup_var).pack(
+            side="left", padx=(14, 0))
 
         ttk.Label(win, text="Extra outputs (direct connections, bypassing relay.py):",
                   font=("", 9)).grid(row=7, column=0, columnspan=2, padx=10,
@@ -1247,6 +1252,8 @@ class GroundtrackGUI(tk.Tk):
             norad = fields["norad"].get().strip()
             if norad and int(norad) != sat.get("norad"):
                 args += ["--norad", norad]
+                if dup_var.get():
+                    args += ["--allow-duplicate-norad"]
 
             freq = fields["freq"].get().strip()
             if freq and int(freq) != sat.get("freq_hz"):

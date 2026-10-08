@@ -13,6 +13,9 @@ Only touches fields you actually pass. Leaves everything else alone.
 
 Usage:
     python3 edit_satellite.py NAME --norad 12345
+    python3 edit_satellite.py NAME --norad 12345 --allow-duplicate-norad
+        # second entry for a satellite another entry already has (e.g. same
+        # satellite on a different frequency); keep only one of them enabled
     python3 edit_satellite.py NAME --freq 437443000
     python3 edit_satellite.py NAME --min-elev 20
     python3 edit_satellite.py NAME --producer-port 9107 --consumer-port 8107
@@ -130,6 +133,11 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("name", help="satellite name to edit, exactly as it appears in satellites.yaml")
     ap.add_argument("--norad", type=int, default=None)
+    ap.add_argument("--allow-duplicate-norad", action="store_true",
+                    help="let --norad reuse a NORAD number another entry already has - for a "
+                         "second entry of the same satellite on a different frequency or "
+                         "decode approach. Only one of the entries may be enabled at a time "
+                         "(the scheduler keys on NORAD); preflight fails if two are")
     ap.add_argument("--freq", type=int, default=None, help="downlink frequency in Hz")
     ap.add_argument("--min-elev", type=float, default=None)
     ap.add_argument("--producer-port", type=int, default=None)
@@ -177,8 +185,20 @@ def main():
     grc_note_needed = False
 
     if args.norad is not None and args.norad != sat.get("norad"):
-        if any(s is not sat and s.get("norad") == args.norad for s in sats):
-            sys.exit(f"NORAD {args.norad} is already used by another satellite - refusing")
+        others = [s for s in sats if s is not sat and s.get("norad") == args.norad]
+        if others and not args.allow_duplicate_norad:
+            sys.exit(f"NORAD {args.norad} is already used by {', '.join(s['name'] for s in others)} - "
+                     f"refusing. If this is the same satellite on another frequency, add "
+                     f"--allow-duplicate-norad (keep only one of the entries enabled).")
+        if others:
+            live = [s["name"] for s in others if s.get("enabled", True)]
+            print(f"NOTE: NORAD {args.norad} is shared with {', '.join(s['name'] for s in others)} "
+                  f"- same satellite, same orbit, so both get identical pass times.")
+            if live and sat.get("enabled", True):
+                print(f"WARNING: {', '.join(live)} and {args.name} are both enabled. The scheduler "
+                      f"treats NORAD as the satellite's identity, so only one would be planned "
+                      f"and preflight will fail. Disable one: "
+                      f"python3 edit_satellite.py <NAME> --disabled")
         changes.append(f"norad: {sat.get('norad')} -> {args.norad}")
         sat["norad"] = args.norad
         grc_note_needed = True
