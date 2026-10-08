@@ -725,6 +725,17 @@ as its `_record_only_template.grc`, after proving `new_record_only_satellite.py`
 can actually generate from it. It's deliberately not derived from the first
 station's flowgraph - the radios differ in more than a device string.
 
+## NORAD numbers of 100000 and up (Alpha-5)
+
+A TLE has five digits for the catalog number, so objects numbered 100000+ write
+it as a letter plus four digits: `A0470` is 100470, `B1234` is 111234 (A=10 ...
+H=17, J=18 ... N=22, P=23 ... Z=33; no I or O). In `satellites.yaml` always use
+the plain number (`norad: 100470`). `tle_number.py` does the decoding for
+`update_tle.py`, `preflight.py` and the station code; Skyfield (sgp4 2.23+)
+decodes it for pass planning. If a satellite shows as missing from a TLE file
+that clearly has it, check that the TLE's line 1 starts `1 A0470U` (not a
+six-digit number, which isn't a valid TLE).
+
 ## tle_util.py
 
 Not run directly. The one place that decides which TLE a satellite uses, imported by

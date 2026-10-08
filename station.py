@@ -41,6 +41,8 @@ import sys
 
 import yaml
 
+from tle_number import catalog_number
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RADIOS_PATH = os.path.join(SCRIPT_DIR, "radios.yaml")
 ENV_VAR = "GROUNDTRACK_STATION"
@@ -489,10 +491,9 @@ def _norads_in_tle_file(path):
     except OSError:
         return found
     for i in range(0, len(lines) - 2, 3):
-        try:
-            found.add(int(lines[i + 1][2:7]))
-        except (ValueError, IndexError):
-            pass
+        n = catalog_number(lines[i + 1])
+        if n is not None:
+            found.add(n)
     return found
 
 

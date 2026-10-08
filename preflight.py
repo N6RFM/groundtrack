@@ -25,6 +25,8 @@ import sys
 import time
 import yaml
 
+from tle_number import catalog_number
+
 CONFIG_PATH = "satellites.yaml"
 SCHEDULE_PATH = "schedule.yaml"
 
@@ -147,10 +149,9 @@ def static_checks(cfg_path):
         with open(path) as f:
             lines = [l.strip() for l in f if l.strip()]
         for i in range(0, len(lines) - 2, 3):
-            try:
-                tle_names.add(int(lines[i + 1][2:7]))
-            except (ValueError, IndexError):
-                pass
+            n = catalog_number(lines[i + 1])
+            if n is not None:
+                tle_names.add(n)
 
     if tle_exists:
         collect_norads(tle_path)

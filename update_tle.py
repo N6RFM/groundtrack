@@ -45,6 +45,8 @@ import time
 import urllib.request
 import yaml
 
+from tle_number import catalog_number
+
 CONFIG_PATH = "satellites.yaml"
 SATNOGS_TLE_URL = "https://db.satnogs.org/api/tle/?format=json"
 CELESTRAK_CATNR_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=tle"
@@ -145,10 +147,9 @@ def main():
         norads = set()
         for i in range(0, len(lines) - 2, 3):
             if lines[i + 1].startswith("1 "):
-                try:
-                    norads.add(int(lines[i + 1][2:7]))
-                except ValueError:
-                    pass
+                n = catalog_number(lines[i + 1])
+                if n is not None:
+                    norads.add(n)
         return norads
 
     if args.check_only:
