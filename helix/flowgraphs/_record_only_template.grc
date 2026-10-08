@@ -732,7 +732,7 @@ blocks:
 
 connections:
 - [analog_sig_source_x_0, '0', blocks_multiply_xx_1, '1']
-- [blocks_multiply_xx_1, '0', filerepeater_AdvFileSink_0, '0']
+- [low_pass_filter_0, '0', filerepeater_AdvFileSink_0, '0']
 - [blocks_multiply_xx_1, '0', low_pass_filter_0, '0']
 - [low_pass_filter_0, '0', qtgui_waterfall_sink_x_0, '0']
 - [osmosdr_source_1, '0', blocks_multiply_xx_1, '0']
