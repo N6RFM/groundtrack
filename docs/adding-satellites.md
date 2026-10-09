@@ -265,7 +265,9 @@ satellite whose `.grc` uses
 fork of upstream [gr-filerepeater](https://github.com/ghostop14/gr-filerepeater)
 specifically because upstream's `Record On Start` is a locked Yes/No
 dropdown with no way to reference a variable - the fork changes that one
-field's type so it can hold an expression instead. Whether a satellite
+field's type so it can hold an expression instead. If it's missing or the stock block is installed instead, a `.grc`'s
+`recordOnStart` reads back as `False` after GRC opens it and `preflight.py` fails
+the satellite - see "Install the gr-filerepeater fork" in [Setup](setup.md). Whether a satellite
 supports the toggle is read from its `.grc` - wired means the Advanced File
 Sink's Record On Start references `record_iq` and an enabled `record_iq`
 Parameter block exists - so **there is nothing to declare in `satellites.yaml`**.

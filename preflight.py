@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import glob
 import os
 import re
 import shutil
@@ -131,6 +132,8 @@ def static_checks(cfg_path):
         except ImportError:
             check(f"python package '{pkg}' importable", False,
                   "pip install skyfield pyyaml --break-system-packages")
+
+    check_filerepeater_block()
 
     sats = cfg.get("satellites", [])
     import station
@@ -266,6 +269,52 @@ def static_checks(cfg_path):
                   f"when passes are paired (python3 pair_passes.py)")
 
     return cfg
+
+
+FILEREPEATER_FORK = "https://github.com/N6RFM/gr-filerepeater_n6rfm"
+
+
+def filerepeater_block_files():
+    """Every installed filerepeater_AdvFileSink block definition GNU Radio Companion could load."""
+    roots = [os.path.expanduser("~/.grc_gnuradio"), "/usr/share/gnuradio/grc/blocks",
+             "/usr/local/share/gnuradio/grc/blocks"]
+    roots += [p for p in os.environ.get("GRC_BLOCKS_PATH", "").split(os.pathsep) if p]
+    found = []
+    for root in roots:
+        for path in sorted(glob.glob(os.path.join(root, "filerepeater_AdvFileSink*.yml"))):
+            if path not in found:
+                found.append(path)
+    return found
+
+
+def check_filerepeater_block():
+    """The fork's Record On Start is a free expression (dtype: raw); upstream's is a fixed
+    Yes/No dropdown. With upstream's installed, GRC silently resets 'bool(record_iq)' to the
+    default 'False' on load, so --record-iq never works. Catch that before it's a mystery."""
+    files = filerepeater_block_files()
+    if not files:
+        check("gr-filerepeater block definition found", False,
+              "no filerepeater_AdvFileSink block definition in the usual GRC block folders - "
+              f"install {FILEREPEATER_FORK} (not upstream gr-filerepeater); see docs/setup.md",
+              level=WARN)
+        return
+    for path in files:
+        try:
+            with open(path) as f:
+                block = yaml.safe_load(f) or {}
+            param = next(p for p in block.get("parameters", []) if p.get("id") == "recordOnStart")
+        except (OSError, yaml.YAMLError, StopIteration, AttributeError):
+            check(f"{path}: has a readable recordOnStart parameter", False,
+                  "can't read it - reinstall the fork: " + FILEREPEATER_FORK)
+            continue
+        takes_expression = param.get("dtype") == "raw" and not param.get("options")
+        check(f"gr-filerepeater fork installed: Record On Start takes an expression ({path})",
+              takes_expression,
+              "" if takes_expression else
+              f"this is upstream's fixed Yes/No block (dtype {param.get('dtype')!r}), so GRC resets "
+              f"'bool(record_iq)' to 'False' and unattended IQ toggling never works. Install "
+              f"{FILEREPEATER_FORK} (git clone, mkdir build, cd build, cmake .., make, "
+              f"sudo make install, sudo ldconfig) and delete any other copy of this file")
 
 
 def check_grc(name, grc_path, sat):

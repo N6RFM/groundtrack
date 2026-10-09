@@ -39,6 +39,41 @@
    ```
    (or use a venv if you'd rather not pass `--break-system-packages`).
 
+3b. **Install the gr-filerepeater fork** - not upstream `gr-filerepeater`. Every
+   recording flowgraph here uses its `Advanced File Sink`, and the per-run IQ
+   on/off switch (`--record-iq` / `record_iq`) only works with the fork:
+   upstream's `Record On Start` is a fixed Yes/No dropdown, so GNU Radio
+   Companion silently replaces `bool(record_iq)` with `False` when it loads a
+   `.grc`, and nothing records unless you remember. The fork makes that one
+   field accept an expression.
+   ```
+   git clone https://github.com/N6RFM/gr-filerepeater_n6rfm
+   cd gr-filerepeater_n6rfm
+   mkdir build
+   cd build
+   cmake ..
+   make -j4
+   sudo make install
+   sudo ldconfig
+   ```
+   If the folder or `build/` already exists from an earlier attempt, `cd` into
+   the folder, run `git pull`, then `rm -rf build` and start again from `mkdir build`
+   (running `cmake ..` from the wrong folder is the usual mistake - it must
+   run inside `build/`). Then confirm the right block is installed:
+   ```
+   grep -n -A3 'id: recordOnStart' /usr/local/share/gnuradio/grc/blocks/filerepeater_AdvFileSink.block.yml
+   find / -name 'filerepeater_AdvFileSink*.yml' 2>/dev/null
+   ```
+   The first must show `dtype: raw` (upstream shows `dtype: enum` with Yes/No
+   options); the second must list only one file - delete any other copy, or
+   GNU Radio Companion may load that one instead. `python3 preflight.py` now
+   checks this for you ("gr-filerepeater fork installed"), and on a second computer
+   it is the first thing worth running after `grcc`. If a `.grc` ever shows
+   `recordOnStart: 'False'` where it should say `bool(record_iq)`, the stock
+   block was loaded when it was saved - fix the install, then set the field
+   back (`sed -i "s/recordOnStart: 'False'/recordOnStart: bool(record_iq)/" NAME.grc`)
+   and rebuild with `grcc`.
+
 4. **Generate the flowgraph scripts.** The `.grc` files in this repo were
    authored outside GNU Radio Companion, so the runnable `.py` files don't
    exist yet. On your machine, with GNU Radio and your SDR driver
