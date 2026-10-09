@@ -732,7 +732,8 @@ it as a letter plus four digits: `A0470` is 100470, `B1234` is 111234 (A=10 ...
 H=17, J=18 ... N=22, P=23 ... Z=33; no I or O). In `satellites.yaml` always use
 the plain number (`norad: 100470`). `tle_number.py` does the decoding for
 `update_tle.py`, `preflight.py` and the station code; Skyfield (sgp4 2.23+)
-decodes it for pass planning. If a satellite shows as missing from a TLE file
+decodes it for pass planning. For these objects `update_tle.py`'s Celestrak fallback asks for OMM/JSON
+(the only form Celestrak has) and converts it to an `A0470`-style TLE itself. If a satellite shows as missing from a TLE file
 that clearly has it, check that the TLE's line 1 starts `1 A0470U` (not a
 six-digit number, which isn't a valid TLE).
 

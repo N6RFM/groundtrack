@@ -45,11 +45,14 @@ import time
 import urllib.request
 import yaml
 
-from tle_number import catalog_number
+from tle_number import catalog_number, omm_to_tle
 
 CONFIG_PATH = "satellites.yaml"
 SATNOGS_TLE_URL = "https://db.satnogs.org/api/tle/?format=json"
 CELESTRAK_CATNR_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=tle"
+# Catalog numbers of 100000 and up don't fit a classic TLE, so Celestrak publishes them only as
+# OMM (json/xml/csv); this is converted to an Alpha-5 TLE (100470 -> "A0470") by tle_number.py.
+CELESTRAK_CATNR_JSON_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=json"
 
 # Identify ourselves honestly on every request. Python's default
 # "Python-urllib/3.x" agent is commonly blocked by servers (SatNOGS
@@ -98,19 +101,38 @@ def fetch_satnogs():
 
 def fetch_celestrak_one(norad):
     """Fallback for a single satellite SatNOGS didn't have. Returns
-    (tle0, tle1, tle2) or None."""
-    url = CELESTRAK_CATNR_URL.format(catnr=norad)
+    (tle0, tle1, tle2) or None. Tries a plain TLE first (catalog numbers below
+    100000), then Celestrak's OMM/JSON, converted to a TLE - the only form it has for
+    an object numbered 100000 or higher."""
+    if norad < 100000:
+        url = CELESTRAK_CATNR_URL.format(catnr=norad)
+        try:
+            with _open(url, 15) as resp:
+                data = resp.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            print(f"    Celestrak fallback for {norad} failed: {e}")
+            data = ""
+        lines = [l.rstrip("\n") for l in data.splitlines() if l.strip()]
+        if len(lines) >= 3 and lines[1].startswith("1 ") and lines[2].startswith("2 "):
+            return lines[0], lines[1], lines[2]
+        if data:
+            print(f"    Celestrak fallback for {norad}: no usable TLE in response")
+
+    url = CELESTRAK_CATNR_JSON_URL.format(catnr=norad)
     try:
         with _open(url, 15) as resp:
-            data = resp.read().decode("utf-8", errors="replace")
+            records = json.loads(resp.read().decode("utf-8", errors="replace"))
+        record = next(r for r in records if int(r.get("NORAD_CAT_ID", -1)) == norad)
+        result = omm_to_tle(record)
+    except StopIteration:
+        print(f"    Celestrak (OMM/JSON) has no data for {norad}")
+        return None
     except Exception as e:
-        print(f"    Celestrak fallback for {norad} failed: {e}")
+        print(f"    Celestrak (OMM/JSON) fallback for {norad} failed: {e}")
         return None
-    lines = [l.rstrip("\n") for l in data.splitlines() if l.strip()]
-    if len(lines) < 3 or not lines[1].startswith("1 ") or not lines[2].startswith("2 "):
-        print(f"    Celestrak fallback for {norad}: no usable TLE in response")
-        return None
-    return lines[0], lines[1], lines[2]
+    print(f"    Celestrak (OMM/JSON): got {norad}, converted to a TLE (epoch "
+          f"{record.get('EPOCH')})")
+    return result
 
 
 def main():
