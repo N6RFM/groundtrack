@@ -15,7 +15,7 @@ files, uncompiled/stale `.py` files, port collisions, satellites missing
 from the TLE file - all without waiting for a real pass to expose them. It also
 catches a compiled flowgraph missing the embedded-block module it imports at launch,
 says which satellites take their TLE from your `custom_tle_file` (and how old it is),
-and - with several radios - warns when one NORAD is used for different satellites.
+and - with several radios - warns when one NORAD is used for different satellites. It also checks that each compiled flowgraph really passes `--record-iq` through to the recorder (a frozen `False` records nothing - see [Troubleshooting](troubleshooting.md)).
 
 ```
 python3 preflight.py

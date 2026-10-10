@@ -11,6 +11,35 @@ Symptoms we've actually hit, in the order worth checking:
 Multi-station mode (a `radios.yaml` exists) - see [Stations](stations.md),
 "Troubleshooting". Pass `--radio NAME` or set `GROUNDTRACK_STATION`.
 
+**A pass ran (the pass log says `started`, `record_iq: true`, `completed`) but no `.iq` file appeared**
+The compiled flowgraph has Record On Start frozen to a literal `False`:
+`grep -n "AdvFileSink(" flowgraphs/<name>.py` shows `...,0, 0,False,False,False,...` instead of
+`...,0, 0,bool(record_iq),False,False,...`. The `.grc` can look right (`recordOnStart: bool(record_iq)`)
+and `--record-iq 1` is accepted either way. Cause: GRC compiled with the stock gr-filerepeater
+block (a Yes/No dropdown, which turns any expression into `False`), or with its **cached copy** of
+that old block after the fork was installed. Fix:
+```
+rm -rf ~/.cache/grc_gnuradio
+grcc -o flowgraphs flowgraphs/<name>.grc        # or ./regen_all.sh
+```
+`preflight.py` reports this ("compiled ... passes Record On Start through"). Recordings go to the
+`basedir` set in the Advanced File Sink (a folder like `~/Desktop/IQ_Files/`), not the station folder.
+
+**`preflight.py` fails with `<name>.norad (N) found in TLE file`, though the satellite is in the SatNOGS database**
+SatNOGS lists a new satellite under a temporary ID (often 98xxx) while its TLE carries the real NORAD
+number. `python3 update_tle.py` now relabels the TLE to the number in `satellites.yaml`, so run it
+and preflight again; either number works in `satellites.yaml`. See [scripts-reference.md](scripts-reference.md),
+"SatNOGS temporary IDs". If neither is in SatNOGS or Celestrak yet, put a TLE in `custom_tle_file`.
+
+**`preflight.py` (or `plan_passes.py`, `toggle_pass_record_iq.py`) seems to hang**
+With several stations it asks `Which station?`. Piped through `tail` or `grep` the prompt is hidden,
+so it looks stuck. Name the station: `GROUNDTRACK_STATION=helix python3 preflight.py` (or `--radio helix`).
+
+**The GUI still shows something you changed, or a change doesn't show up**
+The GUI and `run_passes.py` are long-running programs; they keep the code they started with. After
+installing an update, close the GUI completely (`pkill -f groundtrack_gui.py`) and start it again.
+`run_passes.py` only needs restarting if `satellites.yaml`, the schedule or a flowgraph changed.
+
 **`preflight.py` fails with `embedded-block modules sit next to flowgraphs/<n>.py`, or a
 flowgraph dies at launch with `ModuleNotFoundError`**
 A compiled flowgraph imports a small module GRC generates for each embedded Python
