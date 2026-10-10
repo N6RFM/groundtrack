@@ -45,7 +45,7 @@ import time
 import urllib.request
 import yaml
 
-from tle_number import catalog_number, omm_to_tle
+from tle_number import catalog_number, omm_to_tle, relabel_tle
 
 CONFIG_PATH = "satellites.yaml"
 SATNOGS_TLE_URL = "https://db.satnogs.org/api/tle/?format=json"
@@ -95,6 +95,12 @@ def fetch_satnogs():
         if norad is None or not (tle1 and tle2):
             continue
         by_norad[norad] = (tle0 or f"0 NORAD {norad}", tle1, tle2)
+        # SatNOGS' ID can differ from the number inside the TLE (new satellites get
+        # a temporary 98xxx ID). Index it under the TLE's own number too, so a
+        # satellites.yaml that uses either one finds it.
+        real = catalog_number(tle1)
+        if real is not None and real != norad:
+            by_norad.setdefault(real, (tle0 or f"0 NORAD {real}", tle1, tle2))
     print(f"  SatNOGS: {len(by_norad)} satellite(s) available.")
     return by_norad
 
@@ -209,7 +215,13 @@ def main():
         if norad is None:
             continue
         if norad in satnogs_data:
-            lines_out.extend(satnogs_data[norad])
+            tle0, tle1, tle2 = satnogs_data[norad]
+            real = catalog_number(tle1)
+            if real is not None and real != norad:
+                print(f"  {name}: SatNOGS ID {norad} is NORAD {real} in the TLE - "
+                      f"relabelling so {norad} matches")
+                tle1, tle2 = relabel_tle(tle1, tle2, norad)
+            lines_out.extend((tle0, tle1, tle2))
             found_via_satnogs.append(name)
             continue
         print(f"  {name} (norad {norad}) not in SatNOGS - trying Celestrak fallback ...")

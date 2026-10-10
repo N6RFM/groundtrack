@@ -84,3 +84,16 @@ def omm_to_tle(omm):
           f"{int(omm['REV_AT_EPOCH']) % 100000:5d}")
     l2 += _checksum(l2)
     return str(omm.get("OBJECT_NAME") or "UNKNOWN"), l1, l2
+
+
+def relabel_tle(tle1, tle2, norad):
+    """Both TLE lines with the catalog number replaced by `norad` (checksums redone).
+    SatNOGS gives a brand-new satellite a temporary ID (98xxx) while the TLE itself
+    still carries the real NORAD number; relabelling lets the configured number
+    (whichever the user typed) match the file, with no manual edit."""
+    code = encode_catalog_number(norad)
+    out = []
+    for line in (tle1, tle2):
+        body = line[:2] + code + line[7:68]
+        out.append(body + _checksum(body))
+    return out[0], out[1]

@@ -759,3 +759,12 @@ python3 rename_station.py r2 BEAM --dry-run
 It edits `radios.yaml` as plain text (comments survive; the old file is kept as
 `radios.yaml.bak`), refuses while the station's `run_passes.py` is running, and undoes
 itself if any step fails.
+
+### SatNOGS temporary IDs (98xxx)
+
+SatNOGS gives a brand-new satellite a temporary catalog ID (for example Luca is
+98449) while its TLE carries the real NORAD number (67287). `update_tle.py`
+accepts either number in `satellites.yaml`: when the SatNOGS ID differs from the
+number inside the TLE it relabels the TLE (checksums recomputed) to match the number
+you configured, and says so in its output. A satellite configured with the real
+NORAD number is found too.
