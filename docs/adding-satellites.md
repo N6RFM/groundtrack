@@ -221,6 +221,13 @@ grcc flowgraphs/<name>.grc      # or ./regen_all.sh for everything at once
 python3 update_tle.py           # auto-covers every configured satellite, no flags needed
 python3 preflight.py
 ```
+Use whichever NORAD number you find: SatNOGS sometimes lists a new satellite under a
+temporary ID (98xxx) while its TLE carries the real number. `update_tle.py` accepts
+either one in `satellites.yaml` and relabels the TLE to match, so `preflight.py`
+finds it - no hand edit needed (see [scripts-reference.md](scripts-reference.md)).
+A number of 100000 or more is fine too (the TLE spells it Alpha-5, `A0470` = 100470);
+keep the plain number in `satellites.yaml`.
+
 If the satellite is too new for `update_tle.py`'s sources (SatNOGS,
 Celestrak) to have it at all - or you simply know better than they do - set
 `custom_tle_file` in `satellites.yaml` to a file you maintain by hand with its

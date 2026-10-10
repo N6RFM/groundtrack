@@ -166,7 +166,7 @@ groundtrack/
 ├── show_queue.py            # prints the approved pass queue from schedule.yaml
 ├── station.py               # multi-radio setups: picks which station's folder a script works in
 ├── tle_util.py              # which TLE a satellite uses: custom_tle_file's entry always beats tle_file's
-├── tle_number.py            # catalog number from a TLE line, incl. Alpha-5 (A0470 = 100470) for numbers >= 100000
+├── tle_number.py            # catalog number from a TLE line, incl. Alpha-5 (A0470 = 100470) for numbers >= 100000; OMM->TLE conversion; relabel_tle for SatNOGS temporary IDs
 ├── lanes.py                 # receivers (Doppler channels) and paired passes - shared rules
 ├── pair_passes.py           # pair overlapping passes on two receivers; choose whose TLE steers the beam
 ├── set_doppler_ports.py     # point flowgraphs' Doppler pollers at the right rigctld port, by the SDR each opens
