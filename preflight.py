@@ -490,8 +490,9 @@ def check_compiled_record(name, script, grc_path):
                   "" if not frozen else
                   f"the .grc says recordOnStart: {wanted} but the compiled script has a literal "
                   f"False - it will never record, whatever --record-iq says. It was compiled before "
-                  f"the gr-filerepeater_n6rfm fork was installed. Recompile: "
-                  f"grcc -o {os.path.dirname(script) or '.'} {grc_path}")
+                  f"the gr-filerepeater_n6rfm fork was installed, or GRC is still using its "
+                  f"cached copy of the old block. Fix: rm -rf ~/.cache/grc_gnuradio, then "
+                  f"recompile: grcc -o {os.path.dirname(script) or '.'} {grc_path}")
             return
 
 

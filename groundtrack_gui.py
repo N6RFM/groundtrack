@@ -1033,11 +1033,6 @@ class GroundtrackGUI(tk.Tk):
         fields["freq"].bind("<FocusOut>", suggest_template, add="+")
         template_box.bind("<<ComboboxSelected>>", lambda e: template_chosen.update(by_hand=True))
         template_box.bind("<KeyRelease>", lambda e: template_chosen.update(by_hand=True))
-        record_iq_var = tk.BooleanVar(value=False)
-        record_iq_check = ttk.Checkbutton(
-            win, text="Also write record_iq_toggle: true explicitly (optional - a wired template is detected anyway)",
-            variable=record_iq_var)
-        record_iq_check.grid(row=10, column=0, columnspan=2, sticky="w", padx=10)
 
         def toggle_fields():
             ro = record_only_var.get()
@@ -1048,7 +1043,6 @@ class GroundtrackGUI(tk.Tk):
                 use_template_var.set(False)
             ut = ro and use_template_var.get()
             fields["template"].config(state="normal" if ut else "disabled")
-            record_iq_check.config(state="normal" if ut else "disabled")
 
         toggle_fields()  # correct initial disabled/enabled state for every field above
 
@@ -1080,8 +1074,6 @@ class GroundtrackGUI(tk.Tk):
                 args = [sys.executable, station.script_path(tool_name), "--name", name, "--norad", norad,
                         "--freq", freq, "--min-elev", min_elev,
                         "--template", template, "--yes"]
-                if record_iq_var.get():
-                    args += ["--record-iq-toggle"]
             else:
                 tool_name = "add_satellite.py"
                 args = [sys.executable, station.script_path(tool_name), "--name", name,

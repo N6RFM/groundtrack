@@ -77,7 +77,9 @@
    installed has `recordOnStart` frozen to a literal `False` in its `.py`, so it
    records nothing even though the `.grc` and `--record-iq 1` look right.
    Preflight reports this ("compiled ... passes Record On Start through"); after
-   installing the fork, recompile every flowgraph (`./regen_all.sh`, or
+   installing the fork, clear GRC's block cache (`rm -rf ~/.cache/grc_gnuradio` -
+   otherwise GRC keeps using its cached copy of the old block and still compiles
+   `False`) and recompile every flowgraph (`./regen_all.sh`, or
    `grcc -o FOLDER NAME.grc`).
 
 4. **Generate the flowgraph scripts.** The `.grc` files in this repo were
