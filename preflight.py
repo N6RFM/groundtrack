@@ -251,6 +251,8 @@ def static_checks(cfg_path):
 
         if py_exists:
             check_embedded_modules(name, script)
+            if grc_exists:
+                check_compiled_record(name, script, grc_path)
 
         if grc_exists:
             check_grc(name, grc_path, sat)
@@ -457,6 +459,40 @@ def check_embedded_modules(name, script):
           f"missing {', '.join(m + '.py' for m in missing)} - the flowgraph imports "
           f"{'it' if len(missing) == 1 else 'them'} at launch and would die with ModuleNotFoundError. "
           f"Regenerate it: ./regen_all.sh (or grcc -o {folder} {script.replace('.py', '.grc')})")
+
+
+def check_compiled_record(name, script, grc_path):
+    """The compiled script must pass the .grc's Record On Start expression to the file sink.
+    Compiled while GRC knew only the stock gr-filerepeater block (a fixed Yes/No dropdown), an
+    expression such as bool(record_iq) silently becomes a literal False: the .grc looks right,
+    --record-iq 1 is accepted, and a whole pass records nothing. Reads the compiled script, the
+    authority on what actually runs."""
+    import ast
+    try:
+        with open(script) as f:
+            tree = ast.parse(f.read())
+        with open(grc_path) as f:
+            grc = f.read()
+    except (OSError, SyntaxError):
+        return
+    m = re.search(r"^\s*recordOnStart:\s*(.+?)\s*$", grc, re.M)
+    if not m:
+        return
+    wanted = m.group(1).strip("'\"")
+    if wanted in ("False", "0"):
+        return                              # recording deliberately off in the .grc
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "AdvFileSink"
+                and len(node.args) > 8):
+            arg = node.args[8]
+            frozen = isinstance(arg, ast.Constant) and arg.value in (False, 0)
+            check(f"{name}: compiled {script} passes Record On Start through ({wanted})", not frozen,
+                  "" if not frozen else
+                  f"the .grc says recordOnStart: {wanted} but the compiled script has a literal "
+                  f"False - it will never record, whatever --record-iq says. It was compiled before "
+                  f"the gr-filerepeater_n6rfm fork was installed. Recompile: "
+                  f"grcc -o {os.path.dirname(script) or '.'} {grc_path}")
+            return
 
 
 def check_extra_outputs(name, blocks, sat):

@@ -73,6 +73,12 @@
    block was loaded when it was saved - fix the install, then set the field
    back (`sed -i "s/recordOnStart: 'False'/recordOnStart: bool(record_iq)/" NAME.grc`)
    and rebuild with `grcc`.
+   Compiled scripts matter too: a flowgraph compiled while the stock block was
+   installed has `recordOnStart` frozen to a literal `False` in its `.py`, so it
+   records nothing even though the `.grc` and `--record-iq 1` look right.
+   Preflight reports this ("compiled ... passes Record On Start through"); after
+   installing the fork, recompile every flowgraph (`./regen_all.sh`, or
+   `grcc -o FOLDER NAME.grc`).
 
 4. **Generate the flowgraph scripts.** The `.grc` files in this repo were
    authored outside GNU Radio Companion, so the runnable `.py` files don't
