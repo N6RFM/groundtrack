@@ -85,6 +85,11 @@ def main():
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
 
+    same_name = [s for s in cfg.get("satellites", []) if str(s["name"]).strip().lower() == args.name.strip().lower()]
+    if same_name:
+        raise SystemExit(f"{args.name} is already in {CONFIG_PATH} (NORAD {same_name[0].get('norad')}) - refusing to add "
+                         f"a second entry with the same name. Use edit_satellite.py to change it, or choose another name.")
+
     dupes = [s["name"] for s in cfg.get("satellites", []) if s["norad"] == args.norad]
     if dupes:
         print(f"NOTE: NORAD {args.norad} is already configured as {', '.join(dupes)} - "

@@ -253,6 +253,7 @@ def static_checks(cfg_path):
             check_embedded_modules(name, script)
             if grc_exists:
                 check_compiled_record(name, script, grc_path)
+                check_local_sdr(name, grc_path)
 
         if grc_exists:
             check_grc(name, grc_path, sat)
@@ -459,6 +460,29 @@ def check_embedded_modules(name, script):
           f"missing {', '.join(m + '.py' for m in missing)} - the flowgraph imports "
           f"{'it' if len(missing) == 1 else 'them'} at launch and would die with ModuleNotFoundError. "
           f"Regenerate it: ./regen_all.sh (or grcc -o {folder} {script.replace('.py', '.grc')})")
+
+
+def check_local_sdr(name, grc_path):
+    """With an sdr.local.yaml in this station (python3 set_sdr.py), a flowgraph opening a different
+    device string for the same driver is almost always a serial number copied from another
+    computer - it would open the wrong radio, or none."""
+    import sdr_local
+    local = sdr_local.load_local()
+    if not local:
+        return
+    try:
+        with open(grc_path, newline="") as f:
+            dev = sdr_local.grc_source_args(f.read())
+    except OSError:
+        return
+    want = local.get(sdr_local.driver_of(dev) or "")
+    if not dev or not want:
+        return
+    check(f"{name}: SDR device matches this computer's {sdr_local.LOCAL_FILE}", dev == want,
+          "" if dev == want else
+          f"the flowgraph opens '{dev}' but this computer's setting is '{want}'. If this computer's is right, "
+          f"fix the flowgraph's device string (in GRC, or: sed -i 's|args: {dev}|args: {want}|' {grc_path}) and recompile",
+          level=None if dev == want else WARN)
 
 
 def check_compiled_record(name, script, grc_path):

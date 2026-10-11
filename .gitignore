@@ -53,3 +53,6 @@ radios.yaml
 */flowgraphs/*.py
 !*/flowgraphs/kiss_encode_pdu.py
 *.zip
+
+# This computer's own SDR device strings (set_sdr.py) - differ per computer
+sdr.local.yaml

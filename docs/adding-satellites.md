@@ -95,7 +95,8 @@ itself - no decoder, no KISS sink, no network block, `recordOnStart:
 True`, no waterfall - is still yours to build in GRC; `scionx.grc` is a
 working example to copy from.
 
-Either way, the new entry is always written as `enabled: false` - nothing
+(`new_record_only_satellite.py` goes further: once the flowgraph compiles and a TLE exists it enables the
+satellite itself - see [scripts-reference.md](scripts-reference.md).) Either way, add_satellite.py itself writes the new entry as `enabled: false` - nothing
 is built yet, and a *missing* `enabled` key is treated as `true`
 everywhere else in this toolkit, which would make `preflight.py` (or a
 real `run_passes.py` session) treat the satellite as live immediately and

@@ -117,6 +117,10 @@ def discover_fields(text):
         "wf_name": wf_name,
         "freq_value": freq_val,
         "has_record_iq": "record_iq" in blocks,
+        # GRC resets this field to a literal False when it is saved with the stock
+        # gr-filerepeater block (or a stale block cache) loaded; a satellite built from
+        # such a template would never record
+        "record_on_start_off": str(sink["parameters"].get("recordOnStart", "")).strip("'\" ") in ("False", "0"),
     }
 
 
@@ -284,6 +288,75 @@ def no_template_message():
             f"differ in more than a device string)")
 
 
+def existing_entry(name):
+    """The satellites.yaml entry with this name (case-insensitive), or None."""
+    try:
+        with open("satellites.yaml") as f:
+            cfg = yaml.safe_load(f) or {}
+    except OSError:
+        return None
+    want = name.strip().lower()
+    return next((s for s in cfg.get("satellites", []) if str(s.get("name", "")).strip().lower() == want), None)
+
+
+def fix_record_on_start(new_text, fields, template):
+    """A template whose file sink says Record On Start = False would make a satellite that never
+    records (GRC resets the field to False when it is saved with the stock gr-filerepeater block, or a
+    stale block cache, loaded). The new flowgraph gets the right value instead of inheriting it:
+    bool(record_iq) when the template has the record_iq switch, plain True when it doesn't."""
+    import re
+    if not fields.get("record_on_start_off"):
+        return new_text
+    right = "bool(record_iq)" if fields["has_record_iq"] else "'True'"
+    new_text, n = re.subn(r"^(    recordOnStart: ).*$", lambda m: m.group(1) + right, new_text, count=1, flags=re.M)
+    if n:
+        print(f"NOTE: {template} has Record On Start = False (GRC resets it when saved with a stale block cache), "
+              f"which would never record. The new flowgraph is built with {right} instead. "
+              f"The template itself is untouched - set its Record On Start back when convenient.")
+    return new_text
+
+
+def tle_numbers(path):
+    from tle_number import catalog_number
+    found = set()
+    try:
+        with open(path) as f:
+            lines = [l.rstrip("\n") for l in f if l.strip()]
+    except OSError:
+        return found
+    for i in range(0, len(lines) - 2, 3):
+        if lines[i + 1].startswith("1 "):
+            n = catalog_number(lines[i + 1])
+            if n is not None:
+                found.add(n)
+    return found
+
+
+def refresh_and_check_tle(norad):
+    """Fetch TLEs (update_tle.py, which covers every station), then say whether this NORAD has one.
+    A failure to fetch is not an error here - the check below is what matters."""
+    print(f"\nChecking for a TLE for NORAD {norad} ...")
+    try:
+        subprocess.run([sys.executable, station.script_path("update_tle.py")], stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=180)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    try:
+        with open("satellites.yaml") as f:
+            cfg = yaml.safe_load(f) or {}
+    except OSError:
+        return True
+    have = set()
+    for key in ("tle_file", "custom_tle_file"):
+        if cfg.get(key):
+            have |= tle_numbers(cfg[key])
+    if norad in have:
+        print(f"  found a TLE for NORAD {norad}.")
+        return True
+    print(f"  no TLE for NORAD {norad}.")
+    return False
+
+
 def main():
     import station
     station.enter()
@@ -307,6 +380,10 @@ def main():
                      help="pass through to add_satellite.py - only meaningful if the "
                           "template is already wired for it (this tool never wires a "
                           "template; see wire_record_iq.py for that)")
+    ap.add_argument("--no-enable", action="store_true",
+                     help="leave the new satellite disabled (default: enabled once its flowgraph compiled and a TLE exists)")
+    ap.add_argument("--no-tle-refresh", action="store_true",
+                     help="skip fetching TLEs and the TLE check at the end (offline use)")
     ap.add_argument("--dry-run", action="store_true", help="show what would happen, do nothing")
     ap.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
     args = ap.parse_args()
@@ -360,6 +437,14 @@ def main():
 
     slug = slugify(args.name)
     new_grc = f"flowgraphs/{slug}.grc"
+    existing = existing_entry(args.name)
+    if existing is not None:
+        if existing.get("norad") != args.norad:
+            sys.exit(f"{args.name} is already in satellites.yaml with NORAD {existing.get('norad')}, not "
+                     f"{args.norad}. Use edit_satellite.py to change an existing satellite, or pick another name.")
+        if existing.get("freq_hz") != args.freq:
+            sys.exit(f"{args.name} is already in satellites.yaml at {existing.get('freq_hz')} Hz, not "
+                     f"{args.freq}. Use edit_satellite.py --freq to change it.")
     if os.path.exists(new_grc):
         sys.exit(f"{new_grc} already exists - this tool only creates new "
                  f"satellites, never overwrites one. Use GRC directly to edit it.")
@@ -368,6 +453,11 @@ def main():
         new_text = build_new_text(text, fields, slug, args.name, args.freq)
     except Refusal as r:
         sys.exit(f"Refusing to generate from {template}: {r}")
+    new_text = fix_record_on_start(new_text, fields, template)
+    import sdr_local
+    new_text, sdr_note = sdr_local.apply_local(new_text)
+    if sdr_note:
+        print(f"NOTE: {sdr_note}")
 
     if args.record_iq_toggle and not fields["has_record_iq"]:
         print(f"NOTE: --record-iq-toggle was given, but {template} isn't wired for "
@@ -381,13 +471,15 @@ def main():
     print(f"Will create {new_grc} from {template}:")
     print("\n".join("  " + line for line in diff))
     print(f"\nWill also run:")
-    import station
     add_cmd = [sys.executable, station.script_path("add_satellite.py"), "--name", args.name,
                "--norad", str(args.norad), "--freq", str(args.freq),
                "--min-elev", str(args.min_elev), "--record-only"]
     if args.record_iq_toggle:
         add_cmd.append("--record-iq-toggle")
-    print(f"  {' '.join(add_cmd)}")
+    if existing is None:
+        print(f"  {' '.join(add_cmd)}")
+    else:
+        print(f"  (no yaml change: {args.name} is already in satellites.yaml - only its flowgraph is rebuilt)")
     print(f"  grcc {new_grc}")
 
     if args.dry_run:
@@ -410,7 +502,11 @@ def main():
     # assumes it's being run on its own (step 1 "build the .grc", step 2
     # "grcc it") - both already done here, so echoing it verbatim would be
     # actively misleading. Shown in full only if it fails, for debugging.
-    result = subprocess.run(add_cmd, capture_output=True, text=True)
+    if existing is not None:
+        result = subprocess.CompletedProcess(add_cmd, 0, "", "")
+        print(f"{args.name} is already in satellites.yaml - kept as it is (no duplicate added)")
+    else:
+        result = subprocess.run(add_cmd, capture_output=True, text=True)
     if result.returncode != 0:
         sys.exit(f"add_satellite.py failed (exit {result.returncode}):\n"
                  f"{result.stdout}{result.stderr}\n"
@@ -423,7 +519,8 @@ def main():
     for line in result.stdout.splitlines():
         if line.startswith("NOTE:"):
             print(line)
-    print(f"added to satellites.yaml")
+    if existing is None:
+        print(f"added to satellites.yaml")
 
     # -o flowgraphs/, matching regen_all.sh exactly: grcc otherwise writes
     # its .py to the CURRENT directory, not the .grc's own folder - a real,
@@ -443,12 +540,35 @@ def main():
     # launch) lands in cwd anyway, move it into flowgraphs/ beside the .py
     check_stray_compiled_files(fix=True)
 
-    print(f"\nDone. {args.name} is in satellites.yaml as enabled: false. Next:")
+    # nothing left to do by hand in the normal case: make sure a TLE exists, and switch it on
+    have_tle = True
+    if not args.no_tle_refresh:
+        have_tle = refresh_and_check_tle(args.norad)
+    already_on = existing is not None and existing.get("enabled", True)
     if args.record_iq_toggle and not fields["has_record_iq"]:
+        print(f"\nDone, but {args.name} needs its .grc wired for the IQ switch first:")
         print(f"  python3 wire_record_iq.py {args.name}")
         print(f"  ./regen_all.sh")
-    print(f"  python3 preflight.py")
-    print(f"  python3 toggle_satellite.py --enable {args.name}")
+        print(f"  python3 toggle_satellite.py --enable {args.name}")
+    elif already_on:
+        print(f"\nDone. {args.name} was already enabled - its flowgraph is rebuilt.")
+    elif have_tle and not args.no_enable:
+        r = subprocess.run([sys.executable, station.script_path("toggle_satellite.py"), "--enable", args.name],
+                           stdin=subprocess.DEVNULL)
+        if r.returncode == 0:
+            print(f"\nDone. {args.name} is added, compiled and ENABLED. Run python3 preflight.py to double-check.")
+        else:
+            print(f"\nDone. {args.name} is in satellites.yaml as enabled: false. Enable it with:")
+            print(f"  python3 toggle_satellite.py --enable {args.name}")
+    elif not have_tle:
+        print(f"\nDone. {args.name} is added and compiled but left DISABLED: no TLE for NORAD {args.norad} "
+              f"exists yet in SatNOGS or Celestrak, so no passes can be predicted.")
+        print(f"  When one is published: python3 update_tle.py, then python3 toggle_satellite.py --enable {args.name}")
+        print(f"  (or put a TLE you trust in the custom_tle_file now)")
+    else:
+        print(f"\nDone. {args.name} is in satellites.yaml as enabled: false. Next:")
+        print(f"  python3 preflight.py")
+        print(f"  python3 toggle_satellite.py --enable {args.name}")
 
 
 if __name__ == "__main__":

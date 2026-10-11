@@ -360,6 +360,33 @@ cp flowgraphs/scionx.grc flowgraphs/_record_only_template.grc   # once
 python3 new_record_only_satellite.py --name NEWSAT-7 --norad 12345 --freq 437500000
 python3 new_record_only_satellite.py --name NEWSAT-7 --norad 12345 --freq 437500000 --dry-run
 ```
+**This computer's own radio.** Device strings (`driver=airspy,soapy=0,serial=...`) differ per computer, but
+the committed templates carry whichever computer wrote them. Tell the toolkit once, in a file git never
+sees, instead of editing templates:
+```
+python3 set_sdr.py --from flowgraphs/jamx01.grc       # learn it from a flowgraph that works here
+python3 set_sdr.py --set rtlsdr "driver=rtlsdr,serial=00000002"
+python3 set_sdr.py --show                             # what is set, and what every flowgraph opens
+```
+This writes `sdr.local.yaml` in the station folder (gitignored), one device string per SDR driver.
+`new_record_only_satellite.py` then writes it into every new flowgraph whatever the template says, and
+`preflight.py` warns when a flowgraph opens a different device for the same driver.
+
+**It finishes the job without hand repairs.** After compiling it fetches TLEs (`update_tle.py`) and,
+if the satellite now has one, **enables it** - "added" means ready. Specifically:
+
+- **Recording is always switched on in the result.** If the template's Record On Start was reset to `False`
+  (GRC does that when saved with a stale block cache), the new flowgraph is built with `bool(record_iq)`
+  (or plain `True` for a template without the switch) and the tool says so; the template itself is
+  never edited.
+- **Safe to re-run.** If the satellite's `satellites.yaml` entry already exists (same name, NORAD and
+  frequency) and only its flowgraph is missing, the flowgraph is rebuilt and **no second entry is added**.
+  Same name with a different NORAD or frequency is refused, pointing at `edit_satellite.py`;
+  `add_satellite.py` also refuses a duplicate name outright.
+- **No TLE yet** (not in SatNOGS or Celestrak, as with a brand-new object): the satellite is added and
+  compiled but left disabled, with the exact commands for when a TLE appears.
+- `--no-enable` leaves it disabled either way; `--no-tle-refresh` skips the TLE fetch and check (offline).
+
 Uses `flowgraphs/_record_only_template.grc` if it exists, else
 `flowgraphs/scionx.grc` directly (with a suggestion to save a dedicated
 copy - editing `scionx.grc` later for its own reasons would otherwise
