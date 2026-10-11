@@ -478,11 +478,12 @@ def check_local_sdr(name, grc_path):
     want = local.get(sdr_local.driver_of(dev) or "")
     if not dev or not want:
         return
-    check(f"{name}: SDR device matches this computer's {sdr_local.LOCAL_FILE}", dev == want,
-          "" if dev == want else
+    same = sdr_local.same_device(dev, want)
+    check(f"{name}: SDR device matches this computer's {sdr_local.LOCAL_FILE}", same,
+          "" if same else
           f"the flowgraph opens '{dev}' but this computer's setting is '{want}'. If this computer's is right, "
           f"fix the flowgraph's device string (in GRC, or: sed -i 's|args: {dev}|args: {want}|' {grc_path}) and recompile",
-          level=None if dev == want else WARN)
+          level=None if same else WARN)
 
 
 def check_compiled_record(name, script, grc_path):

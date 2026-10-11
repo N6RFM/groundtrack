@@ -61,7 +61,7 @@ def main():
             except OSError:
                 continue
             want = current.get(sdr_local.driver_of(dev) or "")
-            mark = "" if not want else ("  ok" if want == dev else "  DIFFERENT from this computer's setting")
+            mark = "" if not want else ("  ok" if sdr_local.same_device(want, dev) else "  DIFFERENT radio from this computer's setting")
             print(f"  {os.path.basename(path):34s} {dev or '(no SDR source block)'}{mark}")
 
 

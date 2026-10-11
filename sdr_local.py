@@ -45,6 +45,20 @@ def grc_source_args(text):
     return None
 
 
+def serial_of(args):
+    m = re.search(r"serial=([^,\s]+)", str(args or ""))
+    return m.group(1) if m else None
+
+
+def same_device(a, b):
+    """True when two device strings open the same radio. With a serial number on both, that is the
+    driver and serial (side options such as soapy=0 or bitpack=false don't change which radio it is);
+    otherwise the strings must be identical."""
+    if serial_of(a) and serial_of(b):
+        return driver_of(a) == driver_of(b) and serial_of(a) == serial_of(b)
+    return str(a) == str(b)
+
+
 def load_local(path=LOCAL_FILE):
     """{driver: device string}; empty if the file doesn't exist or can't be read."""
     try:
@@ -71,7 +85,7 @@ def apply_local(text):
     if not old:
         return text, None
     new = load_local().get(driver_of(old) or "")
-    if not new or new == old:
+    if not new or same_device(new, old):
         return text, None
     find = f"    args: {old}\n"
     if text.count(find) != 1:
