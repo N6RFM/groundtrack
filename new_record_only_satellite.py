@@ -435,6 +435,12 @@ def main():
     except Refusal as r:
         sys.exit(f"Refusing to use {template} as a template: {r}")
 
+    if not args.no_tle_refresh:
+        import satnogs_name
+        said = satnogs_name.problem(args.name, args.norad)
+        if said:
+            print(f"WARNING: {said}\n")
+
     slug = slugify(args.name)
     new_grc = f"flowgraphs/{slug}.grc"
     existing = existing_entry(args.name)

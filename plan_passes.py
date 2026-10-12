@@ -100,7 +100,7 @@ def find_overlaps(passes):
                 yield a, b
 
 
-def resolve_overlaps(passes, interactive, lane_of=None):
+def resolve_overlaps(passes, interactive, lane_of=None, priority_of=None):
     """Detect overlapping approved passes and either let the user actively
     choose which one to keep (interactive), or print a clear warning so it's
     not discovered silently later (non-interactive) - see the overlap
@@ -114,6 +114,23 @@ def resolve_overlaps(passes, interactive, lane_of=None):
     if not conflicts:
         return
     cross = lambda a, b: lane_of is not None and lane_of(a) != lane_of(b)
+    # A satellite with a higher `priority:` in satellites.yaml wins an overlap on the same receiver by itself -
+    # nothing to answer. Equal priorities (the default, 0) still need a choice. Overlaps between receivers are
+    # never settled here: both can be recorded, perhaps paired.
+    if priority_of is not None:
+        for a, b in conflicts:
+            if not a["approved"] or not b["approved"] or cross(a, b):
+                continue
+            pa, pb = priority_of(a), priority_of(b)
+            if pa == pb:
+                continue
+            win, lose = (a, b) if pa > pb else (b, a)
+            lose["approved"] = False
+            print(f"  Overlap: {win['name']} (priority {max(pa, pb)}) keeps {win['aos']} -> {win['los']}; "
+                  f"{lose['name']} (priority {min(pa, pb)}) at {lose['aos']} is skipped.")
+        conflicts = [(a, b) for a, b in conflicts if a["approved"] and b["approved"]]
+        if not conflicts:
+            return
     n_cross = sum(1 for a, b in conflicts if cross(a, b))
 
     if n_cross == 0:
@@ -131,7 +148,9 @@ def resolve_overlaps(passes, interactive, lane_of=None):
         print(f"  {b['name']:<10} {b['aos']} -> {b['los']}  (max el {b['max_elevation_deg']})")
         print(f"  -> {overlap_s:.0f}s overlap. Without a choice, {a['name']} "
               f"wins (starts first) and {b['name']} will be skipped or "
-              f"badly truncated.")
+              f"badly truncated."
+              + ("" if cross(a, b) else " (Same priority - give one a higher one to settle this "
+                 "for good: python3 edit_satellite.py NAME --priority 5)"))
 
         together = cross(a, b)
         if together:
@@ -252,7 +271,9 @@ def main():
 
     station_lane = cfg.get("rig_port")
     sat_lane = {norad: lanes.doppler_port(c, station_lane) for norad, c in sat_cfgs.items()}
-    resolve_overlaps(all_passes, args.interactive, lambda p: sat_lane.get(p["norad"], station_lane))
+    prio = {norad: int(c.get("priority", 0) or 0) for norad, c in sat_cfgs.items()}
+    resolve_overlaps(all_passes, args.interactive, lambda p: sat_lane.get(p["norad"], station_lane),
+                     lambda p: prio.get(p["norad"], 0))
 
     # strip the informational (leading-underscore) horizon fields before
     # writing schedule.yaml -- run_passes.py only ever needs aos/los at the

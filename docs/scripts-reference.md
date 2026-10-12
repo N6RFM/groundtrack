@@ -454,6 +454,12 @@ physical hardware limits surfaced as advance information instead of
 something noticed mid-pass. A flagged pass isn't blocked; it's still your
 call whether to approve it.
 
+**Overlaps and priority.** Two approved passes that overlap on the same receiver can't both record (no pre-emption). Give the one you care about more a higher `priority:` (default 0) and `plan_passes.py` keeps it and skips the other without asking:
+```
+python3 edit_satellite.py JAMX01 --priority 5
+```
+Equal priorities behave as before (a warning, or the `--interactive` question). Overlaps between different receivers are never settled by priority - both can be recorded.
+
 ## run_passes.py
 
 The actual execution engine - waits for each approved pass in
@@ -509,6 +515,17 @@ see `show_pass_log.py` below. `notify: true` in `satellites.yaml` also
 triggers a desktop notification on each failed launch attempt, not just
 on AOS/LOS.
 
+**Checks around every pass.** When it starts, `run_passes.py` looks over everything queued ("Pre-pass check ...")
+and checks each pass again just before launching it (`passcheck.py`): the compiled flowgraph exists, its Record On
+Start isn't frozen to `False` (the stale-GRC-cache trap), the IQ folder is writable, there is enough disk for the
+whole pass, and the TLE isn't older than 14 days. Anything wrong prints as `PRE-PASS WARNING` (and raises a
+desktop notification if `notify: true`) and the pass still launches, because the decoder side can work when
+recording can't; only a missing flowgraph file skips a pass. `--strict-precheck` skips a pass on any warning.
+When a pass ends it checks the result: did an IQ file appear in the sink's folder (whatever its name), and is
+it a sensible size for how long the pass ran? One line prints - `IQ check: OK`, `SHORT`, `MISSING`, or `SKIPPED`
+when recording was off - and an `iq_check` record goes to `pass_log.jsonl`. `show_pass_log.py` shows it in an
+"IQ file" column and `--failures-only` lists MISSING/SHORT passes too.
+
 ## toggle_pass_record_iq.py
 
 Toggles IQ recording on or off for specific upcoming passes in the
@@ -541,7 +558,7 @@ or approved. One JSON object per line: a `started` record for each
 launch attempt (with its `attempt` number and the `record_iq` value
 actually used), then how that attempt ended - `crashed` (exit code,
 `attempt`, and `will_retry`), `error`, or, for a pass that ran to its end,
-`completed` (with why: the scheduled LOS, or the elevation safety net).
+`completed` (with why: the scheduled LOS, or the elevation safety net). A pass also gets an `iq_check` record (OK, SHORT, MISSING, SKIPPED), a `precheck` record when the pre-pass check found something, and a `skipped` record if it was never launched.
 This tool correlates them by satellite and AOS time into one row per real
 pass, showing how it finally ended:
 ```
@@ -795,3 +812,29 @@ accepts either number in `satellites.yaml`: when the SatNOGS ID differs from the
 number inside the TLE it relabels the TLE (checksums recomputed) to match the number
 you configured, and says so in its output. A satellite configured with the real
 NORAD number is found too.
+
+## Pass-time checks: passcheck.py, test_passcheck.py
+
+`passcheck.py` holds the checks `run_passes.py` makes before and after each pass (see run_passes.py above); it
+is a library, with nothing to run. `python3 test_passcheck.py` is its offline self-test (also covers the
+name matcher and the overlap-priority rule); it touches no radio, network or station files.
+
+## satnogs_name.py - does this NORAD number belong to this name?
+
+One mistyped digit (BEE-1012 entered as 98917, not 98197) gives a satellite that never gets a TLE, with
+nothing saying why. When you add a satellite, and in `preflight.py`, the number is looked up in SatNOGS' database and
+compared with the name; a mismatch or an unknown number prints a warning with SatNOGS' answer. It never blocks
+anything and is silent when offline. Answers are cached for 30 days in `.satnogs_names.json` (not committed).
+`preflight.py` also warns when a flowgraph's IQ `basefile` looks nothing like its satellite (a template leftover or a typo).
+
+## update_computer.py - bring any computer up to date
+
+For a repository used from more than one computer (or just to avoid the checklist):
+```
+python3 update_computer.py
+```
+It works out which stations run on this computer (asked once; remembered in the untracked `computer.local.yaml`;
+`--ask-again` to change), pulls from GitHub, finds the SDRs plugged in (`SoapySDRUtil --find`) and records each
+station's device strings in `sdr.local.yaml` (asking only where it can't tell which is which), runs preflight for
+each local station (clearing GRC's stale block cache and recompiling if a flowgraph can't record), and restarts the
+GUI. Safe to repeat. `--repo`, `--no-radios` and `--no-gui` are described by `--help`.

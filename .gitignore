@@ -56,3 +56,5 @@ radios.yaml
 
 # This computer's own SDR device strings (set_sdr.py) - differ per computer
 sdr.local.yaml
+.satnogs_names.json
+computer.local.yaml

@@ -28,7 +28,7 @@ def main():
     ap.add_argument("--last", type=int, default=None,
                      help="only show the most recent N passes")
     ap.add_argument("--failures-only", action="store_true",
-                     help="only show crashed/error passes")
+                     help="only show passes that crashed, errored, or whose IQ file is MISSING or SHORT")
     args = ap.parse_args()
 
     try:
@@ -50,6 +50,14 @@ def main():
             entry["record_iq"] = rec.get("record_iq")
             entry["started_at"] = rec["timestamp"]
             entry["attempts"] = entry.get("attempts", 0) + 1
+        elif rec["event"] == "iq_check":
+            entry["iq_file"] = rec.get("status")
+            entry["iq_note"] = rec.get("note", "")
+        elif rec["event"] == "precheck":
+            entry["warnings"] = rec.get("problems", [])
+        elif rec["event"] == "skipped":
+            entry["outcome"] = "skipped"
+            entry["detail"] = rec.get("reason", "")
         else:
             entry["outcome"] = rec["event"]
             entry["ended_at"] = rec["timestamp"]
@@ -58,7 +66,8 @@ def main():
 
     entries = list(by_key.values())
     if args.failures_only:
-        entries = [e for e in entries if e.get("outcome") in ("crashed", "error")]
+        entries = [e for e in entries if e.get("outcome") in ("crashed", "error")
+                   or e.get("iq_file") in ("MISSING", "SHORT")]
     if args.last:
         entries = entries[-args.last:]
 
@@ -66,8 +75,8 @@ def main():
         print("No matching pass log entries.")
         return
 
-    print(f"{'AOS':<20}{'Satellite':<16}{'Outcome':<12}{'IQ':<6}{'Detail'}")
-    print("-" * 90)
+    print(f"{'AOS':<20}{'Satellite':<16}{'Outcome':<12}{'IQ':<6}{'IQ file':<9}{'Detail'}")
+    print("-" * 100)
     for e in entries:
         outcome = e.get("outcome", "(no end recorded - crashed without exit, "
                                     "or run_passes.py itself was killed)")
@@ -76,12 +85,19 @@ def main():
         detail = e.get("detail", "")
         if e.get("attempts", 1) > 1:
             detail += f" ({e['attempts']} launch attempts)"
-        print(f"{aos_display:<20}{e['satellite']:<16}{outcome:<12}{iq:<6}{detail}")
+        iq_file = e.get("iq_file") or "-"
+        if iq_file in ("MISSING", "SHORT") and e.get("iq_note"):
+            detail = (detail + "  " if detail else "") + e["iq_note"]
+        if e.get("warnings"):
+            detail = (detail + "  " if detail else "") + f"[{len(e['warnings'])} pre-pass warning(s)]"
+        print(f"{aos_display:<20}{e['satellite']:<16}{outcome:<12}{iq:<6}{iq_file:<9}{detail}")
 
     total = len(entries)
     failed = sum(1 for e in entries if e.get("outcome") in ("crashed", "error"))
+    no_iq = sum(1 for e in entries if e.get("iq_file") in ("MISSING", "SHORT"))
     missing_end = sum(1 for e in entries if "outcome" not in e)
     print(f"\n{total} pass(es) shown, {failed} failed"
+          + (f", {no_iq} with IQ MISSING or SHORT" if no_iq else "")
           + (f", {missing_end} with no recorded end (check for a crash of "
              f"run_passes.py itself, not just the flowgraph)" if missing_end else ""))
 

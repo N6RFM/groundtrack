@@ -19,6 +19,9 @@ Usage:
     python3 edit_satellite.py NAME --freq 437443000
     python3 edit_satellite.py NAME --min-elev 20
     python3 edit_satellite.py NAME --producer-port 9107 --consumer-port 8107
+    python3 edit_satellite.py NAME --priority 5
+        # wins an overlap with any satellite of lower priority (default 0) on the same
+        # receiver: plan_passes.py keeps this one and skips the other, with no question
     python3 edit_satellite.py NAME --enabled
     python3 edit_satellite.py NAME --record-iq-toggle
         # marks that NAME's .grc has a record_iq Parameter block wired up,
@@ -140,6 +143,10 @@ def main():
                          "(the scheduler keys on NORAD); preflight fails if two are")
     ap.add_argument("--freq", type=int, default=None, help="downlink frequency in Hz")
     ap.add_argument("--min-elev", type=float, default=None)
+    ap.add_argument("--priority", type=int, default=None,
+                     help="who wins when two passes overlap on the same receiver: the higher number is "
+                          "kept and the other skipped, with no question asked (default 0 for everyone; "
+                          "equal priorities still ask / warn). --priority 0 removes the setting")
     ap.add_argument("--producer-port", type=int, default=None)
     ap.add_argument("--consumer-port", type=int, default=None)
     group = ap.add_mutually_exclusive_group()
@@ -211,6 +218,13 @@ def main():
     if args.min_elev is not None and args.min_elev != sat.get("min_elev_deg"):
         changes.append(f"min_elev_deg: {sat.get('min_elev_deg')} -> {args.min_elev}")
         sat["min_elev_deg"] = args.min_elev
+
+    if args.priority is not None and args.priority != int(sat.get("priority", 0) or 0):
+        changes.append(f"priority: {sat.get('priority', 0)} -> {args.priority}")
+        if args.priority == 0:
+            sat.pop("priority", None)
+        else:
+            sat["priority"] = args.priority
 
     for port_field, arg_val in (("producer_port", args.producer_port),
                                  ("consumer_port", args.consumer_port)):

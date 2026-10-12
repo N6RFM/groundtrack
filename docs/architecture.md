@@ -169,6 +169,10 @@ groundtrack/
 ├── tle_number.py            # catalog number from a TLE line, incl. Alpha-5 (A0470 = 100470) for numbers >= 100000; OMM->TLE conversion; relabel_tle for SatNOGS temporary IDs
 ├── sdr_local.py             # this computer's SDR device strings (sdr.local.yaml, untracked) - used by new_record_only_satellite.py and preflight.py
 ├── set_sdr.py               # create/show that file: --from a working flowgraph, --set, --show
+├── passcheck.py             # checks around each pass: pre-pass (compiled record, IQ folder, disk, TLE age) and post-pass IQ verify
+├── satnogs_name.py          # looks a NORAD number up in SatNOGS and compares the name (typo catcher)
+├── update_computer.py       # one command to update any computer: stations here, pull, own SDRs, preflight, GUI
+├── test_passcheck.py        # offline self-test for passcheck, the name matcher and overlap priority
 ├── lanes.py                 # receivers (Doppler channels) and paired passes - shared rules
 ├── pair_passes.py           # pair overlapping passes on two receivers; choose whose TLE steers the beam
 ├── set_doppler_ports.py     # point flowgraphs' Doppler pollers at the right rigctld port, by the SDR each opens

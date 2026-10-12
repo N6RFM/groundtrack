@@ -50,6 +50,9 @@ def slug_of(name):
     return name.lower().replace("-", "")
 
 
+_satnogs_offline = False     # set once a SatNOGS lookup fails, so an offline run doesn't wait on every satellite
+
+
 def static_checks(cfg_path):
     print("=== Static config checks ===")
     if not check("satellites.yaml exists", os.path.exists(cfg_path)):
@@ -198,6 +201,15 @@ def static_checks(cfg_path):
             check(f"{name}.norad ({norad}) is unique", not dup)
             all_norads.add(norad)
             check(f"{name}.norad ({norad}) found in TLE file", norad in tle_names)
+            global _satnogs_offline
+            if not _satnogs_offline:
+                import satnogs_name
+                if satnogs_name.lookup(norad, timeout=4) is None:
+                    _satnogs_offline = True          # no network (or SatNOGS is down): stop asking, say nothing
+                else:
+                    said = satnogs_name.problem(name, norad)
+                    check(f"{name}.norad ({norad}) matches the satellite SatNOGS lists under that number",
+                          said is None, said or "", level=WARN if said else None)
             ci = custom_info.get(norad)
             if ci:
                 stale = ci["age_days"] > 14 or ci["catalog_newer"]
@@ -338,6 +350,18 @@ def check_grc(name, grc_path, sat):
                 match = False
             check(f"{name}: {var} in .grc matches satellites.yaml freq_hz",
                   match, f".grc={grc_val}  yaml={sat.get('freq_hz')}")
+
+    import satnogs_name
+    slug = os.path.splitext(os.path.basename(grc_path))[0]
+    for b in blocks.values():
+        base = (b.get("parameters") or {}).get("basefile")
+        if base and "basedir" in (b.get("parameters") or {}):
+            base = str(base).strip("'\"")
+            ok = satnogs_name.names_match(base, [name, slug]) or satnogs_name.names_match(name, [base])
+            check(f"{name}: IQ basefile '{base}' looks like this satellite", ok,
+                  "" if ok else f"files from this flowgraph are named '{base}...' and won't be easy to tell from other "
+                                f"satellites'. A leftover from the template, or a typo? Change 'basefile' in the file sink block",
+                  level=WARN if not ok else None)
 
     sock_block = blocks.get("network_socket_pdu_0")
     uses_relay = "producer_port" in sat or "consumer_port" in sat
@@ -491,34 +515,18 @@ def check_compiled_record(name, script, grc_path):
     Compiled while GRC knew only the stock gr-filerepeater block (a fixed Yes/No dropdown), an
     expression such as bool(record_iq) silently becomes a literal False: the .grc looks right,
     --record-iq 1 is accepted, and a whole pass records nothing. Reads the compiled script, the
-    authority on what actually runs."""
-    import ast
-    try:
-        with open(script) as f:
-            tree = ast.parse(f.read())
-        with open(grc_path) as f:
-            grc = f.read()
-    except (OSError, SyntaxError):
-        return
-    m = re.search(r"^\s*recordOnStart:\s*(.+?)\s*$", grc, re.M)
-    if not m:
-        return
-    wanted = m.group(1).strip("'\"")
-    if wanted in ("False", "0"):
-        return                              # recording deliberately off in the .grc
-    for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "AdvFileSink"
-                and len(node.args) > 8):
-            arg = node.args[8]
-            frozen = isinstance(arg, ast.Constant) and arg.value in (False, 0)
-            check(f"{name}: compiled {script} passes Record On Start through ({wanted})", not frozen,
-                  "" if not frozen else
-                  f"the .grc says recordOnStart: {wanted} but the compiled script has a literal "
-                  f"False - it will never record, whatever --record-iq says. It was compiled before "
-                  f"the gr-filerepeater_n6rfm fork was installed, or GRC is still using its "
-                  f"cached copy of the old block. Fix: rm -rf ~/.cache/grc_gnuradio, then "
-                  f"recompile: grcc -o {os.path.dirname(script) or '.'} {grc_path}")
-            return
+    authority on what actually runs (the same test run_passes.py repeats before every pass)."""
+    import passcheck
+    frozen, wanted = passcheck.compiled_record_state(script, grc_path)
+    if wanted is None or wanted in ("False", "0"):
+        return                              # nothing to compare, or recording deliberately off in the .grc
+    check(f"{name}: compiled {script} passes Record On Start through ({wanted})", not frozen,
+          "" if not frozen else
+          f"the .grc says recordOnStart: {wanted} but the compiled script has a literal "
+          f"False - it will never record, whatever --record-iq says. It was compiled before "
+          f"the gr-filerepeater_n6rfm fork was installed, or GRC is still using its "
+          f"cached copy of the old block. Fix: rm -rf ~/.cache/grc_gnuradio, then "
+          f"recompile: grcc -o {os.path.dirname(script) or '.'} {grc_path}")
 
 
 def check_extra_outputs(name, blocks, sat):

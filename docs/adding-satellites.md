@@ -229,6 +229,11 @@ finds it - no hand edit needed (see [scripts-reference.md](scripts-reference.md)
 A number of 100000 or more is fine too (the TLE spells it Alpha-5, `A0470` = 100470);
 keep the plain number in `satellites.yaml`.
 
+When you add a satellite the number is checked against SatNOGS' database: if SatNOGS lists that number under a
+different name, or has no such number, you get a warning (a mistyped digit is the usual cause - see
+[Troubleshooting](troubleshooting.md)). If two satellites' passes tend to overlap on one receiver, give the one you
+care about more a higher priority: `python3 edit_satellite.py NAME --priority 5` (the planner then keeps it and skips the other).
+
 If the satellite is too new for `update_tle.py`'s sources (SatNOGS,
 Celestrak) to have it at all - or you simply know better than they do - set
 `custom_tle_file` in `satellites.yaml` to a file you maintain by hand with its

@@ -149,3 +149,9 @@
    helix one running at the same time), see [Stations](stations.md): one folder
    per radio, a station switch in the GUI, and a one-time
    `migrate_to_stations.py` to move an existing setup. With one radio, skip it.
+
+9. **If the repository is used from more than one computer**, run `python3 update_computer.py` on each one whenever
+   you've pulled new code (it does the pull for you). It asks once which stations run on that computer, finds the
+   radios plugged in there and keeps their device strings in untracked files (`sdr.local.yaml`,
+   `computer.local.yaml`), runs preflight, and restarts the GUI - so what differs between computers never ends
+   up in git.

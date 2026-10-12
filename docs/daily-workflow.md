@@ -79,6 +79,10 @@ python3 run_passes.py --verbose
 python3 show_pass_log.py
 ```
 
+Every pass checks itself: `run_passes.py` warns (`PRE-PASS WARNING`) before launching one that won't record, and
+when a pass ends it prints `IQ check: OK`, `SHORT` or `MISSING` and logs it. The "IQ file" column of
+`show_pass_log.py` shows it per pass, and `--failures-only` lists only the passes with trouble.
+
 Steps 3-6 only need to be started once per session (they're long-running);
 step 1-2 is the thing to repeat daily as TLEs update. Redirecting relay.py's
 output to a log file (rather than `python3 relay.py &` directly) keeps your

@@ -217,6 +217,21 @@ relocates a stray compile automatically, before its own other checks even
 run. If a satellite still looks wrong after that, the stray wasn't the
 cause - the fix would have already resolved it.
 
+**`IQ check: MISSING` (or `SHORT`) after a pass**
+`run_passes.py` looked in the flowgraph's IQ folder when the pass ended and found no file (or a tiny one) written
+since it started. Usual causes, in order: Record On Start frozen to `False` in the compiled script (preflight
+says so - `rm -rf ~/.cache/grc_gnuradio`, then `grcc -o flowgraphs flowgraphs/<name>.grc`); the pass was run with
+recording off (`SKIPPED` then, not MISSING); the IQ folder is full or unwritable (`PRE-PASS WARNING` said so before
+the pass); the radio was busy or crashed (see the `crashed` rows in `show_pass_log.py`).
+
+**`PRE-PASS WARNING` when a pass starts**
+The message says what and how to fix it. It doesn't stop the pass (the decoder side may still work); add
+`--strict-precheck` to `run_passes.py` to skip such passes instead.
+
+**`SatNOGS says N is X, not Y` / `SatNOGS has no satellite numbered N`**
+The NORAD number in `satellites.yaml` probably has a typo. Find the satellite at https://db.satnogs.org and fix it with
+`python3 edit_satellite.py NAME --norad N`. A satellite too new for SatNOGS can stay as it is, with its TLE in `tle/custom.txt`.
+
 ## Known caveats
 
 - **GRC doesn't reload a `.grc` that changed on disk**: `wire_record_iq.py`,

@@ -197,6 +197,45 @@ def build_launch_command(sat_cfg, pass_rec, session_record_iq, iq_capable, recor
     return cmd, record_iq_value
 
 
+def precheck_pass(sat_cfg, pass_rec, record_iq_value, tle, strict, notify_enabled, announce=True):
+    """Looks for anything that would spoil this pass before it starts (passcheck.pre_pass_problems), prints
+    it, logs it to pass_log.jsonl and, if desktop notifications are on, raises one. Returns True when
+    the pass may launch: always, unless a "block" problem was found - or, with --strict-precheck, any problem."""
+    import passcheck
+    secs = (pass_rec["los_dt"] - pass_rec["aos_dt"]).total_seconds()
+    problems = passcheck.pre_pass_problems(sat_cfg, record_iq_value, secs, tle)
+    for sev, msg in problems:
+        print(f"[{sat_cfg['name']}] PRE-PASS {'BLOCKED' if sev == 'block' else 'WARNING'}: {msg}")
+    if problems:
+        log_pass_event("precheck", sat_cfg, pass_rec, problems=[m for _, m in problems])
+        if notify_enabled:
+            notify("Satellite pass may not record", f"{sat_cfg['name']}: {problems[0][1][:160]}")
+    blocked = any(sev == "block" for sev, _ in problems) or (strict and problems)
+    if blocked and strict and problems and not any(sev == "block" for sev, _ in problems):
+        print(f"[{sat_cfg['name']}] --strict-precheck: skipping this pass because of the warning above.")
+    return not blocked
+
+
+def verify_pass_iq(sat_cfg, pass_rec, record_iq_value, started_ts, notify_enabled):
+    """After a pass: did the IQ really get written? Prints one line, logs an "iq_check" event, and
+    raises a notification when it is MISSING or SHORT. Never raises."""
+    try:
+        import passcheck
+        res = passcheck.verify_iq(sat_cfg, record_iq_value, started_ts, time.time())
+        name = sat_cfg["name"]
+        if res["status"] in ("OK", "SKIPPED"):
+            print(f"[{name}] IQ check: {res['status']} - {res['note']}")
+        else:
+            print(f"[{name}] IQ check: {res['status']} - {res['note']}. "
+                  f"If this is unexpected: python3 preflight.py, and see docs/troubleshooting.md.")
+            if notify_enabled:
+                notify(f"Satellite IQ {res['status']}", f"{name}: {res['note']}")
+        log_pass_event("iq_check", sat_cfg, pass_rec, status=res["status"], bytes=res["bytes"],
+                       expected_bytes=res["expected"], files=res["files"], note=res["note"])
+    except Exception as e:
+        print(f"[{sat_cfg.get('name', '?')}] IQ check could not be made: {e!r}")
+
+
 def acquire_lock():
     """Refuses to start a second run_passes.py against the same folder -
     two instances would fight over rigctld/rotctld and the SDR."""
@@ -491,6 +530,10 @@ def main():
                           "satellites.yaml entry has record_iq_toggle: true, meaning "
                           "their .grc has a record_iq Parameter block wired up; every "
                           "other satellite launches exactly as before, unaffected")
+    ap.add_argument("--strict-precheck", action="store_true",
+                     help="skip a pass when the pre-pass check finds ANY problem with it (default: warn loudly "
+                          "and launch anyway, since the decoder side of a pass can still work when recording can't; "
+                          "a missing flowgraph file always skips it)")
     args = ap.parse_args()
 
     acquire_lock()
@@ -554,6 +597,7 @@ def main():
 
     launch_attempts = {}      # pass_key -> {"count", "last"} - crash-retry accounting
     finished_passes = set()   # pass_keys that ended (or were given up on): never relaunch
+    pass_t0 = {}              # pass_key -> wall-clock time of its first launch, for the after-pass IQ check
 
     # which satellites may be handed --record-iq (explicit record_iq_toggle, else read from
     # the .grc), and for those with something queued whether the compiled flowgraph really
@@ -561,6 +605,21 @@ def main():
     from edit_satellite import record_iq_capable   # imported here, not at module level: this file stays loadable on its own
     iq_capable = {norad: record_iq_capable(c) for norad, c in sat_cfgs.items()}
     record_iq_ok = verify_record_iq(sat_cfgs, passes, iq_capable)
+
+    # first look at everything queued, so a problem is seen now rather than at the pass; each pass is
+    # checked again just before it launches
+    print("Pre-pass check of everything queued ...")
+    flagged = 0
+    for norad in sorted({p["norad"] for p in passes}):
+        first = next(p for p in passes if p["norad"] == norad)
+        _, value = build_launch_command(sat_cfgs[norad], first, args.record_iq, iq_capable, record_iq_ok)
+        n_before = flagged
+        import passcheck
+        secs = (first["los_dt"] - first["aos_dt"]).total_seconds()
+        for sev, msg in passcheck.pre_pass_problems(sat_cfgs[norad], value, secs, tles.get(norad)):
+            print(f"  {'BLOCKED' if sev == 'block' else 'WARNING'}: {msg}")
+            flagged += 1
+    print("  all clear." if not flagged else f"  {flagged} problem(s) above - fix them before the pass, or it may not record.")
 
     active = {}   # pass_key -> {"pass", "proc", "lane"}, in the order they started
     is_tty = sys.stdout.isatty()
@@ -605,6 +664,8 @@ def main():
                         log_pass_event("crashed", sat_cfg, p, exit_code=rc,
                                        attempt=attempt, will_retry=will_retry)
                         del active[key]
+                        if not will_retry:
+                            verify_pass_iq(sat_cfg, p, a.get("record_iq"), pass_t0.get(key, time.time()), notify_enabled)
                         # only move the rotor toward the NEXT pass once we've stopped trying
                         # this one - pre-positioning away and then back on every retry would
                         # be pointless motion - and not while another pass is still running
@@ -633,6 +694,7 @@ def main():
                         # fires BEFORE the scheduled window closes) would see the pass still
                         # "in window" and relaunch it immediately
                         finished_passes.add(key)
+                        verify_pass_iq(sat_cfg, p, a.get("record_iq"), pass_t0.get(key, time.time()), notify_enabled)
                         del active[key]
                         if not active and not args.no_preposition:
                             preposition_for_next_pass(rot, passes, tles, sat_cfgs, ts, observer, now)
@@ -722,7 +784,14 @@ def main():
                         notify("Satellite pass starting", f"{sat_cfg['name']} - AOS")
                     cmd, record_iq_value = build_launch_command(
                         sat_cfg, p, args.record_iq, iq_capable, record_iq_ok)
-                    active[key] = {"pass": p, "proc": subprocess.Popen(cmd), "lane": lane_of(p)}
+                    if attempt == 1 and not precheck_pass(sat_cfg, p, record_iq_value, tles.get(p["norad"]),
+                                                          args.strict_precheck, notify_enabled):
+                        finished_passes.add(key)      # never launched: don't keep trying for the whole window
+                        log_pass_event("skipped", sat_cfg, p, reason="pre-pass check")
+                        continue
+                    pass_t0.setdefault(key, time.time())
+                    active[key] = {"pass": p, "proc": subprocess.Popen(cmd), "lane": lane_of(p),
+                                   "record_iq": record_iq_value}
                     log_pass_event("started", sat_cfg, p,
                                    record_iq=record_iq_value, attempt=attempt, **extras)
                     time.sleep(3)  # let the flowgraph come up before polling rigctld

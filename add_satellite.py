@@ -100,6 +100,11 @@ def main():
               f"at a time - a single SDR can't run two flowgraphs during the same "
               f"pass window.")
 
+    import satnogs_name
+    said = satnogs_name.problem(args.name, args.norad)
+    if said:
+        print(f"WARNING: {said}\n")
+
     slug = slugify(args.name)
     grc_path = f"flowgraphs/{slug}.grc"
 
