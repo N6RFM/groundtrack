@@ -204,7 +204,7 @@ def install_payload(repo):
     names = list(z.namelist())
     # never overwrite something with uncommitted edits of your own
     dirty = []
-    for n in names + ["update_computer.py"]:
+    for n in names:                       # (this script replaces its own copy, so that one is not checked)
         if os.path.exists(os.path.join(repo, n)):
             if run(["git", "ls-files", "--error-unmatch", n], repo, capture=True).returncode == 0 and \
                run(["git", "diff", "--quiet", "--", n], repo).returncode != 0:
@@ -217,8 +217,9 @@ def install_payload(repo):
         os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
         with open(dest, "wb") as f:
             f.write(z.read(n))
+    mine = strip_payload(open(os.path.abspath(__file__)).read())      # read first: this may be the very file written next
     with open(os.path.join(repo, "update_computer.py"), "w") as f:
-        f.write(strip_payload(open(os.path.abspath(__file__)).read()))
+        f.write(mine)
     names.append("update_computer.py")
     say(f"Installed {len(names)} files into {repo} (version {have} -> {PAYLOAD_VERSION}).")
     for n in names:

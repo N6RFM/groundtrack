@@ -275,6 +275,7 @@ specific fields you actually pass:
 ```
 python3 edit_satellite.py GEOSCAN-1 --freq 435970000
 python3 edit_satellite.py GEOSCAN-1 --enabled
+python3 edit_satellite.py GEOSCAN-1 --priority 5      # wins overlaps with lower-priority satellites on the same receiver
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 ```
 `--record-iq-toggle` is the one flag that also *reads* the satellite's

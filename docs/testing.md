@@ -98,3 +98,9 @@ satellite's `min_elev_deg` in `satellites.yaml` (e.g. to `0`), rerun
 `plan_passes.py --hours 2`, and you'll likely get a near-term low pass to
 watch trigger end-to-end. Remember to put the threshold back afterward.
 
+## Offline self-test for the pass-time checks
+
+`python3 test_passcheck.py` needs no radio, network or station files. It checks the before/after-pass checks
+(`passcheck.py`: frozen Record On Start, IQ folder, MISSING/SHORT/OK IQ files regardless of file name), the
+NORAD-versus-name matcher (`satnogs_name.py`) and the overlap `priority:` rule in `plan_passes.py`.
+`python3 ci_check.py` runs the repository-wide checks.

@@ -258,6 +258,13 @@ so reading only one station's list would silently drop the other's TLEs the
 next time it ran. It refuses, rather than guess, if two stations name different
 TLE files.
 
+## Two or more computers
+
+Stations are folders in the repository, so every computer gets all of them, but each only runs some. What differs
+per computer stays out of git: which stations run here (`computer.local.yaml`) and which SDR each station opens
+(`sdr.local.yaml` in the station folder). `python3 update_computer.py` sets both up - asking only when it
+can't tell - then pulls, checks and restarts the GUI. See [Scripts reference](scripts-reference.md).
+
 ## Safety checks
 
 - `preflight.py`, inside a station, also checks **nothing is shared with
