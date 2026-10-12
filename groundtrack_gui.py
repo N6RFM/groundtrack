@@ -347,6 +347,11 @@ class GroundtrackGUI(tk.Tk):
         ttk.Button(row1b, text="Delete selected",
                    command=self.delete_selected).pack(side="left")
 
+        row3 = ttk.LabelFrame(self.content, text="TLE data")
+        row3.pack(fill="x", padx=8, pady=4)
+        ttk.Button(row3, text="Run update_tle.py",
+                   command=self.run_update_tle).pack(side="left")
+
         row2 = ttk.LabelFrame(self.content, text="Checks and maintenance")
         row2.pack(fill="x", padx=8, pady=4)
         ttk.Button(row2, text="Run preflight.py (full check)",
@@ -355,11 +360,6 @@ class GroundtrackGUI(tk.Tk):
                    command=self.run_doctor).pack(side="left", padx=4)
         ttk.Button(row2, text="Run doctor.py --fix",
                    command=self.run_doctor_fix).pack(side="left")
-
-        row3 = ttk.LabelFrame(self.content, text="TLE data")
-        row3.pack(fill="x", padx=8, pady=4)
-        ttk.Button(row3, text="Run update_tle.py",
-                   command=self.run_update_tle).pack(side="left")
 
         row4 = ttk.LabelFrame(self.content, text="Pass scheduler")
         row4.pack(fill="x", padx=8, pady=4)
