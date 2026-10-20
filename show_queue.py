@@ -124,8 +124,11 @@ def main():
         if t[4].get("rides_with"):
             riders.setdefault(t[4]["rides_with"], []).append(t[2])
     any_pairs = bool(riders)
-    width = 99 + (30 if any_pairs else 0)
+    from passinfo import track_text
+    any_track = any(track_text(t[4]) for t in enriched)
+    width = 99 + (30 if any_pairs else 0) + (30 if any_track else 0)
     print(f"{'STATUS':13s} {'SATELLITE':12s} {'AOS':22s} {'LOS':22s} {'DUR':8s} {'MAX EL':7s} {'RECORD_IQ':10s}"
+          + (f" {'TRACK (rises > peaks > sets)':29s}" if any_track else "")
           + (" TOGETHER" if any_pairs else ""))
     print("-" * width)
 
@@ -157,7 +160,8 @@ def main():
             elif ref(raw) in riders:
                 together = f" steers beam, with {', '.join(riders[ref(raw)])}"
         print(f"{status:13s} {sat:12s} {fmt_dt(aos):22s} {fmt_dt(los):22s} "
-              f"{fmt_duration(aos, los):8s} {elev_str:7s} {iq_str:10s}{together}")
+              f"{fmt_duration(aos, los):8s} {elev_str:7s} {iq_str:10s}"
+              + (f" {track_text(raw):29s}" if any_track else "") + together)
 
     total = len(enriched)
     remaining = sum(1 for aos, los, *_ in enriched if aos and aos > now)

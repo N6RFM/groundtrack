@@ -43,9 +43,27 @@ def load_tles(cfg, wanted_norads):
     return pick(cfg, wanted_norads)
 
 
+from passinfo import compass, track_text   # noqa: E402  (shared with show_queue.py / run_passes.py)
+
+
+def pass_details(sat, observer, aos, tca, los):
+    """Informational facts about one pass, as plain numbers for schedule.yaml: the azimuth where it rises
+    (aos_az), where it peaks (max_az: the compass direction of closest approach) and where it sets
+    (los_az), plus `direction` - "ascending" when the satellite is heading north over the station,
+    "descending" when heading south. Nothing here affects scheduling or recording."""
+    az = lambda t: float((sat - observer).at(t).altaz()[1].degrees)
+    d = {"aos_az": round(az(aos)), "los_az": round(az(los))}
+    mid = tca if tca is not None else aos
+    d["max_az"] = round(az(tca)) if tca is not None else None
+    lat0 = sat.at(mid).subpoint().latitude.degrees
+    lat1 = sat.at(mid.ts.tt_jd(mid.tt + 30.0 / 86400.0)).subpoint().latitude.degrees
+    d["direction"] = "ascending" if lat1 > lat0 else "descending"
+    return d
+
+
 def find_passes(sat, observer, t0, t1, min_elev_deg):
-    """Yields (aos, los, max_elev_deg, horizon_aos, horizon_los) for every
-    pass of `sat` above min_elev_deg between t0 and t1.
+    """Yields (aos, los, max_elev_deg, horizon_aos, horizon_los, details) for every
+    pass of `sat` above min_elev_deg between t0 and t1. `details` is pass_details()'s dict.
 
     horizon_aos/horizon_los are the same pass's TRUE 0-degree horizon
     rise/set times -- purely informational, for comparing against tools
@@ -76,15 +94,17 @@ def find_passes(sat, observer, t0, t1, min_elev_deg):
 
     aos = None
     max_el = None
+    tca = None
     for t, ev in zip(times, events):
         if ev == 0:          # rise
-            aos, max_el = t, None
+            aos, max_el, tca = t, None, None
         elif ev == 1:        # culminate
             el, _, _ = (sat - observer).at(t).altaz()
             max_el = el.degrees
+            tca = t
         elif ev == 2 and aos is not None:  # set
             h_aos, h_los = enclosing_horizon(aos, t)
-            yield aos, t, max_el if max_el is not None else 0.0, h_aos, h_los
+            yield aos, t, max_el if max_el is not None else 0.0, h_aos, h_los, pass_details(sat, observer, aos, tca, t)
             aos = None
 
 
@@ -234,13 +254,14 @@ def main():
         sat = tles.get(norad)
         if sat is None:
             continue
-        for aos, los, max_el, h_aos, h_los in find_passes(sat, observer, t0, t1, sat_cfg["min_elev_deg"]):
+        for aos, los, max_el, h_aos, h_los, details in find_passes(sat, observer, t0, t1, sat_cfg["min_elev_deg"]):
             all_passes.append({
                 "name": sat_cfg["name"],
                 "norad": int(norad),
                 "aos": aos.utc_iso(),
                 "los": los.utc_iso(),
                 "max_elevation_deg": float(round(max_el, 1)),
+                **details,     # aos_az, max_az, los_az, direction - informational only
                 "approved": True,
                 # informational only (leading underscore) -- the true 0-degree
                 # horizon crossing for this same pass, for comparing against
@@ -256,17 +277,17 @@ def main():
     print(f"\n{len(all_passes)} pass(es) in the next {args.hours:.0f}h "
           f"above each satellite's min_elev_deg:\n")
     print(f"       {'AOS (threshold)':<22}{'LOS (threshold)':<22}{'':<14}"
-          f"{'max el':<10}{'AOS (0deg)':<22}{'LOS (0deg)':<22}")
+          f"{'max el':<10}{'AOS (0deg)':<22}{'LOS (0deg)':<22}{'track: rises > peaks > sets'}")
     for i, p in enumerate(all_passes):
         h_aos = p["_horizon_aos"] or "?"
         h_los = p["_horizon_los"] or "?"
         print(f"  [{i:2d}] {p['aos']:<22}{p['los']:<22}{p['name']:<14}"
-              f"{p['max_elevation_deg']:>5.1f} deg  {h_aos:<22}{h_los:<22}")
+              f"{p['max_elevation_deg']:>5.1f} deg  {h_aos:<22}{h_los:<22}{track_text(p)}")
 
     if args.interactive:
         for p in all_passes:
             ans = input(f"Record {p['name']} at {p['aos']} "
-                         f"(max el {p['max_elevation_deg']})? [Y/n] ").strip().lower()
+                         f"(max el {p['max_elevation_deg']}, {track_text(p) or 'no track info'})? [Y/n] ").strip().lower()
             p["approved"] = not ans.startswith("n")
 
     station_lane = cfg.get("rig_port")

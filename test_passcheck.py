@@ -99,5 +99,28 @@ b = mk("HIGH", 2, "2026-01-01T10:05:00Z", "2026-01-01T10:15:00Z")
 plan_passes.resolve_overlaps([a, b], False, lambda p: {1: 4531, 2: 4532}[p["norad"]], lambda p: {1: 0, 2: 5}[p["norad"]])
 expect("different receivers are never settled by priority", (a["approved"], b["approved"]), (True, True))
 
+# ---- pass details: direction, rise/peak/set compass (passinfo.py, plan_passes.pass_details) ----
+import passinfo
+expect("compass N", passinfo.compass(0), "N")
+expect("compass wraps", passinfo.compass(359), "N")
+expect("compass ESE", passinfo.compass(112), "ESE")
+expect("track text", passinfo.track_text({"direction": "ascending", "aos_az": 135, "max_az": 82, "los_az": 40}),
+       "ASC  SE 135 > E 82 > NE 40")
+expect("old schedule entries give no track text", passinfo.track_text({"norad": 1}), "")
+
+from skyfield.api import EarthSatellite, load, wgs84
+_ts = load.timescale()
+_iss = EarthSatellite("1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9990",
+                      "2 25544  51.6400 247.4627 0006703 130.5360 325.0288 15.50000000 99999", "ISS", _ts)
+_obs = wgs84.latlon(41.7167, -71.4281, 20)
+_n = _wrong = 0
+for _aos, _los, _mx, _ha, _hl, _d in plan_passes.find_passes(_iss, _obs, _ts.utc(2024, 1, 2), _ts.utc(2024, 1, 3), 10):
+    _n += 1
+    _lat = lambda t: _iss.at(t).subpoint().latitude.degrees
+    _wrong += _d["direction"] != ("ascending" if _lat(_los) > _lat(_aos) else "descending")
+    _wrong += not all(0 <= _d[k] <= 360 for k in ("aos_az", "max_az", "los_az"))
+expect("pass details: found passes", _n > 0, True)
+expect("pass details: direction matches the latitude change, azimuths in range", _wrong, 0)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

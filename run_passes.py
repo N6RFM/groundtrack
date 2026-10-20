@@ -28,6 +28,7 @@ import yaml
 import os
 import errno
 import json
+from passinfo import track_text
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load, wgs84, EarthSatellite
 
@@ -804,7 +805,8 @@ def main():
                     sat_cfg = sat_cfgs[nxt["norad"]]
                     status = (f"Next pass: {sat_cfg['name']} in "
                               f"{format_countdown(nxt['aos_dt'] - now)} "
-                              f"(AOS {nxt['aos']}, max el {nxt.get('max_elevation_deg', '?')} deg)")
+                              f"(AOS {nxt['aos']}, max el {nxt.get('max_elevation_deg', '?')} deg"
+                              + (f"; {track_text(nxt)}" if track_text(nxt) else "") + ")")
                 else:
                     status = "No further approved passes in schedule.yaml."
 

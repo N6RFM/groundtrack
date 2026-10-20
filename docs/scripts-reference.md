@@ -455,6 +455,14 @@ physical hardware limits surfaced as advance information instead of
 something noticed mid-pass. A flagged pass isn't blocked; it's still your
 call whether to approve it.
 
+**Pass details.** Each pass also records where it goes in the sky, as informational fields in `schedule.yaml`:
+`aos_az` (where it rises), `max_az` (the compass direction at its highest point, closest approach), `los_az` (where
+it sets) and `direction` - `ascending` when the satellite is heading north over you, `descending` when heading south.
+The planner prints them in a last column, e.g. `ASC  SE 135 > E 82 > NE 40` (rises south-east at 135 degrees, peaks in the
+east, sets north-east, heading north), `show_queue.py` shows the same column, and `run_passes.py`'s "Next pass" line
+ends with it. They never affect what is recorded. A schedule planned before this existed simply has no column until
+you plan again.
+
 **Overlaps and priority.** Two approved passes that overlap on the same receiver can't both record (no pre-emption). Give the one you care about more a higher `priority:` (default 0) and `plan_passes.py` keeps it and skips the other without asking:
 ```
 python3 edit_satellite.py JAMX01 --priority 5
