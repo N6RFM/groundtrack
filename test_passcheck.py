@@ -146,5 +146,48 @@ expect("status: log merged to one pass", len(_c), 1)
 expect("status: outcome and IQ result merged", (_c[0]["outcome"], _c[0]["iq"]), ("completed", "SHORT"))
 expect("status: old passes excluded", status.correlate_log(_lp, datetime.now(timezone.utc) - timedelta(minutes=30)), [])
 
+# --- schedule_sync.py: editing a satellite keeps the queue in step ---
+import schedule_sync
+import yaml as _y
+from tle_number import _checksum as _cs
+_cwd = os.getcwd()
+_sd = tempfile.mkdtemp()
+os.chdir(_sd)
+os.makedirs("tle")
+_now = datetime.now(timezone.utc)
+_l1 = "1 25544U 98067A   %02d%012.8f  .00016717  00000-0  10270-3 0  999" % (_now.year % 100, _now.timetuple().tm_yday + (_now.hour + _now.minute / 60) / 24)
+open("tle/a.txt", "w").write("ISS\n" + _l1 + _cs(_l1) + "\n2 25544  51.6400 247.4627 0006703 130.5360 325.0288 15.50000000 99999\n")
+_f = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+def _cfg(**iss):
+    _y.safe_dump({"ground_station": {"lat": 41.7, "lon": -71.4, "alt_m": 20}, "tle_file": "tle/a.txt", "rig_port": 4531,
+                  "satellites": [dict({"name": "ISS", "norad": 25544, "freq_hz": 1, "script": "x.py", "min_elev_deg": 10}, **iss),
+                                 {"name": "OTHER", "norad": 99999, "freq_hz": 1, "script": "y.py", "min_elev_deg": 10}]},
+                 open("satellites.yaml", "w"))
+def _sched():
+    return _y.safe_load(open("schedule.yaml"))["passes"]
+_keep = {"name": "OTHER", "norad": 99999, "aos": _f(_now + timedelta(hours=2)), "los": _f(_now + timedelta(hours=2, minutes=9)),
+         "max_elevation_deg": 40.0, "approved": True}
+_stale = {"name": "ISS", "norad": 11111, "aos": _f(_now + timedelta(hours=1)), "los": _f(_now + timedelta(hours=1, minutes=9)),
+          "max_elevation_deg": 30.0, "approved": True}
+_rider = dict(_keep, aos=_f(_now + timedelta(hours=5)), los=_f(_now + timedelta(hours=5, minutes=9)),
+              rides_with="11111@" + _stale["aos"])
+_cfg()
+expect("sync: no schedule.yaml, nothing to do", schedule_sync.sync({25544}), "")
+_y.safe_dump({"passes": [_stale, _keep, _rider]}, open("schedule.yaml", "w"), sort_keys=False)
+_msg = schedule_sync.sync({25544, 11111})
+_p = _sched()
+expect("sync: stale NORAD's passes removed", [x for x in _p if x["norad"] == 11111], [])
+expect("sync: the changed satellite's passes are planned", len([x for x in _p if x["norad"] == 25544]) > 0, True)
+expect("sync: new passes approved with track details", all(x["approved"] and "direction" in x for x in _p if x["norad"] == 25544), True)
+expect("sync: an unrelated satellite's pass is untouched", [x for x in _p if x["norad"] == 99999 and x["aos"] == _keep["aos"]], [_keep])
+expect("sync: a rider whose leader vanished is freed", [x.get("rides_with") for x in _p if x["norad"] == 99999 and x["aos"] == _rider["aos"]], [None])
+expect("sync: queue stays sorted", [x["aos"] for x in _p], sorted(x["aos"] for x in _p))
+expect("sync: reports what it did", "new pass" in _msg and "removed" in _msg, True)
+_cfg(enabled=False)
+schedule_sync.sync({25544})
+expect("sync: disabling a satellite drops its passes", [x for x in _sched() if x["norad"] == 25544], [])
+expect("sync: nothing to change gives no output", schedule_sync.sync({25544}), "")
+os.chdir(_cwd)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

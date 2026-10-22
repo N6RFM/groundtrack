@@ -278,6 +278,15 @@ python3 edit_satellite.py GEOSCAN-1 --enabled
 python3 edit_satellite.py GEOSCAN-1 --priority 5      # wins overlaps with lower-priority satellites on the same receiver
 python3 edit_satellite.py ASRTU-1_SSDV --record-iq-toggle
 ```
+**The queue follows the edit.** Changing a satellite's NORAD, its minimum elevation, or enabling or disabling it
+also updates `schedule.yaml` for you: passes that no longer apply are removed and the new ones are planned (over
+the stretch of time the queue already covers, at least 24 hours), approved as usual. Every other pass, its approval
+and any pairing stay exactly as they were. `toggle_satellite.py` and `delete_satellite.py` do the same. You never
+need to run `plan_passes.py` just to repair the queue after an edit; it is only for planning a fresh window. A
+change that does not affect passes (frequency, ports, extra outputs) leaves the schedule alone. If there is no
+`schedule.yaml` yet, nothing is written. If the new satellite has no TLE, the message says to run
+`update_tle.py` first. The logic lives in `schedule_sync.py`.
+
 `--record-iq-toggle` is the one flag that also *reads* the satellite's
 `.grc` (never writes it): it checks that the `.grc` is genuinely wired for
 the toggle - an Advanced File Sink whose Record On Start uses `record_iq`,

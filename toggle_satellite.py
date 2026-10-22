@@ -61,6 +61,10 @@ def main():
 
     print(f"{name}: {'enabled' if current else 'disabled'} -> "
           f"{'enabled' if target_state else 'disabled'}")
+    import schedule_sync
+    msg = schedule_sync.sync({match["norad"]})
+    if msg:
+        print(msg)
     if not target_state:
         print("Note: relay.py needs a restart to stop listening on its ports "
               "if it's currently running.")

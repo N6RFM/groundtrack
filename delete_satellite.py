@@ -61,9 +61,10 @@ def main():
         yaml.dump(cfg, f, sort_keys=False, default_flow_style=False)
 
     print(f"Removed {args.name} from {CONFIG_PATH}.")
-    print(f"Note: run plan_passes.py to drop any of its passes still sitting in "
-          f"schedule.yaml, since it fully regenerates that file from what's "
-          f"currently configured.")
+    import schedule_sync
+    msg = schedule_sync.sync(set())
+    if msg:
+        print(msg)
 
 
 if __name__ == "__main__":

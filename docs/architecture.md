@@ -170,6 +170,7 @@ groundtrack/
 ├── sdr_local.py             # this computer's SDR device strings (sdr.local.yaml, untracked) - used by new_record_only_satellite.py and preflight.py
 ├── set_sdr.py               # create/show that file: --from a working flowgraph, --set, --show
 ├── passcheck.py             # checks around each pass: pre-pass (compiled record, IQ folder, disk, TLE age) and post-pass IQ verify
+├── schedule_sync.py         # keeps schedule.yaml in step after a satellite is edited, toggled or deleted
 ├── status.py                # one-screen report per computer: next pass, recent recordings, problems (read-only)
 ├── passinfo.py              # words for where a pass goes: direction (ascending/descending) and rise > peak > set compass points
 ├── satnogs_name.py          # looks a NORAD number up in SatNOGS and compares the name (typo catcher)

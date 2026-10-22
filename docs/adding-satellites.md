@@ -332,10 +332,10 @@ python3 toggle_satellite.py --enable GEOSCAN-1
 A disabled satellite is invisible to `relay.py`, `run_passes.py`,
 `plan_passes.py`, and `preflight.py`'s live checks - as if it weren't in
 `satellites.yaml` at all - while its full config sits untouched, ready
-to re-enable with no reconfiguration. Re-run `plan_passes.py` after
-toggling anything, since it fully regenerates `schedule.yaml` from
-whatever's currently enabled - a disabled satellite's old approved
-passes simply won't be in the new file, nothing to prune by hand.
+to re-enable with no reconfiguration. Toggling (or editing the NORAD or minimum
+elevation, or deleting) updates `schedule.yaml` for you: a disabled satellite's passes
+are removed and a re-enabled one's are planned, with nothing to prune by hand and no
+need to run `plan_passes.py`.
 
 ## Satellite data
 

@@ -190,6 +190,7 @@ def main():
 
     changes = []
     grc_note_needed = False
+    schedule_norads = set()     # whose queued passes this edit invalidates (see schedule_sync.py)
 
     if args.norad is not None and args.norad != sat.get("norad"):
         others = [s for s in sats if s is not sat and s.get("norad") == args.norad]
@@ -207,6 +208,7 @@ def main():
                       f"and preflight will fail. Disable one: "
                       f"python3 edit_satellite.py <NAME> --disabled")
         changes.append(f"norad: {sat.get('norad')} -> {args.norad}")
+        schedule_norads.update({sat.get('norad'), args.norad})
         sat["norad"] = args.norad
         grc_note_needed = True
 
@@ -217,6 +219,7 @@ def main():
 
     if args.min_elev is not None and args.min_elev != sat.get("min_elev_deg"):
         changes.append(f"min_elev_deg: {sat.get('min_elev_deg')} -> {args.min_elev}")
+        schedule_norads.add(sat.get('norad'))
         sat["min_elev_deg"] = args.min_elev
 
     if args.priority is not None and args.priority != int(sat.get("priority", 0) or 0):
@@ -238,10 +241,12 @@ def main():
     if args.enabled:
         if sat.get("enabled", True) is not True:
             changes.append("enabled: false -> true")
+            schedule_norads.add(sat.get('norad'))
         sat["enabled"] = True
     elif args.disabled:
         if sat.get("enabled", True) is not False:
             changes.append("enabled: true -> false")
+            schedule_norads.add(sat.get('norad'))
         sat["enabled"] = False
 
     if args.record_iq_toggle:
@@ -312,6 +317,12 @@ def main():
     print(f"Updated {args.name} in {CONFIG_PATH}:")
     for c in changes:
         print(f"  {c}")
+
+    if schedule_norads:
+        import schedule_sync
+        msg = schedule_sync.sync(schedule_norads)
+        if msg:
+            print(f"\n{msg}")
 
     if grc_note_needed:
         print(f"\nNote: this only updates satellites.yaml, not the .grc. If the norad, "
