@@ -189,5 +189,33 @@ expect("sync: disabling a satellite drops its passes", [x for x in _sched() if x
 expect("sync: nothing to change gives no output", schedule_sync.sync({25544}), "")
 os.chdir(_cwd)
 
+# --- custom_tle_file mistakes are named, not silently skipped ---
+import tle_util
+_cp = os.path.join(_td, "custom_check.txt")
+_good = ("1 A0933U 26227BC  26294.33285765  .00002926  00000-0  14934-3 0  9999",
+         "2 A0933  97.4439   3.5146 0003668  96.4367 263.7284 15.17492450  2978")
+def _custom(name, l1, l2):
+    open(_cp, "w").write(f"{name}\n{l1}\n{l2}\n")
+    return tle_util.custom_problems(_cp, [("UTNH-Sat", 100993), ("OSSIE-D", 100933)])
+expect("custom: a correct entry for a configured satellite has no problems", _custom("OSSIE-D", *_good), [])
+_m = _custom("UTNH-Sat", *_good)
+expect("custom: name vs number mismatch is named (the swapped-digits case)", len(_m) == 1 and "UTNH-Sat is configured as 100993" in _m[0] and "swapped" in _m[0], True)
+_m = _custom("SOMETHING", *_good[:1], _good[1])
+expect("custom: matches nothing configured", _custom("OSSIE-D", *_good) == [] and
+       len(tle_util.custom_problems(_cp, [("OTHER", 5)])) == 1, True)
+_six1 = "1 100933U 26227BC  26294.33285765  .00002926  00000-0  14934-3 0  9999"
+_six2 = "2 100933  97.4439   3.5146 0003668  96.4367 263.7284 15.17492450  2978"
+_m = _custom("OSSIE-D", _six1, _six2)
+expect("custom: six-digit catalog number is explained", len(_m) == 1 and "six digits" in _m[0] and "A0933" in _m[0], True)
+_f1, _f2 = tle_util.fix_six_digit(_six1, _six2)
+expect("custom: six-digit lines are repaired to Alpha-5 with good checksums", (_f1, _f2), _good)
+open(_cp, "w").write(f"OSSIE-D\n{_six1}\n{_six2}\n")
+expect("custom: read_tles now reads six-digit lines correctly",
+       list(tle_util.read_tles(_cp, {100933}, load.timescale())), [100933])
+_m = _custom("OSSIE-D", _good[0][:-1] + "0", _good[1])
+expect("custom: bad checksum is named", any("checksum" in x for x in _m), True)
+_m = _custom("OSSIE-D", _good[0].replace("  ", " "), _good[1])
+expect("custom: lost spaces are named", any("characters" in x for x in _m), True)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

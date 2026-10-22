@@ -252,6 +252,12 @@ def main():
     print(f"\nWrote {tle_path} ({total_found} satellite(s) total).")
     print(f"  {len(found_via_satnogs)} via SatNOGS, {len(found_via_celestrak)} via "
           f"Celestrak fallback.")
+    if custom_tle_path and os.path.exists(custom_tle_path):
+        from tle_util import custom_problems
+        for msg in custom_problems(custom_tle_path, [(s.get("name", "?"), s["norad"]) for s in satellites
+                                                     if s.get("norad") is not None]):
+            print(f"\nWARNING: custom_tle_file: {msg}")
+
     if still_missing:
         # a satellite not yet in either public source may already have a
         # hand-maintained entry in custom_tle_file - that's the intended

@@ -175,6 +175,15 @@ def static_checks(cfg_path):
         except Exception:
             custom_info = {}
 
+    if custom_tle_exists:
+        try:
+            from tle_util import custom_problems
+            for msg in custom_problems(custom_tle_path, [(s.get("name", "?"), s["norad"]) for s in sats
+                                                         if s.get("norad") is not None]):
+                check(f"custom_tle_file: {msg}", False, level=WARN)
+        except Exception:
+            pass
+
     for sat in sats:
         name = sat.get("name", "<unnamed>")
         if not sat.get("enabled", True):

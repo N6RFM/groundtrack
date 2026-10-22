@@ -464,6 +464,8 @@ physical hardware limits surfaced as advance information instead of
 something noticed mid-pass. A flagged pass isn't blocked; it's still your
 call whether to approve it.
 
+**Local time.** Times in `schedule.yaml` and in the listings are UTC (they are the same on every computer). The plan listing, `show_queue.py` and `run_passes.py`'s "Next pass" line also show the AOS on this computer's own clock, for example `Thu 22:16`, so there is nothing to convert when comparing with GPredict or a clock. `status.py` already did.
+
 **Pass details.** Each pass also records where it goes in the sky, as informational fields in `schedule.yaml`:
 `aos_az` (where it rises), `max_az` (the compass direction at its highest point, closest approach), `los_az` (where
 it sets) and `direction` - `ascending` when the satellite is heading north over you, `descending` when heading south.
@@ -796,8 +798,25 @@ the plain number (`norad: 100470`). `tle_number.py` does the decoding for
 `update_tle.py`, `preflight.py` and the station code; Skyfield (sgp4 2.23+)
 decodes it for pass planning. For these objects `update_tle.py`'s Celestrak fallback asks for OMM/JSON
 (the only form Celestrak has) and converts it to an `A0470`-style TLE itself. If a satellite shows as missing from a TLE file
-that clearly has it, check that the TLE's line 1 starts `1 A0470U` (not a
-six-digit number, which isn't a valid TLE).
+that clearly has it, check that the TLE's line 1 starts `1 A0470U` (a six-digit number is read as the Alpha-5 form, but the file is best tidied).
+
+## Mistakes in custom_tle_file are named, not skipped
+
+A custom entry is matched to a satellite **only by the catalog number inside TLE line 1**, never by the name line
+above it, and the number has to equal the satellite's `norad:` in that station's `satellites.yaml`. Before, an entry
+that did not match (a digit typo, a six-digit number, lost spaces) was simply skipped with no message. Now
+`plan_passes.py`, `run_passes.py`, `update_tle.py` and `preflight.py` (as a warning) say what is wrong, for example:
+
+```
+WARNING: custom_tle_file: entry 'UTNH-Sat' has catalog number 100933 (A0933), but UTNH-Sat is configured as
+100993 - the name is never compared, only the number. One of the two is wrong (check for swapped digits);
+UTNH-Sat will not use this entry
+```
+It names: a number that matches no satellite configured here, a name whose number disagrees with the configured one
+(the swapped-digits case), a line that is not 69 characters long (spaces lost in copying), a failed checksum, and
+lines that do not follow the name / `1 ` / `2 ` layout. A catalog number written with six digits (`100933`) is now
+read correctly as `A0933`, and the warning tells you what to write to tidy the file. `update_tle.py` judges entries
+against every station's satellites together, because the TLE file is shared.
 
 ## tle_util.py
 
