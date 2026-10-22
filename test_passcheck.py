@@ -6,6 +6,7 @@ overlap priority rule (plan_passes.resolve_overlaps). Touches no radio, network 
     python3 test_passcheck.py
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -121,6 +122,29 @@ for _aos, _los, _mx, _ha, _hl, _d in plan_passes.find_passes(_iss, _obs, _ts.utc
     _wrong += not all(0 <= _d[k] <= 360 for k in ("aos_az", "max_az", "los_az"))
 expect("pass details: found passes", _n > 0, True)
 expect("pass details: direction matches the latitude change, azimuths in range", _wrong, 0)
+
+# --- status.py ---
+import status
+from datetime import datetime, timedelta, timezone
+expect("status: human 25 min", status.human(timedelta(minutes=25)), "25m")
+expect("status: human 3h05", status.human(timedelta(hours=3, minutes=5)), "3h 05m")
+expect("status: human 2 days", status.human(timedelta(days=2, hours=4)), "2d 4h")
+_td = tempfile.mkdtemp()
+_tp = os.path.join(_td, "t.txt")
+open(_tp, "w").write("ISS\n1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9990\n2 25544  51.6400 247.4627 0006703 130.5360 325.0288 15.50000000 99999\n")
+_ep = status.tle_epochs(_tp)
+expect("status: TLE epoch read", _ep.get(25544), datetime(2024, 1, 1, 12, tzinfo=timezone.utc))
+expect("status: unreadable TLE file gives {}", status.tle_epochs(os.path.join(_td, "none")), {})
+_lp = os.path.join(_td, "log.jsonl")
+_a = datetime.now(timezone.utc) - timedelta(hours=2)
+with open(_lp, "w") as _f:
+    for _e, _x in (("started", {}), ("completed", {}), ("iq_check", {"status": "SHORT", "note": "tiny"})):
+        _f.write(json.dumps({"event": _e, "satellite": "S", "norad": 1, "aos": _a.isoformat(),
+                             "los": (_a + timedelta(minutes=8)).isoformat(), "timestamp": _a.isoformat(), **_x}) + "\n")
+_c = status.correlate_log(_lp, datetime.now(timezone.utc) - timedelta(hours=24))
+expect("status: log merged to one pass", len(_c), 1)
+expect("status: outcome and IQ result merged", (_c[0]["outcome"], _c[0]["iq"]), ("completed", "SHORT"))
+expect("status: old passes excluded", status.correlate_log(_lp, datetime.now(timezone.utc) - timedelta(minutes=30)), [])
 
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

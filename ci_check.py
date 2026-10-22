@@ -54,6 +54,7 @@ STATION_EXEMPT = {
     "lanes.py": "a library: works on whatever passes and config it is handed",
     "update_computer.py": "runs from the project root and visits each station folder itself",
     "sdr_local.py": "a library: reads sdr.local.yaml from the current (already chosen) station folder",
+    "status.py": "reads every station on this computer itself (like update_computer.py), changing nothing",
     "passinfo.py": "a library: formats pass details already read from a schedule.yaml it is handed",
     "passcheck.py": "a library: works on the satellite config and flowgraph it is handed",
 }

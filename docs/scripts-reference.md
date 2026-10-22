@@ -836,6 +836,24 @@ compared with the name; a mismatch or an unknown number prints a warning with Sa
 anything and is silent when offline. Answers are cached for 30 days in `.satnogs_names.json` (not committed).
 `preflight.py` also warns when a flowgraph's IQ `basefile` looks nothing like its satellite (a template leftover or a typo).
 
+## status.py - one screen for "what's next, what recorded, is anything wrong"
+
+```
+python3 status.py                 # every station that runs on this computer
+python3 status.py --radio helix   # one station
+python3 status.py --hours 48      # look further back than the default 24 hours
+python3 status.py --radios        # also look for the SDRs on USB (a few seconds)
+```
+For each station it shows whether `run_passes.py` is running, the next pass (countdown, local time, the
+rise > peak > set track), how many approved passes are queued, the passes of the last 24 hours with their
+IQ result, the TLE age and the free space in the IQ folder - then a **PROBLEMS** list, or "all clear".
+It reports a problem when nothing is queued (or the queue ends within 3 hours), when a pass is within an hour but
+`run_passes.py` is not running, when a recent pass crashed or its IQ file is MISSING or SHORT, when a TLE is over
+14 days old, when the IQ disk is nearly full, or when a compiled flowgraph has Record On Start frozen to False.
+It only reads files and never changes anything, so it is safe while `run_passes.py` is tracking; it exits 1 on a
+problem and 0 otherwise. Which stations count as "on this computer" comes from `computer.local.yaml` (see
+`update_computer.py`); with none saved it reports all of them. Each computer reports only itself - run it on both.
+
 ## update_computer.py - bring any computer up to date
 
 For a repository used from more than one computer (or just to avoid the checklist):

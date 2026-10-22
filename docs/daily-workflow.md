@@ -6,6 +6,9 @@
 > `--radio NAME` on any command, the GUI's station switch, or you'll be asked.
 > See [Stations](stations.md).
 
+> **Quick look:** `python3 status.py` is one screen for this computer - what is next, what recorded
+> recently, and anything wrong. See [Scripts reference](scripts-reference.md#statuspy---one-screen-for-whats-next-what-recorded-is-anything-wrong).
+
 ## Preflight checks (run this before every session)
 
 `preflight.py` catches exactly the class of bugs we've hit already - typos
