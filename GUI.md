@@ -158,6 +158,11 @@ emulator like `gnome-terminal` can silently start in the wrong directory
 and close instantly the moment the command inside it exits, hiding any
 real error before you can read it.
 
+**Colours and title.** These windows are set to white on black and titled with the script and station (for
+example `groundtrack: run_passes.py [helix]`), using the standard xterm escape sequences that every terminal
+program listed above understands, so they look the same whatever colour scheme the terminal's own default profile
+uses. To change them, edit `TERMINAL_BG` and `TERMINAL_FG` near the top of `groundtrack_gui.py`.
+
 **The GUI has no idea what state these are in once launched.** It
 doesn't know if `relay.py` is still running, crashed, or was closed -
 that's a real limitation of the detached-process approach, traded

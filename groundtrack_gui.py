@@ -95,6 +95,13 @@ def gap_check(sat):
     return problems
 
 
+# Colours of the windows this GUI opens for relay.py / run_passes.py / the interactive tools. Set explicitly
+# (white on black, like a plain console) so they look the same whichever terminal program is installed and
+# whatever colour scheme its default profile happens to have. Edit these two lines to change them.
+TERMINAL_BG = "#000000"
+TERMINAL_FG = "#ffffff"
+
+
 def find_terminal():
     """Return the first available terminal emulator's launch command
     prefix, or None if none of the common ones are installed."""
@@ -710,8 +717,14 @@ class GroundtrackGUI(tk.Tk):
         # working directory (the same reason for the explicit cd below).
         env_line = (f"export GROUNDTRACK_STATION={shlex.quote(self.current_station)}; "
                     if self.current_station else "")
+        # Colours and a title, set with the standard xterm escape sequences, which gnome-terminal, xfce4-terminal,
+        # konsole and xterm all honour: foreground, background, cursor, then the window title.
+        script = os.path.basename(str(cmd[1])) if len(cmd) > 1 else os.path.basename(str(cmd[0]))
+        title = f"groundtrack: {script}" + (f" [{self.current_station}]" if self.current_station else "")
+        look = (f"printf '\\033]10;{TERMINAL_FG}\\007\\033]11;{TERMINAL_BG}\\007"
+                f"\\033]12;{TERMINAL_FG}\\007\\033]0;%s\\007' {shlex.quote(title)}; ")
         shell_line = (
-            f"{env_line}cd {shlex.quote(self.repo_root)} && {quoted_cmd}; "
+            f"{look}{env_line}cd {shlex.quote(self.repo_root)} && {quoted_cmd}; "
             f"echo; echo '--- process exited (see above for any error) ---'; "
             f"echo 'Press Ctrl-C or close this window to dismiss.'; "
             f"sleep infinity"
