@@ -21,7 +21,8 @@ says which satellites take their TLE from your `custom_tle_file` (and how old it
 and - with several radios - warns when one NORAD is used for different satellites. It also checks that each compiled flowgraph really passes `--record-iq` through to the recorder (a frozen `False` records nothing - see [Troubleshooting](troubleshooting.md)).
 
 ```
-python3 preflight.py
+python3 preflight.py             # shows only warnings and failures, then the totals
+python3 preflight.py --verbose   # also lists every check that passed
 ```
 
 Run this after any edit to `satellites.yaml` or any `.grc`, and as a habit

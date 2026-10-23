@@ -35,6 +35,27 @@ PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 results = []
 
 
+VERBOSE = False
+_pending = {}          # headings waiting to be shown: only printed once something under them needs attention
+
+
+def heading(text, level="section"):
+    """A section or per-satellite heading. With --verbose it prints at once; otherwise it is held back and
+    shown only if a warning or failure turns up beneath it, so a clean run is a few lines, not two hundred."""
+    if VERBOSE:
+        print(text)
+        return
+    if level == "section":
+        _pending.clear()
+    _pending[level] = text
+
+
+def _flush_headings():
+    for level in ("section", "sub"):
+        if level in _pending:
+            print(_pending.pop(level))
+
+
 def check(name, ok, detail="", level=None):
     status = level or (PASS if ok else FAIL)
     results.append((status, name, detail))
@@ -42,6 +63,9 @@ def check(name, ok, detail="", level=None):
     line = f"[{marker}] {name}"
     if detail:
         line += f" - {detail}"
+    if status == PASS and not VERBOSE:
+        return ok
+    _flush_headings()
     print(line)
     return ok
 
@@ -54,7 +78,7 @@ _satnogs_offline = False     # set once a SatNOGS lookup fails, so an offline ru
 
 
 def static_checks(cfg_path):
-    print("=== Static config checks ===")
+    heading("=== Static config checks ===")
     if not check("satellites.yaml exists", os.path.exists(cfg_path)):
         return None
     try:
@@ -187,9 +211,9 @@ def static_checks(cfg_path):
     for sat in sats:
         name = sat.get("name", "<unnamed>")
         if not sat.get("enabled", True):
-            print(f"--- {name} (disabled - skipping) ---")
+            heading(f"--- {name} (disabled - skipping) ---", "sub")
             continue
-        print(f"--- {name} ---")
+        heading(f"--- {name} ---", "sub")
 
         for field in ("norad", "freq_hz", "script", "min_elev_deg"):
             check(f"{name}.{field} present", field in sat)
@@ -595,15 +619,15 @@ def check_extra_outputs(name, blocks, sat):
 
 
 def live_check(cfg, only=None, duration=8):
-    print("\n=== Live checks (launches real flowgraphs briefly) ===")
+    heading("\n=== Live checks (launches real flowgraphs briefly) ===")
     for sat in cfg["satellites"]:
         if only and sat["name"] != only:
             continue
         name = sat["name"]
         if not sat.get("enabled", True):
-            print(f"--- {name} (disabled - skipping) ---")
+            heading(f"--- {name} (disabled - skipping) ---", "sub")
             continue
-        print(f"--- {name} live test ---")
+        heading(f"--- {name} live test ---", "sub")
 
         uses_relay = "producer_port" in sat or "consumer_port" in sat
 
@@ -694,12 +718,16 @@ def main():
     import station
     station.enter()
     ap = argparse.ArgumentParser()
+    ap.add_argument("--verbose", "-v", action="store_true",
+                     help="show every check that passed too (by default only warnings and failures are shown)")
     ap.add_argument("--live", action="store_true",
                      help="also briefly launch each flowgraph (uses real SDR hardware)")
     ap.add_argument("--only", help="with --live, test only this satellite name")
     ap.add_argument("--duration", type=int, default=8,
                      help="seconds to wait for the relay connection in --live mode")
     args = ap.parse_args()
+    global VERBOSE
+    VERBOSE = args.verbose
 
     # Runs unconditionally, not just under doctor.py --fix: a stray compile
     # (grcc writes to cwd, not the .grc's own folder - see doctor.py for the
@@ -714,7 +742,7 @@ def main():
     cfg = static_checks(CONFIG_PATH)
 
     if os.path.exists(SCHEDULE_PATH) and cfg:
-        print("\n=== schedule.yaml checks ===")
+        heading("\n=== schedule.yaml checks ===")
         try:
             with open(SCHEDULE_PATH) as f:
                 sched = yaml.safe_load(f)
@@ -752,6 +780,8 @@ def main():
     n_warn = sum(1 for s, _, _ in results if s == WARN)
     n_pass = sum(1 for s, _, _ in results if s == PASS)
     print(f"\n{n_pass} passed, {n_warn} warnings, {n_fail} failed.")
+    if not VERBOSE and n_pass:
+        print("(Only warnings and failures are listed above. Add --verbose to see every check that passed.)")
     print("Preflight finished.")
     sys.stdout.flush()
     sys.exit(1 if n_fail else 0)
