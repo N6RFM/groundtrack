@@ -375,8 +375,10 @@ class GroundtrackGUI(tk.Tk):
                    command=self.show_schedule).pack(side="left")
         ttk.Button(row4, text="Plan passes (auto-approve)",
                    command=self.plan_passes_auto).pack(side="left", padx=4)
+        ttk.Button(row4, text="Plan passes (ask about overlaps, new window)",
+                   command=self.plan_passes_ask_overlaps).pack(side="left")
         ttk.Button(row4, text="Plan passes (interactive, new window)",
-                   command=self.plan_passes_interactive).pack(side="left")
+                   command=self.plan_passes_interactive).pack(side="left", padx=4)
         ttk.Button(row4, text="Pair overlapping passes (new window)",
                    command=self.pair_passes).pack(side="left", padx=(8, 0))
         ttk.Button(row4, text="Toggle IQ for pass (new window)",
@@ -815,6 +817,19 @@ class GroundtrackGUI(tk.Tk):
         """Record two satellites at once: pair overlapping passes that are on different receivers,
         and say whose TLE steers the beam. Interactive, so it gets its own terminal."""
         self.spawn_in_terminal([sys.executable, station.script_path("pair_passes.py")])
+
+    def plan_passes_ask_overlaps(self):
+        """Every pass approved, and a question only where two passes on the same receiver overlap and
+        priority hasn't settled it - which needs a real terminal, like the other interactive tools."""
+        hours = simpledialog.askinteger(
+            "Plan passes (ask about overlaps)", "Hours ahead to predict:",
+            initialvalue=24, minvalue=1)
+        if not hours:
+            return
+        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--ask-overlaps"]
+        if self.spawn_in_terminal(cmd):
+            self.log(self.output.get("1.0", tk.END) +
+                     "\nAnswer the overlap questions there, then use 'Show schedule' here once you're done.")
 
     def plan_passes_interactive(self):
         """--interactive prompts y/n per pass on stdin - same reasoning

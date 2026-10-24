@@ -452,6 +452,7 @@ anything to actually execute:
 python3 plan_passes.py
 python3 plan_passes.py --hours 48
 python3 plan_passes.py --interactive   # prompt y/n per pass instead of approving all
+python3 plan_passes.py --ask-overlaps  # approve every pass; ask only where two passes overlap and priority hasn't decided
 python3 plan_passes.py --add-satellite # interactively append a new satellite, then exit
 ```
 Each pass's listing includes its peak angular rate (`peak deg/s`) - the
@@ -479,6 +480,8 @@ you plan again.
 python3 edit_satellite.py JAMX01 --priority 5
 ```
 **Changing priorities.** Priority is per satellite, and the higher number wins any overlap on the same receiver. Any whole numbers work, so you can rank several (`--priority 9` over `--priority 5` over the default 0), and `--priority 0` removes it. Changing one re-decides the overlaps already in the queue straight away (it says which passes are now skipped and which are recorded again); nothing is recomputed and unrelated passes are untouched. Passes you have paired are left alone. Priority is the same for every pass of a satellite; to prefer a different one for just one pass, set that pass's `approved: false` in `schedule.yaml` by hand, or use `plan_passes.py --interactive`, which asks about every overlap that priority has not settled.
+
+**To be asked each time instead:** leave every satellite at the default priority 0 (`--priority 0` removes one) and plan with `python3 plan_passes.py --ask-overlaps` (the GUI's "Plan passes (ask about overlaps)" button). Every pass is approved, and you are asked only about each overlap on the same receiver, with no per-pass questions. The automatic updates after editing, enabling or disabling a satellite cannot ask, so an overlap they find at equal priority stays recorded as both with a warning; run the ask-about-overlaps plan to settle it.
 
 Equal priorities behave as before (a warning, or the `--interactive` question). Overlaps between different receivers are never settled by priority - both can be recorded.
 

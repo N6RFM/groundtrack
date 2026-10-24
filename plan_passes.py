@@ -22,6 +22,14 @@ CONFIG_PATH = "satellites.yaml"
 SCHEDULE_PATH = "schedule.yaml"
 
 
+def local_text(iso):
+    """A UTC schedule time as this computer's own clock, 'Thu 22:16', for the listing."""
+    try:
+        return parse_iso(iso).astimezone().strftime("%a %H:%M")
+    except (ValueError, TypeError):
+        return "?"
+
+
 def parse_iso(s):
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
@@ -226,6 +234,9 @@ def main():
                      help="lookahead window in hours (default 24)")
     ap.add_argument("--interactive", action="store_true",
                      help="prompt y/n for each pass instead of approving all")
+    ap.add_argument("--ask-overlaps", action="store_true",
+                     help="approve every pass, but ask which to keep for each overlap that priority hasn't "
+                          "settled (without asking about every pass, as --interactive does)")
     ap.add_argument("--add-satellite", action="store_true",
                      help="interactively append a new satellite to satellites.yaml and exit")
     args = ap.parse_args()
@@ -277,12 +288,12 @@ def main():
     print(f"\n{len(all_passes)} pass(es) in the next {args.hours:.0f}h "
           f"above each satellite's min_elev_deg:\n")
     print(f"       {'AOS (threshold)':<22}{'LOS (threshold)':<22}{'':<14}"
-          f"{'max el':<10}{'AOS (0deg)':<22}{'LOS (0deg)':<22}{'track: rises > peaks > sets'}")
+          f"{'max el':<10}{'AOS (0deg)':<22}{'LOS (0deg)':<22}{'local AOS':<14}{'track: rises > peaks > sets'}")
     for i, p in enumerate(all_passes):
         h_aos = p["_horizon_aos"] or "?"
         h_los = p["_horizon_los"] or "?"
         print(f"  [{i:2d}] {p['aos']:<22}{p['los']:<22}{p['name']:<14}"
-              f"{p['max_elevation_deg']:>5.1f} deg  {h_aos:<22}{h_los:<22}{track_text(p)}")
+              f"{p['max_elevation_deg']:>5.1f} deg  {h_aos:<22}{h_los:<22}{local_text(p['aos']):<14}{track_text(p)}")
 
     if args.interactive:
         for p in all_passes:
@@ -293,7 +304,7 @@ def main():
     station_lane = cfg.get("rig_port")
     sat_lane = {norad: lanes.doppler_port(c, station_lane) for norad, c in sat_cfgs.items()}
     prio = {norad: int(c.get("priority", 0) or 0) for norad, c in sat_cfgs.items()}
-    resolve_overlaps(all_passes, args.interactive, lambda p: sat_lane.get(p["norad"], station_lane),
+    resolve_overlaps(all_passes, args.interactive or args.ask_overlaps, lambda p: sat_lane.get(p["norad"], station_lane),
                      lambda p: prio.get(p["norad"], 0))
 
     # strip the informational (leading-underscore) horizon fields before
