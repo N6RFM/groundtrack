@@ -329,72 +329,72 @@ class GroundtrackGUI(tk.Tk):
 
         row1a = ttk.Frame(row1)
         row1a.pack(fill="x", pady=(2, 2))
-        ttk.Button(row1a, text="Refresh", command=self.refresh).pack(side="left")
+        ttk.Button(row1a, text="Refresh", command=self.refresh).pack(side="left", padx=(0, 6))
         ttk.Button(row1a, text="Add satellite...",
-                   command=self.add_satellite_dialog).pack(side="left", padx=4)
+                   command=self.add_satellite_dialog).pack(side="left", padx=(0, 6))
         ttk.Button(row1a, text="Edit selected",
-                   command=self.edit_satellite_dialog).pack(side="left")
+                   command=self.edit_satellite_dialog).pack(side="left", padx=(0, 6))
         ttk.Button(row1a, text="View YAML for selected",
-                   command=self.view_yaml_selected).pack(side="left", padx=4)
+                   command=self.view_yaml_selected).pack(side="left", padx=(0, 6))
         ttk.Button(row1a, text="Enable selected",
-                   command=lambda: self.toggle(True)).pack(side="left", padx=4)
+                   command=lambda: self.toggle(True)).pack(side="left", padx=(0, 6))
         ttk.Button(row1a, text="Disable selected",
-                   command=lambda: self.toggle(False)).pack(side="left")
+                   command=lambda: self.toggle(False)).pack(side="left", padx=(0, 6))
 
         row1b = ttk.Frame(row1)
         row1b.pack(fill="x", pady=(2, 2))
         ttk.Button(row1b, text="Regenerate .grc for selected",
-                   command=self.regen_selected).pack(side="left")
+                   command=self.regen_selected).pack(side="left", padx=(0, 6))
         ttk.Button(row1b, text="Vet selected .grc",
-                   command=self.vet_selected).pack(side="left", padx=4)
+                   command=self.vet_selected).pack(side="left", padx=(0, 6))
         ttk.Button(row1b, text="Vet --fix selected .grc",
-                   command=self.vet_fix_selected).pack(side="left")
+                   command=self.vet_fix_selected).pack(side="left", padx=(0, 6))
         ttk.Button(row1b, text="Suggest extra_outputs (new window)",
-                   command=self.suggest_extra_outputs_selected).pack(side="left", padx=4)
+                   command=self.suggest_extra_outputs_selected).pack(side="left", padx=(0, 6))
         ttk.Separator(row1b, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Button(row1b, text="Delete selected",
-                   command=self.delete_selected).pack(side="left")
+                   command=self.delete_selected).pack(side="left", padx=(0, 6))
 
         row3 = ttk.LabelFrame(self.content, text="TLE data")
         row3.pack(fill="x", padx=8, pady=4)
         ttk.Button(row3, text="Run update_tle.py",
-                   command=self.run_update_tle).pack(side="left")
+                   command=self.run_update_tle).pack(side="left", padx=(0, 6))
 
         row2 = ttk.LabelFrame(self.content, text="Checks and maintenance")
         row2.pack(fill="x", padx=8, pady=4)
         ttk.Button(row2, text="Run preflight.py (full check)",
-                   command=self.run_preflight).pack(side="left")
+                   command=self.run_preflight).pack(side="left", padx=(0, 6))
         ttk.Button(row2, text="Run doctor.py",
-                   command=self.run_doctor).pack(side="left", padx=4)
+                   command=self.run_doctor).pack(side="left", padx=(0, 6))
         ttk.Button(row2, text="Run doctor.py --fix",
-                   command=self.run_doctor_fix).pack(side="left")
+                   command=self.run_doctor_fix).pack(side="left", padx=(0, 6))
 
         row4 = ttk.LabelFrame(self.content, text="Pass scheduler")
         row4.pack(fill="x", padx=8, pady=4)
         ttk.Button(row4, text="Show schedule",
-                   command=self.show_schedule).pack(side="left")
+                   command=self.show_schedule).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Plan passes (auto-approve)",
-                   command=self.plan_passes_auto).pack(side="left", padx=4)
+                   command=self.plan_passes_auto).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Plan passes (ask about overlaps, new window)",
-                   command=self.plan_passes_ask_overlaps).pack(side="left")
+                   command=self.plan_passes_ask_overlaps).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Pair overlapping passes (new window)",
-                   command=self.pair_passes).pack(side="left", padx=4)
+                   command=self.pair_passes).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Toggle IQ for pass (new window)",
-                   command=self.toggle_pass_record_iq).pack(side="left", padx=4)
+                   command=self.toggle_pass_record_iq).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Show pass log",
-                   command=self.show_pass_log).pack(side="left")
+                   command=self.show_pass_log).pack(side="left", padx=(0, 6))
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
         ttk.Button(row5, text="Start relay.py (new window, verbose)",
-                   command=self.start_relay).pack(side="left")
+                   command=self.start_relay).pack(side="left", padx=(0, 6))
         ttk.Button(row5, text="Start tcp_bridge.py (new window, verbose)",
-                   command=self.start_tcp_bridge).pack(side="left", padx=4)
+                   command=self.start_tcp_bridge).pack(side="left", padx=(0, 6))
 
         row6 = ttk.LabelFrame(self.content, text="Execution")
         row6.pack(fill="x", padx=8, pady=(4, 8))
         ttk.Button(row6, text="Start run_passes.py (new window)",
-                   command=self.start_run_passes).pack(side="left")
+                   command=self.start_run_passes).pack(side="left", padx=(0, 6))
         self.preposition_var = tk.BooleanVar(value=True)
         self.preposition_check = ttk.Checkbutton(row6, text=self.PREPOSITION_TEXT,
                                                   variable=self.preposition_var)
