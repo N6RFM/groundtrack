@@ -200,6 +200,7 @@ def main():
     changes = []
     grc_note_needed = False
     schedule_norads = set()     # whose queued passes this edit invalidates (see schedule_sync.py)
+    priority_changed = False
 
     if args.norad is not None and args.norad != sat.get("norad"):
         others = [s for s in sats if s is not sat and s.get("norad") == args.norad]
@@ -233,6 +234,7 @@ def main():
 
     if args.priority is not None and args.priority != int(sat.get("priority", 0) or 0):
         changes.append(f"priority: {sat.get('priority', 0)} -> {args.priority}")
+        priority_changed = True
         if args.priority == 0:
             sat.pop("priority", None)
         else:
@@ -330,6 +332,11 @@ def main():
     if schedule_norads:
         import schedule_sync
         msg = schedule_sync.sync(schedule_norads)
+        if msg:
+            print(f"\n{msg}")
+    if priority_changed and sat.get("norad") not in schedule_norads:
+        import schedule_sync
+        msg = schedule_sync.sync_priority(sat.get("norad"))
         if msg:
             print(f"\n{msg}")
 

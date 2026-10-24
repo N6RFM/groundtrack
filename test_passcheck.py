@@ -187,6 +187,35 @@ _cfg(enabled=False)
 schedule_sync.sync({25544})
 expect("sync: disabling a satellite drops its passes", [x for x in _sched() if x["norad"] == 25544], [])
 expect("sync: nothing to change gives no output", schedule_sync.sync({25544}), "")
+
+# --- changing a priority re-decides the overlaps already in the queue ---
+_cfg()
+_y.safe_dump({"ground_station": {"lat": 41.7, "lon": -71.4, "alt_m": 20}, "tle_file": "tle/a.txt", "rig_port": 4531,
+              "satellites": [{"name": "A", "norad": 1, "freq_hz": 1, "script": "x.py", "min_elev_deg": 10, "priority": 5},
+                             {"name": "B", "norad": 2, "freq_hz": 1, "script": "y.py", "min_elev_deg": 10},
+                             {"name": "C", "norad": 3, "freq_hz": 1, "script": "z.py", "min_elev_deg": 10}]},
+             open("satellites.yaml", "w"))
+_t = lambda m: _f(_now + timedelta(minutes=m))
+_pa = {"name": "A", "norad": 1, "aos": _t(60), "los": _t(70), "max_elevation_deg": 30.0, "approved": True}
+_pb = {"name": "B", "norad": 2, "aos": _t(62), "los": _t(72), "max_elevation_deg": 30.0, "approved": False}   # kept out by A
+_pc = {"name": "C", "norad": 3, "aos": _t(200), "los": _t(210), "max_elevation_deg": 30.0, "approved": True}
+_y.safe_dump({"passes": [_pa, _pb, _pc]}, open("schedule.yaml", "w"), sort_keys=False)
+expect("priority: nothing changes when the order stays the same", schedule_sync.sync_priority(1), "")
+_cfg_text = _y.safe_load(open("satellites.yaml"))
+_cfg_text["satellites"][0]["priority"] = 0
+_cfg_text["satellites"][1]["priority"] = 9
+_y.safe_dump(_cfg_text, open("satellites.yaml", "w"))
+_msg = schedule_sync.sync_priority(2)
+_p = {x["name"]: x["approved"] for x in _sched()}
+expect("priority: the satellite now ranked higher wins its overlap", (_p["A"], _p["B"]), (False, True))
+expect("priority: an unrelated pass is untouched", _p["C"], True)
+expect("priority: the change is reported", "now skipped" in _msg and "now recorded" in _msg, True)
+_cfg_text["satellites"][1]["priority"] = 0
+_cfg_text["satellites"][0]["priority"] = 5
+_y.safe_dump(_cfg_text, open("satellites.yaml", "w"))
+schedule_sync.sync_priority(1)
+_p = {x["name"]: x["approved"] for x in _sched()}
+expect("priority: and back again", (_p["A"], _p["B"]), (True, False))
 os.chdir(_cwd)
 
 # --- custom_tle_file mistakes are named, not silently skipped ---

@@ -478,6 +478,8 @@ you plan again.
 ```
 python3 edit_satellite.py JAMX01 --priority 5
 ```
+**Changing priorities.** Priority is per satellite, and the higher number wins any overlap on the same receiver. Any whole numbers work, so you can rank several (`--priority 9` over `--priority 5` over the default 0), and `--priority 0` removes it. Changing one re-decides the overlaps already in the queue straight away (it says which passes are now skipped and which are recorded again); nothing is recomputed and unrelated passes are untouched. Passes you have paired are left alone. Priority is the same for every pass of a satellite; to prefer a different one for just one pass, set that pass's `approved: false` in `schedule.yaml` by hand, or use `plan_passes.py --interactive`, which asks about every overlap that priority has not settled.
+
 Equal priorities behave as before (a warning, or the `--interactive` question). Overlaps between different receivers are never settled by priority - both can be recorded.
 
 ## run_passes.py
