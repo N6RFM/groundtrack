@@ -377,10 +377,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.plan_passes_auto).pack(side="left", padx=4)
         ttk.Button(row4, text="Plan passes (ask about overlaps, new window)",
                    command=self.plan_passes_ask_overlaps).pack(side="left")
-        ttk.Button(row4, text="Plan passes (interactive, new window)",
-                   command=self.plan_passes_interactive).pack(side="left", padx=4)
         ttk.Button(row4, text="Pair overlapping passes (new window)",
-                   command=self.pair_passes).pack(side="left", padx=(8, 0))
+                   command=self.pair_passes).pack(side="left", padx=4)
         ttk.Button(row4, text="Toggle IQ for pass (new window)",
                    command=self.toggle_pass_record_iq).pack(side="left", padx=4)
         ttk.Button(row4, text="Show pass log",
@@ -830,21 +828,6 @@ class GroundtrackGUI(tk.Tk):
         if self.spawn_in_terminal(cmd):
             self.log(self.output.get("1.0", tk.END) +
                      "\nAnswer the overlap questions there, then use 'Show schedule' here once you're done.")
-
-    def plan_passes_interactive(self):
-        """--interactive prompts y/n per pass on stdin - same reasoning
-        as run_passes.py, this needs a real terminal, not a captured
-        subprocess the GUI can't feed keystrokes into."""
-        hours = simpledialog.askinteger(
-            "Plan passes (interactive)", "Hours ahead to predict:",
-            initialvalue=24, minvalue=1)
-        if not hours:
-            return
-        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--interactive"]
-        if self.spawn_in_terminal(cmd):
-            self.log(self.output.get("1.0", tk.END) +
-                     "\nApprove/reject passes there, then use 'Show schedule' "
-                     "here once you're done.")
 
     def toggle_pass_record_iq(self):
         """Interactive - lists the queue and prompts for pass number(s) and
