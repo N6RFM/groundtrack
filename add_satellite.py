@@ -53,13 +53,22 @@ def next_free_ports(cfg):
     return prod, cons
 
 
+def _norad_arg(text):
+    import argparse
+    from tle_number import parse_norad
+    try:
+        return parse_norad(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
 def main():
     import station
     station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True, help="e.g. GEOSCAN-3")
-    ap.add_argument("--norad", required=True, type=int)
+    ap.add_argument("--norad", required=True, type=_norad_arg)
     ap.add_argument("--freq", required=True, type=int, help="downlink frequency in Hz")
     ap.add_argument("--min-elev", type=float, default=15.0)
     ap.add_argument("--record-only", action="store_true",

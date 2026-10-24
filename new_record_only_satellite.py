@@ -357,6 +357,14 @@ def refresh_and_check_tle(norad):
     return False
 
 
+def _norad_arg(text):
+    from tle_number import parse_norad
+    try:
+        return parse_norad(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
 def main():
     import station
     station.enter()
@@ -364,7 +372,7 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     listing = "--list-templates" in sys.argv[1:]    # a listing needs no satellite; every other run still does
     ap.add_argument("--name", required=not listing, help="e.g. NEWSAT-7")
-    ap.add_argument("--norad", required=not listing, type=int,
+    ap.add_argument("--norad", required=not listing, type=_norad_arg,
                      help="not present in the .grc at all - used only in satellites.yaml, "
                           "for TLE lookup and pass prediction")
     ap.add_argument("--freq", required=not listing, type=int,

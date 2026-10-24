@@ -129,13 +129,22 @@ def record_iq_capable(sat):
         return False
 
 
+def _norad_arg(text):
+    import argparse
+    from tle_number import parse_norad
+    try:
+        return parse_norad(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
 def main():
     import station
     station.enter()
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("name", help="satellite name to edit, exactly as it appears in satellites.yaml")
-    ap.add_argument("--norad", type=int, default=None)
+    ap.add_argument("--norad", type=_norad_arg, default=None)
     ap.add_argument("--allow-duplicate-norad", action="store_true",
                     help="let --norad reuse a NORAD number another entry already has - for a "
                          "second entry of the same satellite on a different frequency or "

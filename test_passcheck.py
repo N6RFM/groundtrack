@@ -217,5 +217,25 @@ expect("custom: bad checksum is named", any("checksum" in x for x in _m), True)
 _m = _custom("OSSIE-D", _good[0].replace("  ", " "), _good[1])
 expect("custom: lost spaces are named", any("characters" in x for x in _m), True)
 
+# --- NORAD typed the way a TLE writes it ---
+from tle_number import parse_norad
+expect("norad: plain digits", parse_norad("100933"), 100933)
+expect("norad: Alpha-5 form A0933", parse_norad("A0933"), 100933)
+expect("norad: lower case and spaces", parse_norad(" a0933 "), 100933)
+expect("norad: B1234", parse_norad("B1234"), 111234)
+_bad = 0
+for _x in ("A09", "I0000", "xyz", ""):
+    try:
+        parse_norad(_x)
+    except ValueError:
+        _bad += 1
+expect("norad: nonsense is rejected", _bad, 4)
+import satnogs_name
+_orig = satnogs_name.lookup
+satnogs_name.lookup = lambda n, **k: {"found": False, "names": [], "follow": None, "status": ""}
+expect("satnogs: unknown number without a TLE still warns", satnogs_name.problem("X", 100933) is not None, True)
+expect("satnogs: unknown number with a TLE on file does not warn", satnogs_name.problem("X", 100933, have_tle=True), None)
+satnogs_name.lookup = _orig
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

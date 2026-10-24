@@ -33,6 +33,7 @@ import yaml
 
 import station
 from doctor import check_stray_compiled_files
+from tle_number import parse_norad
 
 CONFIG_PATH = "satellites.yaml"
 
@@ -1070,6 +1071,11 @@ class GroundtrackGUI(tk.Tk):
             norad = fields["norad"].get().strip()
             freq = fields["freq"].get().strip()
             min_elev = fields["min_elev"].get().strip() or "15"
+            try:
+                norad = str(parse_norad(norad)) if norad else norad    # A0933 is accepted and becomes 100933
+            except ValueError as e:
+                status_label.config(text=str(e))
+                return
 
             if not name or not norad or not freq:
                 status_label.config(text="Name, NORAD, and frequency are all required.")
@@ -1255,6 +1261,11 @@ class GroundtrackGUI(tk.Tk):
             args = [sys.executable, station.script_path("edit_satellite.py"), name]
 
             norad = fields["norad"].get().strip()
+            try:
+                norad = str(parse_norad(norad)) if norad else norad    # A0933 is accepted and becomes 100933
+            except ValueError as e:
+                status_label.config(text=str(e), foreground="#a00")
+                return
             if norad and int(norad) != sat.get("norad"):
                 args += ["--norad", norad]
                 if dup_var.get():

@@ -29,6 +29,18 @@ def catalog_number(line1):
         return None
 
 
+def parse_norad(text):
+    """A catalog number as typed by a person: plain digits (100933) or the five-character form a TLE uses for
+    numbers of 100000 and up (A0933 = 100933). Returns the plain int; raises ValueError on anything else."""
+    s = str(text).strip()
+    if s.isdigit():
+        return int(s)
+    n = catalog_number("  " + s.upper()) if len(s) == 5 else None
+    if n is None:
+        raise ValueError(f"{text!r} is not a catalog number - use digits (100933) or the TLE form (A0933)")
+    return n
+
+
 def encode_catalog_number(n):
     """The five characters a TLE uses for catalog number n: plain digits up to 99999,
     Alpha-5 above (100470 -> 'A0470')."""

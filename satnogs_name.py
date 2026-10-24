@@ -93,12 +93,14 @@ def lookup(norad, use_cache=True, timeout=4):
     return v
 
 
-def problem(name, norad, use_cache=True, timeout=4):
+def problem(name, norad, use_cache=True, timeout=4, have_tle=False):
     """None when fine or unknowable; otherwise a one-sentence description of what looks wrong."""
     info = lookup(norad, use_cache=use_cache, timeout=timeout)
     if info is None:
         return None
     if not info["found"]:
+        if have_tle:
+            return None      # SatNOGS doesn't number every object, but a TLE is already on file, so nothing is wrong
         return (f"SatNOGS has no satellite numbered {norad}, so {name} will not get a TLE from it. "
                 f"Check the number for a typo (search the name at https://db.satnogs.org); "
                 f"a brand-new satellite can use tle/custom.txt instead.")

@@ -240,7 +240,7 @@ def static_checks(cfg_path):
                 if satnogs_name.lookup(norad, timeout=4) is None:
                     _satnogs_offline = True          # no network (or SatNOGS is down): stop asking, say nothing
                 else:
-                    said = satnogs_name.problem(name, norad)
+                    said = satnogs_name.problem(name, norad, have_tle=norad in tle_names)
                     check(f"{name}.norad ({norad}) matches the satellite SatNOGS lists under that number",
                           said is None, said or "", level=WARN if said else None)
             ci = custom_info.get(norad)

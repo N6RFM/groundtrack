@@ -794,7 +794,7 @@ station's flowgraph - the radios differ in more than a device string.
 A TLE has five digits for the catalog number, so objects numbered 100000+ write
 it as a letter plus four digits: `A0470` is 100470, `B1234` is 111234 (A=10 ...
 H=17, J=18 ... N=22, P=23 ... Z=33; no I or O). In `satellites.yaml` always use
-the plain number (`norad: 100470`). `tle_number.py` does the decoding for
+the plain number (`norad: 100470`). Wherever you type a NORAD (the GUI's Add and Edit dialogs, `--norad` on `add_satellite.py`, `edit_satellite.py` and `new_record_only_satellite.py`) you may write either form - `100470` or `A0470` - and it is stored as the plain number. preflight's SatNOGS number check stays quiet for a number SatNOGS doesn't list when a TLE for it is already on file, since SatNOGS doesn't number every object. `tle_number.py` does the decoding for
 `update_tle.py`, `preflight.py` and the station code; Skyfield (sgp4 2.23+)
 decodes it for pass planning. For these objects `update_tle.py`'s Celestrak fallback asks for OMM/JSON
 (the only form Celestrak has) and converts it to an `A0470`-style TLE itself. If a satellite shows as missing from a TLE file
