@@ -379,10 +379,12 @@ class GroundtrackGUI(tk.Tk):
                    command=self.plan_passes_ask_overlaps).pack(side="left", padx=(0, 6))
         ttk.Button(row4, text="Pair overlapping passes (new window)",
                    command=self.pair_passes).pack(side="left", padx=(0, 6))
-        ttk.Button(row4, text="Toggle IQ for pass (new window)",
-                   command=self.toggle_pass_record_iq).pack(side="left", padx=(0, 6))
+        # these two are not about planning, so they sit apart, against the right edge
+        # (packed right-to-left: the first one packed is the rightmost)
         ttk.Button(row4, text="Show pass log",
-                   command=self.show_pass_log).pack(side="left", padx=(0, 6))
+                   command=self.show_pass_log).pack(side="right", padx=(6, 0))
+        ttk.Button(row4, text="Toggle IQ for pass (new window)",
+                   command=self.toggle_pass_record_iq).pack(side="right", padx=(0, 6))
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
