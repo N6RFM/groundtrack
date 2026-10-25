@@ -28,7 +28,7 @@ import yaml
 import os
 import errno
 import json
-from passinfo import track_text
+from passinfo import stamp, track_text
 from datetime import datetime, timedelta, timezone
 from skyfield.api import load, wgs84, EarthSatellite
 
@@ -681,7 +681,7 @@ def main():
                     if past_los or below_elev:
                         if is_tty:
                             clear_line()
-                        print(f"[{sat_cfg['name']}] LOS ({'scheduled' if past_los else 'elevation safety net'})")
+                        print(f"[{sat_cfg['name']}] LOS ({'scheduled' if past_los else 'elevation safety net'}) at {stamp()}")
                         if notify_enabled:
                             notify("Satellite pass ended", f"{sat_cfg['name']} - LOS")
                         log_pass_event("completed", sat_cfg, p,
@@ -778,6 +778,10 @@ def main():
                     elif any(lanes.leader_of(r, by_ref, lane_of) is p for r in running):
                         extras["role"] = "leader"
                         note = " - now steers the beam for the pass already running"
+                    if attempt == 1:
+                        tr = track_text(p)
+                        print(f"\n=== {stamp()}  {sat_cfg['name']} pass starting - max el "
+                              f"{p.get('max_elevation_deg', '?')} deg, LOS {p['los']}" + (f", {tr}" if tr else "") + " ===")
                     print(f"[{sat_cfg['name']}] AOS - launching {sat_cfg['script']}"
                           + (f" (attempt {attempt}/{MAX_LAUNCH_ATTEMPTS})"
                              if attempt > 1 else "") + note)
@@ -805,7 +809,7 @@ def main():
                     sat_cfg = sat_cfgs[nxt["norad"]]
                     status = (f"Next pass: {sat_cfg['name']} in "
                               f"{format_countdown(nxt['aos_dt'] - now)} "
-                              f"(AOS {nxt['aos']}, max el {nxt.get('max_elevation_deg', '?')} deg"
+                              f"(AOS {nxt['aos']} = {nxt['aos_dt'].astimezone().strftime('%a %H:%M')} local, max el {nxt.get('max_elevation_deg', '?')} deg"
                               + (f"; {track_text(nxt)}" if track_text(nxt) else "") + ")")
                 else:
                     status = "No further approved passes in schedule.yaml."

@@ -551,6 +551,12 @@ it a sensible size for how long the pass ran? One line prints - `IQ check: OK`, 
 when recording was off - and an `iq_check` record goes to `pass_log.jsonl`. `show_pass_log.py` shows it in an
 "IQ file" column and `--failures-only` lists MISSING/SHORT passes too.
 
+**Timestamps in the console.** When a pass starts, `run_passes.py` prints a banner line with the exact time on this computer's clock and in UTC, then the satellite, its peak elevation, its LOS and its track, for example:
+```
+=== 2026-10-24 23:44:58 EDT (03:44:58Z)  OSSIE-D pass starting - max el 48.6 deg, LOS 2026-10-25T03:50:46Z, ASC  S 182 > W 261 > NNW 340 ===
+```
+and the LOS line carries its time too (`LOS (scheduled) at 2026-10-24 23:50:46 EDT (03:50:46Z)`), so a decoder's log or a recording can be lined up with the console afterwards.
+
 ## toggle_pass_record_iq.py
 
 Toggles IQ recording on or off for specific upcoming passes in the

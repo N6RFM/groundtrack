@@ -266,5 +266,11 @@ expect("satnogs: unknown number without a TLE still warns", satnogs_name.problem
 expect("satnogs: unknown number with a TLE on file does not warn", satnogs_name.problem("X", 100933, have_tle=True), None)
 satnogs_name.lookup = _orig
 
+# --- timestamps printed at AOS and LOS ---
+from passinfo import stamp
+_s = stamp(datetime(2026, 10, 25, 3, 44, 58, tzinfo=timezone.utc))
+expect("stamp: shows UTC", _s.endswith("(03:44:58Z)"), True)
+expect("stamp: local time first, with a zone name", _s[:2] == "20" and _s.count(":") >= 4, True)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

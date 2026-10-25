@@ -31,3 +31,12 @@ def track_text(p):
     if p.get("aos_az") is None and p.get("max_az") is None and p.get("los_az") is None:
         return ""
     return f"{direction_tag(p):<4} {_point(p.get('aos_az'))} > {_point(p.get('max_az'))} > {_point(p.get('los_az'))}".strip()
+
+
+def stamp(dt=None):
+    """The moment as '2026-10-24 23:44:58 EDT (03:44:58Z)': this computer's clock first, then UTC."""
+    from datetime import datetime, timezone
+    dt = (dt or datetime.now(timezone.utc))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return f"{dt.astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')} ({dt.astimezone(timezone.utc).strftime('%H:%M:%S')}Z)"
