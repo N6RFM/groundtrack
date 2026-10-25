@@ -371,19 +371,23 @@ class GroundtrackGUI(tk.Tk):
 
         row4 = ttk.LabelFrame(self.content, text="Pass scheduler")
         row4.pack(fill="x", padx=8, pady=4)
-        ttk.Button(row4, text="Show schedule",
+        # Four buttons on the first line, and the two that aren't about planning on a second line against the
+        # right edge, so none is ever pushed out of view however narrow the window.
+        row4a = ttk.Frame(row4)
+        row4a.pack(fill="x")
+        ttk.Button(row4a, text="Show schedule",
                    command=self.show_schedule).pack(side="left", padx=(0, 6))
-        ttk.Button(row4, text="Plan passes (auto-approve)",
+        ttk.Button(row4a, text="Plan passes (auto-approve)",
                    command=self.plan_passes_auto).pack(side="left", padx=(0, 6))
-        ttk.Button(row4, text="Plan passes (ask about overlaps, new window)",
-                   command=self.plan_passes_ask_overlaps).pack(side="left", padx=(0, 6))
-        ttk.Button(row4, text="Pair overlapping passes (new window)",
+        ttk.Button(row4a, text="Plan passes (interactive, new window)",
+                   command=self.plan_passes_interactive).pack(side="left", padx=(0, 6))
+        ttk.Button(row4a, text="Pair overlapping passes (new window)",
                    command=self.pair_passes).pack(side="left", padx=(0, 6))
-        # these two are not about planning, so they sit apart, against the right edge
-        # (packed right-to-left: the first one packed is the rightmost)
-        ttk.Button(row4, text="Show pass log",
+        row4b = ttk.Frame(row4)
+        row4b.pack(fill="x", pady=(4, 0))
+        ttk.Button(row4b, text="Show pass log",
                    command=self.show_pass_log).pack(side="right", padx=(6, 0))
-        ttk.Button(row4, text="Toggle IQ for pass (new window)",
+        ttk.Button(row4b, text="Toggle IQ for pass (new window)",
                    command=self.toggle_pass_record_iq).pack(side="right", padx=(0, 6))
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
@@ -818,18 +822,19 @@ class GroundtrackGUI(tk.Tk):
         and say whose TLE steers the beam. Interactive, so it gets its own terminal."""
         self.spawn_in_terminal([sys.executable, station.script_path("pair_passes.py")])
 
-    def plan_passes_ask_overlaps(self):
-        """Every pass approved, and a question only where two passes on the same receiver overlap and
-        priority hasn't settled it - which needs a real terminal, like the other interactive tools."""
+    def plan_passes_interactive(self):
+        """--interactive prompts y/n per pass on stdin - same reasoning as run_passes.py, this needs a real
+        terminal, not a captured subprocess the GUI can't feed keystrokes into."""
         hours = simpledialog.askinteger(
-            "Plan passes (ask about overlaps)", "Hours ahead to predict:",
+            "Plan passes (interactive)", "Hours ahead to predict:",
             initialvalue=24, minvalue=1)
         if not hours:
             return
-        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--ask-overlaps"]
+        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--interactive"]
         if self.spawn_in_terminal(cmd):
             self.log(self.output.get("1.0", tk.END) +
-                     "\nAnswer the overlap questions there, then use 'Show schedule' here once you're done.")
+                     "\nApprove/reject passes there, then use 'Show schedule' "
+                     "here once you're done.")
 
     def toggle_pass_record_iq(self):
         """Interactive - lists the queue and prompts for pass number(s) and
