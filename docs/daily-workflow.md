@@ -8,6 +8,7 @@
 
 > **Quick look:** `python3 status.py` is one screen for this computer - what is next, what recorded
 > recently, and anything wrong. See [Scripts reference](scripts-reference.md#statuspy---one-screen-for-whats-next-what-recorded-is-anything-wrong).
+> For a page that stays open and updates itself: `python3 dashboard.py`, then open http://127.0.0.1:8750.
 
 ## Preflight checks (run this before every session)
 

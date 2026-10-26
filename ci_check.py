@@ -54,6 +54,7 @@ STATION_EXEMPT = {
     "lanes.py": "a library: works on whatever passes and config it is handed",
     "update_computer.py": "runs from the project root and visits each station folder itself",
     "sdr_local.py": "a library: reads sdr.local.yaml from the current (already chosen) station folder",
+    "dashboard.py": "read-only web page: asks status.py for every station on this computer",
     "schedule_sync.py": "a library: works on the schedule.yaml of the station folder its caller already chose",
     "test_passcheck.py": "a self-test: builds its own temporary station folder, touches no real one",
     "status.py": "reads every station on this computer itself (like update_computer.py), changing nothing",

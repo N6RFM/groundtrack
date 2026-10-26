@@ -272,5 +272,28 @@ _s = stamp(datetime(2026, 10, 25, 3, 44, 58, tzinfo=timezone.utc))
 expect("stamp: shows UTC", _s.endswith("(03:44:58Z)"), True)
 expect("stamp: local time first, with a zone name", _s[:2] == "20" and _s.count(":") >= 4, True)
 
+# --- status.collect / dashboard ---
+import json as _json, yaml as _yaml, dashboard
+_sd = tempfile.mkdtemp()
+_nowd = datetime.now(timezone.utc)
+_iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+with open(os.path.join(_sd, "satellites.yaml"), "w") as _f:
+    _yaml.safe_dump({"satellites": []}, _f)
+with open(os.path.join(_sd, "schedule.yaml"), "w") as _f:
+    _yaml.safe_dump({"passes": [
+        {"name": "AAA", "norad": 1, "approved": True, "aos": _iso(_nowd + timedelta(minutes=20)),
+         "los": _iso(_nowd + timedelta(minutes=30)), "max_elevation_deg": 40},
+        {"name": "BBB", "norad": 2, "approved": False, "aos": _iso(_nowd + timedelta(minutes=50)),
+         "los": _iso(_nowd + timedelta(minutes=60)), "max_elevation_deg": 40}]}, _f)
+_d = status.collect("x", "Test", _sd, 24, _nowd)
+expect("collect: next pass is the approved one", _d["next"]["name"], "AAA")
+expect("collect: unapproved passes not queued", len(_d["upcoming"]), 1)
+expect("collect: queue ending soon is a problem", any("queue ends" in p for p in _d["problems"]), True)
+expect("collect: soon + not running is a problem", any("not running" in p for p in _d["problems"]), True)
+expect("collect: result is JSON-safe", bool(_json.dumps(_d)), True)
+expect("collect: no satellites.yaml -> not configured", status.collect("y", "T", tempfile.mkdtemp(), 24, _nowd)["configured"], False)
+expect("dashboard: page refreshes itself", "setInterval(load,30000)" in dashboard.PAGE, True)
+expect("dashboard: binds localhost only", "127.0.0.1" in open("dashboard.py").read() and "0.0.0.0" not in open("dashboard.py").read(), True)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

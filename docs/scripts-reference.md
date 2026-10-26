@@ -893,6 +893,20 @@ It only reads files and never changes anything, so it is safe while `run_passes.
 problem and 0 otherwise. Which stations count as "on this computer" comes from `computer.local.yaml` (see
 `update_computer.py`); with none saved it reports all of them. Each computer reports only itself - run it on both.
 
+## dashboard.py - the same report as a live web page
+
+```
+python3 dashboard.py             # then open http://127.0.0.1:8750 in a browser
+python3 dashboard.py --port 9000
+```
+Everything `status.py` reports, as a page that refreshes itself every 30 seconds: per station whether
+`run_passes.py` is running, the next pass with a live countdown, the upcoming queue (local time, max elevation,
+rise > peak > set track), the last 24 hours of recordings with their IQ result, TLE age, IQ disk space, and the
+problem list. It is read-only and listens on 127.0.0.1 only: nothing leaves this computer, nothing goes through
+GitHub, and it shows only the stations on this computer (run it on each). Leave it running in a terminal and keep a
+browser tab open; it works on a phone only if you tunnel to the computer yourself. It also serves the raw data as
+JSON at `/api/status`. Stop it with Ctrl+C.
+
 ## update_computer.py - bring any computer up to date
 
 For a repository used from more than one computer (or just to avoid the checklist):

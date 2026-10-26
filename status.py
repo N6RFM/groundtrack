@@ -154,23 +154,24 @@ def correlate_log(path, since):
 
 # ---------------------------------------------------------------- one station
 
-def station_report(name, label, folder, hours, now):
-    """Prints one station's section; returns the number of problems found."""
-    problems, notes = [], []
-    title = f"{name.upper()}  {label}" if name else "Station"
-    print(f"\n=== {title} " + "=" * max(0, 66 - len(title)))
+def collect(name, label, folder, hours, now):
+    """Everything status.py knows about one station, as plain data (also what dashboard.py serves)."""
+    cmd_radio = f" --radio {name}" if name else ""
+    d = {"name": name, "label": label, "folder": folder, "configured": True, "pid": None,
+         "next": None, "queued": None, "upcoming": [], "recent": [], "recent_hours": hours,
+         "tle": None, "disks": [], "problems": []}
+    problems = d["problems"]
 
     cfg = load_yaml(os.path.join(folder, "satellites.yaml"))
     if cfg is None:
-        print("  no satellites.yaml here - nothing to report.")
-        return 1
+        d["configured"] = False
+        problems.append("no satellites.yaml here - nothing to report")
+        return d
     sats = [s for s in cfg.get("satellites", []) if s.get("enabled", True)]
 
-    # --- is run_passes running
-    pid = running_pid(folder)
-    print(f"  run_passes.py : {'running (PID %d)' % pid if pid else 'NOT running'}")
+    d["pid"] = pid = running_pid(folder)
 
-    # --- next pass
+    # --- the queue
     sched = load_yaml(os.path.join(folder, "schedule.yaml")) or {}
     passes = []
     for p in sched.get("passes", []) or []:
@@ -181,65 +182,60 @@ def station_report(name, label, folder, hours, now):
             passes.append((a, l, p))
     passes.sort(key=lambda t: t[0])
     upcoming = [t for t in passes if t[1] > now]
+    for a, l, p in upcoming[:60]:
+        d["upcoming"].append({"name": p.get("name", "?"), "aos": a.isoformat(), "los": l.isoformat(),
+                              "aos_ts": a.timestamp(), "los_ts": l.timestamp(),
+                              "local": a.astimezone().strftime("%a %H:%M"),
+                              "max_el": p.get("max_elevation_deg"), "track": track_text(p),
+                              "direction": p.get("direction") or "", "active": a <= now})
     if upcoming:
         a, l, p = upcoming[0]
-        if a <= now:
-            when = f"ACTIVE NOW (sets in {human(l - now)})"
-        else:
-            when = f"in {human(a - now)}"
-        local_t = a.astimezone().strftime("%a %H:%M")
-        tr = track_text(p)
-        print(f"  next pass     : {p.get('name', '?')}  {when}  ({local_t} local, "
-              f"{p.get('max_elevation_deg', '?')} deg max)" + (f"  {tr}" if tr else ""))
-        print(f"  queued        : {len(upcoming)} approved pass(es), through "
-              f"{upcoming[-1][1].astimezone().strftime('%a %H:%M')} local")
+        d["next"] = d["upcoming"][0]
+        d["queued"] = {"count": len(upcoming), "through": upcoming[-1][1].astimezone().strftime("%a %H:%M"),
+                       "through_ts": upcoming[-1][1].timestamp()}
         if (upcoming[-1][1] - now) < timedelta(hours=EMPTY_QUEUE_HOURS):
-            problems.append(f"the queue ends in {human(upcoming[-1][1] - now)} - plan more: python3 plan_passes.py"
-                            + (f" --radio {name}" if name else ""))
+            problems.append(f"the queue ends in {human(upcoming[-1][1] - now)} - plan more: python3 plan_passes.py{cmd_radio}")
         if not pid and (a - now) < timedelta(minutes=SOON_MIN):
             problems.append(f"a pass starts in {human(max(a - now, timedelta(0)))} but run_passes.py is not running - "
                             f"start it (GUI: Start run_passes.py)")
     else:
-        print("  next pass     : none queued")
-        problems.append("no upcoming approved passes - run: python3 plan_passes.py" + (f" --radio {name}" if name else ""))
+        problems.append(f"no upcoming approved passes - run: python3 plan_passes.py{cmd_radio}")
 
     # --- recent passes
     since = now - timedelta(hours=hours)
     log = correlate_log(os.path.join(folder, "pass_log.jsonl"), since)
-    if log:
-        print(f"  last {hours:g} h      : {len(log)} pass(es)")
-        bad = 0
-        for e in log:
-            outcome = e.get("outcome")
-            iq = e.get("iq")
-            ended = e["los"] and e["los"] < now
-            if outcome in ("crashed", "error"):
-                mark, bad = "FAILED ", bad + 1
-            elif iq in ("MISSING", "SHORT"):
-                mark, bad = f"IQ {iq}", bad + 1
-            elif outcome == "completed" and iq in ("OK", "SKIPPED", None, "UNKNOWN"):
-                mark = "ok     "
-            elif outcome == "skipped":
-                mark = "skipped"
-            elif not ended:
-                mark = "running"
-            else:
-                mark, bad = "NO END ", bad + 1
-            extra = ""
-            if iq == "OK":
-                extra = f"  IQ {e.get('iq_note', '')}"
-            elif iq in ("MISSING", "SHORT"):
-                extra = f"  {e.get('iq_note', '')}"
-            elif e.get("detail"):
-                extra = f"  {e['detail']}"
-            if e.get("warnings"):
-                extra += f"  [{len(e['warnings'])} pre-pass warning(s)]"
-            print(f"      {mark:<10} {e['aos'].astimezone().strftime('%a %H:%M')}  {e['satellite']:<14}{extra}")
-        if bad:
-            problems.append(f"{bad} of the last {len(log)} pass(es) did not record properly - see: "
-                            f"python3 show_pass_log.py" + (f" --radio {name}" if name else "") + " --failures-only")
-    else:
-        print(f"  last {hours:g} h      : no passes logged")
+    bad = 0
+    for e in log:
+        outcome, iq = e.get("outcome"), e.get("iq")
+        ended = e["los"] and e["los"] < now
+        if outcome in ("crashed", "error"):
+            mark, level = "FAILED", "bad"
+        elif iq in ("MISSING", "SHORT"):
+            mark, level = f"IQ {iq}", "bad"
+        elif outcome == "completed" and iq in ("OK", "SKIPPED", None, "UNKNOWN"):
+            mark, level = "ok", "ok"
+        elif outcome == "skipped":
+            mark, level = "skipped", "warn"
+        elif not ended:
+            mark, level = "running", "info"
+        else:
+            mark, level = "NO END", "bad"
+        bad += level == "bad"
+        extra = ""
+        if iq == "OK":
+            extra = f"IQ {e.get('iq_note', '')}"
+        elif iq in ("MISSING", "SHORT"):
+            extra = e.get("iq_note", "")
+        elif e.get("detail"):
+            extra = e["detail"]
+        if e.get("warnings"):
+            extra += f"  [{len(e['warnings'])} pre-pass warning(s)]"
+        d["recent"].append({"mark": mark, "level": level, "satellite": e["satellite"], "extra": extra.strip(),
+                            "aos": e["aos"].isoformat(), "aos_ts": e["aos"].timestamp(),
+                            "local": e["aos"].astimezone().strftime("%a %H:%M")})
+    if bad:
+        problems.append(f"{bad} of the last {len(log)} pass(es) did not record properly - see: "
+                        f"python3 show_pass_log.py{cmd_radio} --failures-only")
 
     # --- the TLE behind the schedule
     epochs = {}
@@ -248,9 +244,8 @@ def station_report(name, label, folder, hours, now):
             epochs.update(tle_epochs(os.path.normpath(os.path.join(folder, str(cfg[key])))))
     ages = [(now - epochs[s["norad"]]).total_seconds() / 86400 for s in sats if s.get("norad") in epochs]
     if ages:
-        oldest = max(ages)
-        print(f"  TLE age       : newest {min(ages):.1f} d, oldest {oldest:.1f} d (of {len(ages)} satellites)")
-        if oldest > passcheck.STALE_TLE_DAYS:
+        d["tle"] = {"newest": min(ages), "oldest": max(ages), "count": len(ages)}
+        if max(ages) > passcheck.STALE_TLE_DAYS:
             n = sum(1 for a in ages if a > passcheck.STALE_TLE_DAYS)
             problems.append(f"{n} satellite(s) have a TLE older than {passcheck.STALE_TLE_DAYS} days - run: python3 update_tle.py")
 
@@ -262,13 +257,13 @@ def station_report(name, label, folder, hours, now):
         sink = passcheck.sink_info(os.path.join(folder, grc)) if grc and os.path.exists(os.path.join(folder, grc)) else None
         if not sink:
             continue
-        d = sink.get("basedir")
-        if d and os.path.isdir(d) and d not in checked_dirs:
-            checked_dirs.add(d)
-            free = shutil.disk_usage(d).free
-            print(f"  IQ disk       : {free / 1e9:.0f} GB free in {d}")
+        dr = sink.get("basedir")
+        if dr and os.path.isdir(dr) and dr not in checked_dirs:
+            checked_dirs.add(dr)
+            free = shutil.disk_usage(dr).free
+            d["disks"].append({"dir": dr, "free_gb": free / 1e9})
             if free < passcheck.MIN_FREE_BYTES * 4:
-                problems.append(f"only {free / 1e9:.1f} GB free in {d} - IQ recordings need room")
+                problems.append(f"only {free / 1e9:.1f} GB free in {dr} - IQ recordings need room")
         if os.path.exists(script) and os.path.exists(os.path.join(folder, grc)):
             fz, _ = passcheck.compiled_record_state(script, os.path.join(folder, grc))
             if fz:
@@ -276,15 +271,44 @@ def station_report(name, label, folder, hours, now):
     if frozen:
         problems.append("Record On Start is frozen to False in the compiled script for: " + ", ".join(frozen)
                         + " - clear the cache: rm -rf ~/.cache/grc_gnuradio, then recompile")
+    return d
 
-    # --- verdict
-    if problems:
+
+def station_report(name, label, folder, hours, now):
+    """Prints one station's section; returns the number of problems found."""
+    d = collect(name, label, folder, hours, now)
+    title = f"{name.upper()}  {label}" if name else "Station"
+    print(f"\n=== {title} " + "=" * max(0, 66 - len(title)))
+    if not d["configured"]:
+        print("  no satellites.yaml here - nothing to report.")
+        return 1
+    print(f"  run_passes.py : {'running (PID %d)' % d['pid'] if d['pid'] else 'NOT running'}")
+    n = d["next"]
+    if n:
+        a, l = parse_dt(n["aos"]), parse_dt(n["los"])
+        when = f"ACTIVE NOW (sets in {human(l - now)})" if n["active"] else f"in {human(a - now)}"
+        print(f"  next pass     : {n['name']}  {when}  ({n['local']} local, {n['max_el'] if n['max_el'] is not None else '?'} deg max)"
+              + (f"  {n['track']}" if n["track"] else ""))
+        print(f"  queued        : {d['queued']['count']} approved pass(es), through {d['queued']['through']} local")
+    else:
+        print("  next pass     : none queued")
+    if d["recent"]:
+        print(f"  last {hours:g} h      : {len(d['recent'])} pass(es)")
+        for e in d["recent"]:
+            print(f"      {e['mark']:<10} {e['local']}  {e['satellite']:<14}" + (f"  {e['extra']}" if e["extra"] else ""))
+    else:
+        print(f"  last {hours:g} h      : no passes logged")
+    if d["tle"]:
+        print(f"  TLE age       : newest {d['tle']['newest']:.1f} d, oldest {d['tle']['oldest']:.1f} d (of {d['tle']['count']} satellites)")
+    for k in d["disks"]:
+        print(f"  IQ disk       : {k['free_gb']:.0f} GB free in {k['dir']}")
+    if d["problems"]:
         print("  PROBLEMS:")
-        for p in problems:
+        for p in d["problems"]:
             print(f"    ! {p}")
     else:
         print("  all clear")
-    return len(problems)
+    return len(d["problems"])
 
 
 def radios_report():
