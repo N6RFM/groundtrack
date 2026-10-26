@@ -173,6 +173,7 @@ groundtrack/
 ├── schedule_sync.py         # keeps schedule.yaml in step after a satellite is edited, toggled or deleted
 ├── status.py                # one-screen report per computer: next pass, recent recordings, problems (read-only)
 ├── dashboard.py             # the same report as a local web page, refreshing every 30 s (127.0.0.1 only, read-only)
+├── setup_dashboard_tunnel.py # always-on dashboard + SSH tunnel to your own server; --check diagnoses it (docs/remote-dashboard.md)
 ├── passinfo.py              # words for where a pass goes: direction (ascending/descending) and rise > peak > set compass points
 ├── satnogs_name.py          # looks a NORAD number up in SatNOGS and compares the name (typo catcher)
 ├── update_computer.py       # one command to update any computer: stations here, pull, own SDRs, preflight, GUI

@@ -907,6 +907,9 @@ GitHub, and it shows only the stations on this computer (run it on each). Leave 
 browser tab open; it works on a phone only if you tunnel to the computer yourself. It also serves the raw data as
 JSON at `/api/status`. Stop it with Ctrl+C.
 
+To see the other computer's dashboard through your own server, and what to do when that breaks, see
+[Remote dashboard](remote-dashboard.md) (`python3 setup_dashboard_tunnel.py --check` tests the whole chain).
+
 ## update_computer.py - bring any computer up to date
 
 For a repository used from more than one computer (or just to avoid the checklist):
