@@ -17,10 +17,18 @@ On any computer that has the key (RI and Texas both do), keep this running in a 
 ```
 gtview
 ```
-(an alias for `ssh -i ~/.ssh/id_ed25519_groundtrack -L 8760:127.0.0.1:18750 -L 8761:127.0.0.1:18751 ubuntu@REDACTED`)
+(an alias for `ssh -4 -i ~/.ssh/id_ed25519_groundtrack -L 8760:127.0.0.1:18750 -L 8761:127.0.0.1:18751 ubuntu@REDACTED`)
 
 Then open `http://127.0.0.1:8760` (Rhode Island) and `http://127.0.0.1:8761` (Texas). This computer's own dashboard
 is always at `http://127.0.0.1:8750`. If the page says "dashboard server not reachable", the path behind it is down.
+
+**Which computer is this?** The page title and heading say `groundtrack - <site>`, and each station shows its 6-character
+grid square (for example `FN41iq`, about 5 x 2.5 km - no exact coordinates are shown). The site name is this computer's host
+name unless you set one (once per computer, in the groundtrack folder):
+```
+echo "site: Rhode Island" >> computer.local.yaml      # Texas: echo "site: Texas" >> computer.local.yaml
+systemctl --user restart groundtrack-dashboard.service
+```
 
 ## When something breaks: run the check first
 
@@ -40,10 +48,11 @@ It tests each link and prints the fix for any that fail:
 
 ## Problems in the viewing window (`gtview`)
 
+- **`bind [::1]:... Cannot assign requested address`** - harmless (this computer has no IPv6 loopback). `gtview` uses `ssh -4` to avoid it.
 - **`bind ... Address already in use`** - an earlier `gtview` is still open. Either use it, or close it:
   `ss -ltnp | grep -E ':876[01]'` shows its PID; `kill PID`; run `gtview` again.
 - **`gtview: command not found`** - define it (once per computer):
-  `echo "alias gtview='ssh -i ~/.ssh/id_ed25519_groundtrack -L 8760:127.0.0.1:18750 -L 8761:127.0.0.1:18751 ubuntu@REDACTED'" >> ~/.bashrc; source ~/.bashrc`
+  `echo "alias gtview='ssh -4 -i ~/.ssh/id_ed25519_groundtrack -L 8760:127.0.0.1:18750 -L 8761:127.0.0.1:18751 ubuntu@REDACTED'" >> ~/.bashrc; source ~/.bashrc`
 - **Page loads but is blank/old** - the computer behind it is off or its tunnel is down; run `--check` ON that computer.
 - **The ssh window closed** - the forwards ended; run `gtview` again.
 

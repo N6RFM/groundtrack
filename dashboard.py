@@ -32,8 +32,8 @@ def snapshot(hours=24):
         except Exception as e:  # one broken station must not blank the page
             stations.append({"name": n, "label": l, "configured": True, "pid": None, "next": None,
                              "queued": None, "upcoming": [], "recent": [], "recent_hours": hours,
-                             "tle": None, "disks": [], "problems": [f"could not read this station: {e}"]})
-    return {"now": now.isoformat(), "now_ts": now.timestamp(),
+                             "tle": None, "disks": [], "grid": "", "problems": [f"could not read this station: {e}"]})
+    return {"site": status.site_name(), "zone": now.astimezone().strftime("%Z (UTC%z)"), "now": now.isoformat(), "now_ts": now.timestamp(),
             "now_local": now.astimezone().strftime("%a %Y-%m-%d %H:%M:%S %Z"),
             "stations": stations}
 
@@ -59,7 +59,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 th{color:var(--mut);font-weight:500}.scroll{overflow-x:auto}
 h3{font-size:13px;color:var(--mut);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
 </style></head><body>
-<header><h1>groundtrack</h1><div class="mut" id="stamp">loading...</div></header>
+<header><h1 id="site">groundtrack</h1><div class="mut" id="stamp">loading...</div></header>
 <div id="root"></div>
 <script>
 let snap=null, offset=0;
@@ -69,10 +69,12 @@ function human(sec){sec=Math.max(0,Math.round(sec));const d=Math.floor(sec/86400
 function nowTs(){return Date.now()/1000+offset}
 function render(){
  if(!snap)return;
- document.getElementById("stamp").textContent="updated "+snap.now_local+" - refreshes every 30 s";
+ document.getElementById("site").textContent="groundtrack - "+snap.site;
+ document.title="groundtrack - "+snap.site;
+ document.getElementById("stamp").textContent="updated "+snap.now_local+" - times are "+snap.zone+" - refreshes every 30 s";
  const t=nowTs();
  document.getElementById("root").innerHTML=snap.stations.map(s=>{
-  const title=(s.name?s.name.toUpperCase()+" - ":"")+esc(s.label||"Station");
+  const title=(s.name?s.name.toUpperCase()+" - ":"")+esc(s.label||"Station")+(s.grid?` <span class="mut" style="font-weight:400">grid ${esc(s.grid)}</span>`:"");
   if(!s.configured)return `<div class="card"><h2>${title}</h2><div class="mut">No satellites.yaml here.</div></div>`;
   const run=s.pid?`<span class="pill ok">run_passes running (PID ${s.pid})</span>`:`<span class="pill bad">run_passes NOT running</span>`;
   let next='<div class="mut">No upcoming approved passes.</div>';

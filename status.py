@@ -154,12 +154,31 @@ def correlate_log(path, since):
 
 # ---------------------------------------------------------------- one station
 
+def maidenhead(lat, lon):
+    """6-character grid square (e.g. FN41gq) - about 5 x 2.5 km, so no exact coordinates are shown."""
+    try:
+        lon, lat = float(lon) + 180.0, float(lat) + 90.0
+        if not (0 <= lon < 360 and 0 <= lat < 180) or (lat == 90.0 and lon == 180.0):
+            return ""
+        f = lambda v, n: int(v // n)
+        return (chr(65 + f(lon, 20)) + chr(65 + f(lat, 10)) + str(f(lon % 20, 2)) + str(f(lat % 10, 1))
+                + chr(97 + f((lon % 2) * 12, 1)) + chr(97 + f((lat % 1) * 24, 1)))
+    except (TypeError, ValueError):
+        return ""
+
+
+def site_name():
+    """The name shown on the dashboard: 'site:' in computer.local.yaml, else this computer's host name."""
+    local = load_yaml(os.path.join(HERE, "computer.local.yaml")) or {}
+    return str(local.get("site") or "").strip() or os.uname().nodename
+
+
 def collect(name, label, folder, hours, now):
     """Everything status.py knows about one station, as plain data (also what dashboard.py serves)."""
     cmd_radio = f" --radio {name}" if name else ""
     d = {"name": name, "label": label, "folder": folder, "configured": True, "pid": None,
          "next": None, "queued": None, "upcoming": [], "recent": [], "recent_hours": hours,
-         "tle": None, "disks": [], "problems": []}
+         "tle": None, "disks": [], "problems": [], "grid": ""}
     problems = d["problems"]
 
     cfg = load_yaml(os.path.join(folder, "satellites.yaml"))
@@ -168,6 +187,8 @@ def collect(name, label, folder, hours, now):
         problems.append("no satellites.yaml here - nothing to report")
         return d
     sats = [s for s in cfg.get("satellites", []) if s.get("enabled", True)]
+    gs = cfg.get("ground_station") or {}
+    d["grid"] = maidenhead(gs.get("lat"), gs.get("lon")) if gs.get("lat") or gs.get("lon") else ""
 
     d["pid"] = pid = running_pid(folder)
 

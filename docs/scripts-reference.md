@@ -902,7 +902,7 @@ python3 dashboard.py --port 9000
 Everything `status.py` reports, as a page that refreshes itself every 30 seconds: per station whether
 `run_passes.py` is running, the next pass with a live countdown, the upcoming queue (local time, max elevation,
 rise > peak > set track), the last 24 hours of recordings with their IQ result, TLE age, IQ disk space, and the
-problem list. It is read-only and listens on 127.0.0.1 only: nothing leaves this computer, nothing goes through
+problem list. The heading and tab title show this computer's name (`site:` in `computer.local.yaml`, else the host name) and each station's grid square. It is read-only and listens on 127.0.0.1 only: nothing leaves this computer, nothing goes through
 GitHub, and it shows only the stations on this computer (run it on each). Leave it running in a terminal and keep a
 browser tab open; it works on a phone only if you tunnel to the computer yourself. It also serves the raw data as
 JSON at `/api/status`. Stop it with Ctrl+C.

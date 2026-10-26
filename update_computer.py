@@ -146,9 +146,15 @@ def local_stations(repo, ask_again):
         except (ValueError, IndexError):
             pass
         say("  please enter numbers from the list, e.g. 1,2")
+    try:
+        keep = yaml.safe_load(open(path)) or {}
+        keep = keep if isinstance(keep, dict) else {}
+    except (OSError, yaml.YAMLError):
+        keep = {}
+    keep["stations"] = chosen
     with open(path, "w") as f:
-        f.write("# Which stations run on THIS computer. Not committed (see .gitignore). Change with: python3 update_computer.py --ask-again\n")
-        yaml.safe_dump({"stations": chosen}, f, default_flow_style=False)
+        f.write("# Which stations run on THIS computer (and an optional site: name for the dashboard). Not committed (see .gitignore). Change with: python3 update_computer.py --ask-again\n")
+        yaml.safe_dump(keep, f, default_flow_style=False)
     ensure_ignored(repo, LOCAL_COMPUTER_FILE)
     say(f"Remembered in {LOCAL_COMPUTER_FILE}: {', '.join(chosen)}")
     return {s: stations[s] for s in chosen}
