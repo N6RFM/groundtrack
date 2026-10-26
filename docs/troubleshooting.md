@@ -4,6 +4,8 @@
 
 ## Troubleshooting
 
+> **Dashboard or its tunnel not working?** Run `python3 setup_dashboard_tunnel.py --check` on that computer; it names the broken link and the fix. Details: [Remote dashboard](remote-dashboard.md). For "is anything wrong with my stations" in general, `python3 status.py`.
+
 Symptoms we've actually hit, in the order worth checking:
 
 **`station: no station selected, and there's no terminal to ask on` (or
