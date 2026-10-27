@@ -897,6 +897,7 @@ problem and 0 otherwise. Which stations count as "on this computer" comes from `
 
 ```
 python3 clean_iq.py                          # show what would go (changes nothing)
+python3 clean_iq.py --ask                    # show it, then ask y/N (what the GUI button runs)
 python3 clean_iq.py --yes                    # move those files to the Trash
 python3 clean_iq.py --yes --archive ~/old_iq # ...or to another folder
 python3 clean_iq.py --yes --delete           # ...or delete them for good

@@ -362,12 +362,20 @@ class GroundtrackGUI(tk.Tk):
 
         row2 = ttk.LabelFrame(self.content, text="Checks and maintenance")
         row2.pack(fill="x", padx=8, pady=4)
-        ttk.Button(row2, text="Run preflight.py (full check)",
+        row2a = ttk.Frame(row2)
+        row2a.pack(fill="x")
+        ttk.Button(row2a, text="Run preflight.py (full check)",
                    command=self.run_preflight).pack(side="left", padx=(0, 6))
-        ttk.Button(row2, text="Run doctor.py",
+        ttk.Button(row2a, text="Run doctor.py",
                    command=self.run_doctor).pack(side="left", padx=(0, 6))
-        ttk.Button(row2, text="Run doctor.py --fix",
+        ttk.Button(row2a, text="Run doctor.py --fix",
                    command=self.run_doctor_fix).pack(side="left", padx=(0, 6))
+        row2b = ttk.Frame(row2)
+        row2b.pack(fill="x", pady=(4, 0))
+        ttk.Button(row2b, text="Open dashboard",
+                   command=self.open_dashboard).pack(side="left", padx=(0, 6))
+        ttk.Button(row2b, text="Clean old IQ files (new window)",
+                   command=self.clean_iq_files).pack(side="left", padx=(0, 6))
 
         row4 = ttk.LabelFrame(self.content, text="Pass scheduler")
         row4.pack(fill="x", padx=8, pady=4)
@@ -799,6 +807,33 @@ class GroundtrackGUI(tk.Tk):
             cmd.append("--no-preposition")      # nothing to pre-position on a station with no rotor
         cmd += ["--record-iq", "yes" if self.record_iq_var.get() else "no"]
         self.spawn_in_terminal(cmd)
+
+    def open_dashboard(self):
+        """Open the local dashboard page in the browser; start it first (in its own window) if it is not running."""
+        import urllib.request
+        import webbrowser
+        from dashboard import DEFAULT_PORT
+        url = f"http://127.0.0.1:{DEFAULT_PORT}"
+        try:
+            urllib.request.urlopen(url + "/api/status", timeout=2).close()
+            webbrowser.open(url)
+            self.log(f"Opened {url} in your browser.")
+            return
+        except Exception:
+            pass
+        if not messagebox.askyesno(
+                "Dashboard not running",
+                "The dashboard is not running on this computer.\n\n"
+                "Start it now in a new window? (The always-on service from setup_dashboard_tunnel.py "
+                "makes this unnecessary.)"):
+            return
+        if self.spawn_in_terminal([sys.executable, station.script_path("dashboard.py")]):
+            self.after(2500, lambda: webbrowser.open(url))
+
+    def clean_iq_files(self):
+        """clean_iq.py --ask in its own terminal: it lists what would go and asks y/N. Never touches a
+        file that is open, written to in the last 15 minutes, or younger than 24 hours."""
+        self.spawn_in_terminal([sys.executable, station.script_path("clean_iq.py"), "--ask"])
 
     def run_update_tle(self):
         self.run_cmd([sys.executable, station.script_path("update_tle.py")])

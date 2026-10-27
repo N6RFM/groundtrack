@@ -179,6 +179,8 @@ later, if that becomes worth doing.
 | Run preflight.py (full check) | exactly that, captured and shown in the output pane |
 | Run doctor.py | exactly that |
 | Run doctor.py --fix | actually removes/moves stray compiled files it finds, rather than just printing the commands |
+| Open dashboard | opens the local dashboard (`http://127.0.0.1:8750`) in your browser; if it is not running, asks whether to start `dashboard.py` in its own window first |
+| Clean old IQ files (new window) | `clean_iq.py --ask` in its own terminal: lists the old `.iq` files that would go, asks y/N, then moves them to the Trash. Never touches a file being recorded (open, written to in the last 15 minutes, or younger than 24 hours) |
 | Show schedule | `show_queue.py` |
 | Plan passes (auto-approve) | prompts for hours-ahead, then `plan_passes.py --hours N` |
 | Plan passes (interactive, new window) | same prompt, then `plan_passes.py --hours N --interactive` in its own terminal: asks y/n for every pass, then about each overlap |

@@ -3,7 +3,8 @@
 Clear out old IQ recordings WITHOUT ever touching one that is still being written.
 
     python3 clean_iq.py                         # show what would go (changes nothing)
-    python3 clean_iq.py --yes                   # move those files to the Trash
+    python3 clean_iq.py --ask                   # show, then ask y/N before moving them to the Trash
+    python3 clean_iq.py --yes                   # move those files to the Trash without asking
     python3 clean_iq.py --yes --archive ~/old_iq    # move them to another folder instead
     python3 clean_iq.py --yes --delete          # delete them for good
     python3 clean_iq.py --older-than 72          # only files older than 72 hours (default 24)
@@ -119,6 +120,7 @@ def main():
     ap.add_argument("--min-idle", type=float, default=15.0, metavar="MINUTES", help="never touch a file written to within this many minutes (default 15)")
     ap.add_argument("--dir", action="append", default=[], help="also clean this folder (repeatable)")
     ap.add_argument("--yes", action="store_true", help="actually do it (without this, only shows what would happen)")
+    ap.add_argument("--ask", action="store_true", help="show what would go, then ask before doing it (used by the GUI button)")
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--archive", metavar="DIR", help="move files here instead of the Trash")
     how.add_argument("--delete", action="store_true", help="delete permanently instead of the Trash")
@@ -139,7 +141,16 @@ def main():
         return
     for p, size, age in go:
         print(f"  {'REMOVE' if args.yes else 'would remove'}  {os.path.basename(p)}  ({size / 1e6:.0f} MB, {age / 24:.1f} days old)")
-    print(f"{len(go)} file(s), {total / 1e9:.2f} GB" + ("" if args.yes else " - nothing changed; add --yes to do it."))
+    print(f"{len(go)} file(s), {total / 1e9:.2f} GB" + ("" if args.yes or args.ask else " - nothing changed; add --yes to do it."))
+    if args.ask and not args.yes:
+        where = f"to {args.archive}" if args.archive else ("for good" if args.delete else "to the Trash")
+        try:
+            args.yes = input(f"\nMove these {len(go)} file(s) {where}? [y/N]: ").strip().lower() in ("y", "yes")
+        except EOFError:
+            args.yes = False
+        if not args.yes:
+            print("Nothing changed.")
+            return
     if not args.yes:
         return
     dest = os.path.expanduser(args.archive) if args.archive else None
