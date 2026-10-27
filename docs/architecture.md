@@ -172,6 +172,7 @@ groundtrack/
 ├── passcheck.py             # checks around each pass: pre-pass (compiled record, IQ folder, disk, TLE age) and post-pass IQ verify
 ├── schedule_sync.py         # keeps schedule.yaml in step after a satellite is edited, toggled or deleted
 ├── status.py                # one-screen report per computer: next pass, recent recordings, problems (read-only)
+├── clean_iq.py              # clears old IQ files, never one still being recorded (dry run unless --yes)
 ├── dashboard.py             # the same report as a local web page, refreshing every 30 s (127.0.0.1 only, read-only)
 ├── setup_dashboard_tunnel.py # always-on dashboard + SSH tunnel to your own server; --check diagnoses it (docs/remote-dashboard.md)
 ├── passinfo.py              # words for where a pass goes: direction (ascending/descending) and rise > peak > set compass points

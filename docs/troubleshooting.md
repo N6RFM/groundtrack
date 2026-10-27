@@ -4,6 +4,12 @@
 
 ## Troubleshooting
 
+**`IQ MISSING` although the recording is in the folder.** The check runs at LOS and looks in the IQ folder for a file written
+since the pass started. If the file was moved (to the Trash, another folder) or renamed while the pass was recording, the
+recorder keeps writing to the moved file, the folder looks empty at LOS, and the check says MISSING. The recording itself is
+fine - restore the file. To avoid it, clear old files with `python3 clean_iq.py` (it never touches a file being written)
+instead of by hand during a pass.
+
 > **Dashboard or its tunnel not working?** Run `python3 setup_dashboard_tunnel.py --check` on that computer; it names the broken link and the fix. Details: [Remote dashboard](remote-dashboard.md). For "is anything wrong with my stations" in general, `python3 status.py`.
 
 Symptoms we've actually hit, in the order worth checking:

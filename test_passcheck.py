@@ -302,5 +302,29 @@ expect("grid: bad input gives empty", status.maidenhead(None, 5), "")
 expect("grid: no exact coordinates in the page data", "41.667" not in _json.dumps(dashboard.snapshot()), True)
 expect("dashboard: snapshot carries a site name", bool(dashboard.snapshot()["site"]), True)
 
+# --- clean_iq.py never touches a recording in progress ---
+import clean_iq
+_cd = tempfile.mkdtemp()
+_nowc = time.time()
+def _mk(name, age_h, data=b"x" * 10):
+    p = os.path.join(_cd, name)
+    open(p, "wb").write(data)
+    os.utime(p, (_nowc - age_h * 3600, _nowc - age_h * 3600))
+    return p
+_mk("old.iq", 48)
+_mk("young.iq", 2)
+_mk("recent.iq", 0.05)
+_mk("old.kss", 48)
+_busy = _mk("busy_old.iq", 48)
+_h = open(_busy, "rb")
+_go, _keep = clean_iq.candidates([_cd], 24, 15, _nowc)
+expect("clean_iq: only the old idle .iq is a candidate", [os.path.basename(p) for p, _, _ in _go], ["old.iq"])
+_why = {os.path.basename(p): w for p, _, w in _keep}
+expect("clean_iq: a file still open is kept", _why.get("busy_old.iq"), clean_iq.SKIP_OPEN)
+expect("clean_iq: a file written in the last 15 min is kept", _why.get("recent.iq", "").startswith("written"), True)
+expect("clean_iq: a file under 24 h is kept", _why.get("young.iq", "").startswith("newer"), True)
+expect("clean_iq: other file types are ignored", "old.kss" in _why, False)
+_h.close()
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

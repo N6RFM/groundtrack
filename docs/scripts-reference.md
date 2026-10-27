@@ -893,6 +893,23 @@ It only reads files and never changes anything, so it is safe while `run_passes.
 problem and 0 otherwise. Which stations count as "on this computer" comes from `computer.local.yaml` (see
 `update_computer.py`); with none saved it reports all of them. Each computer reports only itself - run it on both.
 
+## clean_iq.py - clear out old IQ recordings safely
+
+```
+python3 clean_iq.py                          # show what would go (changes nothing)
+python3 clean_iq.py --yes                    # move those files to the Trash
+python3 clean_iq.py --yes --archive ~/old_iq # ...or to another folder
+python3 clean_iq.py --yes --delete           # ...or delete them for good
+python3 clean_iq.py --older-than 72          # only files older than 72 hours (default 24)
+```
+Looks in the IQ folder(s) of this station's flowgraphs (add more with `--dir`) at `.iq` files, and leaves a file alone when
+a program still has it open, when it was written to in the last `--min-idle` minutes (default 15), or when it is newer
+than `--older-than` hours. A recording in progress can therefore never be removed. Use it instead of clearing the
+folder by hand: moving a file that is being recorded into the Trash lets the recorder keep writing there, and the
+after-pass check then reports **IQ MISSING** although the data was recorded (see
+[Troubleshooting](troubleshooting.md)). The Trash option needs the `gio` command (present on normal desktops);
+otherwise use `--archive` or `--delete`.
+
 ## dashboard.py - the same report as a live web page
 
 ```
