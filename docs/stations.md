@@ -264,7 +264,7 @@ Stations are folders in the repository, so every computer gets all of them, but 
 per computer stays out of git: which stations run here (`computer.local.yaml`) and which SDR each station opens
 (`sdr.local.yaml` in the station folder). `python3 update_computer.py` sets both up - asking only when it
 can't tell - then pulls, checks and restarts the GUI. See [Scripts reference](scripts-reference.md).
-`computer.local.yaml` can also hold a `site:` line (for example `site: "Bristol, RI"`), the name the
+`computer.local.yaml` can also hold a `site:` line (for example `site: "Home"`), the name the
 [dashboard](remote-dashboard.md) shows for this computer; without it the host name is used.
 
 ## Safety checks

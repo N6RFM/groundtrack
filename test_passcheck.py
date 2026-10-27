@@ -296,10 +296,10 @@ expect("dashboard: page refreshes itself", "setInterval(load,30000)" in dashboar
 expect("dashboard: binds localhost only", "127.0.0.1" in open("dashboard.py").read() and "0.0.0.0" not in open("dashboard.py").read(), True)
 
 # --- site name and grid square on the dashboard ---
-expect("grid: Rhode Island is FN41", status.maidenhead(41.667, -71.266)[:4], "FN41")
+expect("grid: Boston is FN42", status.maidenhead(42.36, -71.06)[:4], "FN42")
 expect("grid: London is IO91wm", status.maidenhead(51.5, -0.12), "IO91wm")
 expect("grid: bad input gives empty", status.maidenhead(None, 5), "")
-expect("grid: no exact coordinates in the page data", "41.667" not in _json.dumps(dashboard.snapshot()), True)
+expect("grid: no lat/lon fields in the page data", '"lat"' not in _json.dumps(dashboard.snapshot()) and '"lon"' not in _json.dumps(dashboard.snapshot()), True)
 expect("dashboard: snapshot carries a site name", bool(dashboard.snapshot()["site"]), True)
 
 # --- clean_iq.py never touches a recording in progress ---

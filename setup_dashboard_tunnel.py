@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Keep this computer's dashboard reachable through your own server (e.g. your Oracle VM), always on.
+Keep this computer's dashboard reachable through your own server (e.g. a small cloud VM), always on.
 
 Run from the groundtrack folder, once per computer, with a DIFFERENT --remote-port on each:
 
-    python3 setup_dashboard_tunnel.py --server ubuntu@ORACLE_IP --remote-port 18750      # Rhode Island
-    python3 setup_dashboard_tunnel.py --server ubuntu@ORACLE_IP --remote-port 18751      # Texas
+    python3 setup_dashboard_tunnel.py --server ubuntu@YOUR_VM_ADDRESS --remote-port 18750      # Rhode Island
+    python3 setup_dashboard_tunnel.py --server ubuntu@YOUR_VM_ADDRESS --remote-port 18751      # Texas
 
 It (1) makes an SSH key just for this and copies it to the server (asks for the server password
 once, if needed), (2) installs two systemd USER services - the dashboard, and an SSH reverse
 tunnel that restarts itself - and starts them. Both come back after a reboot.
 
 The dashboard stays bound to 127.0.0.1 here and on the server: do NOT open the remote port in the
-Oracle firewall. You view it with an SSH port-forward (printed at the end).
+cloud provider's firewall. You view it with an SSH port-forward (printed at the end).
 
     --dry-run     show what would be written, change nothing
     --uninstall   stop and remove the two services
@@ -112,7 +112,7 @@ def check():
         if r.returncode == 255:
             line(False, f"cannot log in to {server} with this computer's key",
                  "the server may be down or the key was removed from ~/.ssh/authorized_keys on it; "
-                 "see docs/remote-dashboard.md ('key refused'). Check the VM is running in the Oracle console")
+                 "see docs/remote-dashboard.md ('key refused'). Check the VM is running in your cloud provider's console")
         else:
             line(r.stdout.strip() == "200", f"the server sees this computer's dashboard on port {port}",
                  "systemctl --user restart groundtrack-tunnel.service ; wait 20 s ; run --check again. "
