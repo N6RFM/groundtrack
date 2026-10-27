@@ -255,7 +255,9 @@ def collect(name, label, folder, hours, now):
                             "aos": e["aos"].isoformat(), "aos_ts": e["aos"].timestamp(),
                             "local": e["aos"].astimezone().strftime("%a %H:%M")})
     if bad:
-        problems.append(f"{bad} of the last {len(log)} pass(es) did not record properly - see: "
+        which = "; ".join(f"{r['satellite']} {r['local']} ({r['mark']}{': ' + r['extra'] if r['extra'] else ''})"
+                          for r in d["recent"] if r["level"] == "bad")
+        problems.append(f"{bad} of the last {len(log)} pass(es) did not record properly: {which} - details: "
                         f"python3 show_pass_log.py{cmd_radio} --failures-only")
 
     # --- the TLE behind the schedule
