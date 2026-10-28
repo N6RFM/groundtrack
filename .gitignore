@@ -58,3 +58,5 @@ radios.yaml
 sdr.local.yaml
 .satnogs_names.json
 computer.local.yaml
+# which failed passes you have marked as seen (per computer)
+pass_ack.json

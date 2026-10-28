@@ -182,6 +182,7 @@ later, if that becomes worth doing.
 | Open dashboard | opens the local dashboard (`http://127.0.0.1:8750`) in your browser; if it is not running, asks whether to start `dashboard.py` in its own window first |
 | Clean old IQ files (new window) | `clean_iq.py --ask` in its own terminal: lists the old `.iq` files that would go, asks y/N, then moves them to the Trash. Never touches a file being recorded (open, written to in the last 15 minutes, or younger than 24 hours) |
 | Show schedule | `show_queue.py` |
+| Clear pass warnings | after a yes/no confirmation, `status.py --clear` for the current station: marks the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and `status.py` stop reporting them (the pass log is untouched) |
 | Plan passes (auto-approve) | prompts for hours-ahead, then `plan_passes.py --hours N` |
 | Plan passes (interactive, new window) | same prompt, then `plan_passes.py --hours N --interactive` in its own terminal: asks y/n for every pass, then about each overlap |
 | Pair overlapping passes (new window) | `pair_passes.py` in its own terminal: pair two overlapping passes on different receivers and choose whose TLE steers the beam (see [Stations](docs/stations.md#recording-two-satellites-at-once)) |

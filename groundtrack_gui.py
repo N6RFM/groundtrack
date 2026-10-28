@@ -397,6 +397,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.show_pass_log).pack(side="right", padx=(6, 0))
         ttk.Button(row4b, text="Toggle IQ for pass (new window)",
                    command=self.toggle_pass_record_iq).pack(side="right", padx=(0, 6))
+        ttk.Button(row4b, text="Clear pass warnings",
+                   command=self.clear_pass_warnings).pack(side="right", padx=(0, 6))
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
@@ -841,6 +843,19 @@ class GroundtrackGUI(tk.Tk):
 
     def show_schedule(self):
         self.run_cmd([sys.executable, station.script_path("show_queue.py")])
+
+    def clear_pass_warnings(self):
+        """status.py --clear: marks the failed passes of the last 24 h that the dashboard and status.py are
+        reporting as seen, so they stop showing as problems. The pass log itself is never edited."""
+        if not messagebox.askyesno(
+                "Clear pass warnings",
+                "Mark the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and "
+                "status.py stop reporting them?\n\nThe pass log itself is not changed."):
+            return
+        cmd = [sys.executable, station.script_path("status.py"), "--clear"]
+        if self.current_station:
+            cmd += ["--radio", self.current_station]
+        self.run_cmd(cmd)
 
     def show_pass_log(self):
         self.run_cmd([sys.executable, station.script_path("show_pass_log.py")])

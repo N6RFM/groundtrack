@@ -882,6 +882,7 @@ python3 status.py                 # every station that runs on this computer
 python3 status.py --radio helix   # one station
 python3 status.py --hours 48      # look further back than the default 24 hours
 python3 status.py --radios        # also look for the SDRs on USB (a few seconds)
+python3 status.py --clear         # mark the failed passes now reported as seen, so they stop showing as problems
 ```
 For each station it shows whether `run_passes.py` is running, the next pass (countdown, local time, the
 rise > peak > set track), how many approved passes are queued, the passes of the last 24 hours with their
@@ -889,7 +890,11 @@ IQ result, the TLE age and the free space in the IQ folder - then a **PROBLEMS**
 It reports a problem when nothing is queued (or the queue ends within 3 hours), when a pass is within an hour but
 `run_passes.py` is not running, when a recent pass crashed or its IQ file is MISSING or SHORT, when a TLE is over
 14 days old, when the IQ disk is nearly full, or when a compiled flowgraph has Record On Start frozen to False.
-It only reads files and never changes anything, so it is safe while `run_passes.py` is tracking; it exits 1 on a
+**Clearing a warning.** A failed or IQ-missing pass keeps being reported for 24 hours. When you have looked at it (or it was a false alarm, such
+as a file moved during the pass), `python3 status.py --clear` (GUI: **Clear pass warnings**) marks the passes now reported as seen. They stay
+in the Last 24 h list marked `cleared (...)`, but no longer count as a problem. The choice is kept in `pass_ack.json` in the station folder (not
+committed, per computer); `pass_log.jsonl` is never edited. Only passes that exist now are cleared: a later failure is reported as usual.
+Apart from `--clear`, it only reads files and never changes anything, so it is safe while `run_passes.py` is tracking; it exits 1 on a
 problem and 0 otherwise. Which stations count as "on this computer" comes from `computer.local.yaml` (see
 `update_computer.py`); with none saved it reports all of them. Each computer reports only itself - run it on both.
 

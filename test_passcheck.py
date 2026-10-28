@@ -326,5 +326,29 @@ expect("clean_iq: a file under 24 h is kept", _why.get("young.iq", "").startswit
 expect("clean_iq: other file types are ignored", "old.kss" in _why, False)
 _h.close()
 
+# --- clearing pass warnings ---
+_ad = tempfile.mkdtemp()
+_na = datetime.now(timezone.utc)
+_ai = lambda d: d.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+with open(os.path.join(_ad, "satellites.yaml"), "w") as _f:
+    _yaml.safe_dump({"satellites": []}, _f)
+with open(os.path.join(_ad, "schedule.yaml"), "w") as _f:
+    _yaml.safe_dump({"passes": [{"name": "Z", "norad": 9, "approved": True, "aos": _ai(_na + timedelta(hours=5)),
+                                  "los": _ai(_na + timedelta(hours=5, minutes=9)), "max_elevation_deg": 40}]}, _f)
+_aos, _los = _na - timedelta(hours=2), _na - timedelta(hours=2) + timedelta(minutes=9)
+with open(os.path.join(_ad, "pass_log.jsonl"), "w") as _f:
+    for _ev in ({"event": "started"}, {"event": "completed", "reason": "scheduled"},
+                {"event": "iq_check", "status": "MISSING", "note": "no IQ file"}):
+        _f.write(_json.dumps({"timestamp": _ai(_los), "satellite": "SATX", "norad": 7, "aos": _ai(_aos), "los": _ai(_los), **_ev}) + "\n")
+_c1 = status.collect("t", "T", _ad, 24, _na)
+expect("clear: a missing-IQ pass is a problem", any("did not record" in p for p in _c1["problems"]), True)
+_done = status.clear_warnings(_ad, 24, _na)
+expect("clear: reports what it cleared", [(s_, m_) for s_, _, m_ in _done], [("SATX", "IQ MISSING")])
+_c2 = status.collect("t", "T", _ad, 24, _na)
+expect("clear: no longer a problem", any("did not record" in p for p in _c2["problems"]), False)
+expect("clear: still listed, marked cleared", _c2["recent"][0]["mark"].startswith("cleared"), True)
+expect("clear: clearing twice does nothing", status.clear_warnings(_ad, 24, _na), [])
+expect("clear: the pass log is untouched", sum(1 for _ in open(os.path.join(_ad, "pass_log.jsonl"))), 3)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

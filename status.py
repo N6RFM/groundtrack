@@ -152,6 +152,57 @@ def correlate_log(path, since):
     return sorted(out, key=lambda e: e["aos"])
 
 
+# ---------------------------------------------------------------- clearing a warning
+
+ACK_FILE = "pass_ack.json"
+
+
+def ack_key(e):
+    return f"{e['satellite']}|{e['aos'].isoformat()}"
+
+
+def load_acks(folder):
+    try:
+        with open(os.path.join(folder, ACK_FILE)) as f:
+            return set(json.load(f).get("cleared", []))
+    except (OSError, ValueError, AttributeError):
+        return set()
+
+
+def classify(e, now):
+    """(mark, level) of one logged pass; level is ok / warn / info / bad."""
+    outcome, iq = e.get("outcome"), e.get("iq")
+    ended = e["los"] and e["los"] < now
+    if outcome in ("crashed", "error"):
+        return "FAILED", "bad"
+    if iq in ("MISSING", "SHORT"):
+        return f"IQ {iq}", "bad"
+    if outcome == "completed" and iq in ("OK", "SKIPPED", None, "UNKNOWN"):
+        return "ok", "ok"
+    if outcome == "skipped":
+        return "skipped", "warn"
+    if not ended:
+        return "running", "info"
+    return "NO END", "bad"
+
+
+def clear_warnings(folder, hours, now):
+    """Marks every currently flagged pass of the last `hours` as seen, so it stops being reported.
+    Kept in pass_ack.json (not committed); pass_log.jsonl is never edited. Returns [(satellite, local time, mark)]."""
+    log = correlate_log(os.path.join(folder, "pass_log.jsonl"), now - timedelta(hours=hours))
+    acked = load_acks(folder)
+    done = []
+    for e in log:
+        mark, level = classify(e, now)
+        if level == "bad" and ack_key(e) not in acked:
+            acked.add(ack_key(e))
+            done.append((e["satellite"], e["aos"].astimezone().strftime("%a %H:%M"), mark))
+    if done:
+        with open(os.path.join(folder, ACK_FILE), "w") as f:
+            json.dump({"cleared": sorted(acked)}, f, indent=1)
+    return done
+
+
 # ---------------------------------------------------------------- one station
 
 def maidenhead(lat, lon):
@@ -226,21 +277,12 @@ def collect(name, label, folder, hours, now):
     since = now - timedelta(hours=hours)
     log = correlate_log(os.path.join(folder, "pass_log.jsonl"), since)
     bad = 0
+    acked = load_acks(folder)
     for e in log:
         outcome, iq = e.get("outcome"), e.get("iq")
-        ended = e["los"] and e["los"] < now
-        if outcome in ("crashed", "error"):
-            mark, level = "FAILED", "bad"
-        elif iq in ("MISSING", "SHORT"):
-            mark, level = f"IQ {iq}", "bad"
-        elif outcome == "completed" and iq in ("OK", "SKIPPED", None, "UNKNOWN"):
-            mark, level = "ok", "ok"
-        elif outcome == "skipped":
-            mark, level = "skipped", "warn"
-        elif not ended:
-            mark, level = "running", "info"
-        else:
-            mark, level = "NO END", "bad"
+        mark, level = classify(e, now)
+        if level == "bad" and ack_key(e) in acked:
+            mark, level = f"cleared ({mark})", "info"
         bad += level == "bad"
         extra = ""
         if iq == "OK":
@@ -258,7 +300,7 @@ def collect(name, label, folder, hours, now):
         which = "; ".join(f"{r['satellite']} {r['local']} ({r['mark']}{': ' + r['extra'] if r['extra'] else ''})"
                           for r in d["recent"] if r["level"] == "bad")
         problems.append(f"{bad} of the last {len(log)} pass(es) did not record properly: {which} - details: "
-                        f"python3 show_pass_log.py{cmd_radio} --failures-only")
+                        f"python3 show_pass_log.py{cmd_radio} --failures-only ; once seen, clear it: python3 status.py{cmd_radio} --clear")
 
     # --- the TLE behind the schedule
     epochs = {}
@@ -355,6 +397,8 @@ def main():
     ap.add_argument("--radio", help="report on this station only")
     ap.add_argument("--hours", type=float, default=24, help="how far back to look for recorded passes (default 24)")
     ap.add_argument("--radios", action="store_true", help="also look for the SDRs on USB")
+    ap.add_argument("--clear", action="store_true",
+                    help="mark the failed passes now being reported as seen, so they stop showing as problems (the log itself is untouched)")
     args = ap.parse_args()
 
     now = datetime.now(timezone.utc)
@@ -362,6 +406,15 @@ def main():
     if args.radio:
         sts = [s for s in sts if s[0].lower() == args.radio.lower()] or \
             sys.exit(f"no station {args.radio!r} on this computer. Here: {', '.join(s[0] for s in sts)}")
+    if args.clear:
+        total = 0
+        for n, l, d in sts:
+            done = clear_warnings(d, args.hours, now)
+            total += len(done)
+            for sat, when, mark in done:
+                print(f"[{n or 'station'}] cleared: {sat} {when} ({mark})")
+        print(f"Cleared {total} warning(s)." if total else "Nothing to clear.")
+        return
     print(f"groundtrack status - {now.astimezone().strftime('%a %Y-%m-%d %H:%M %Z')}  ({len(sts)} station(s) on this computer)")
     total = sum(station_report(n, l, d, args.hours, now) for n, l, d in sts)
     if args.radios:
