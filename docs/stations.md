@@ -264,6 +264,12 @@ Stations are folders in the repository, so every computer gets all of them, but 
 per computer stays out of git: which stations run here (`computer.local.yaml`) and which SDR each station opens
 (`sdr.local.yaml` in the station folder). `python3 update_computer.py` sets both up - asking only when it
 can't tell - then pulls, checks and restarts the GUI. See [Scripts reference](scripts-reference.md).
+
+**Moving satellites between stations or computers.** To reuse a satellite you already built on another station (for example the same
+Helix hardware at your other location), export it and import it there: `python3 share_satellite.py export NAME --out file.gtsat`, then
+`python3 share_satellite.py import file.gtsat` (GUI: Export selected / Import satellites). The destination station's own `sdr.local.yaml` supplies
+its SDR serial number and soapy string, so differences between radios are handled; see
+[Scripts reference](scripts-reference.md#share_satellitepy---move-satellites-between-stations-or-computers).
 `computer.local.yaml` can also hold a `site:` line (for example `site: "Home"`), the name the
 [dashboard](remote-dashboard.md) shows for this computer; without it the host name is used.
 

@@ -4,6 +4,11 @@
 
 ## Troubleshooting
 
+**After `share_satellite.py import`: "no device string for driver ... in sdr.local.yaml", or the flowgraph opens the wrong radio.** The
+imported flowgraph carries no serial number; the destination's own comes from `sdr.local.yaml` in the station folder. Create it with
+`python3 set_sdr.py --from flowgraphs/<a flowgraph that works on this station>.grc`, then import again with `--replace` (or edit the source block's
+device string in the new `.grc` and recompile it). Imported satellites arrive disabled; `python3 preflight.py` before enabling.
+
 **`IQ MISSING` although the recording is in the folder.** The check runs at LOS and looks in the IQ folder for a file written
 since the pass started. If the file was moved (to the Trash, another folder) or renamed while the pass was recording, the
 recorder keeps writing to the moved file, the folder looks empty at LOS, and the check says MISSING. The recording itself is
