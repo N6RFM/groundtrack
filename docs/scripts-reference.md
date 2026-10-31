@@ -926,6 +926,29 @@ flowgraph. A custom TLE is added to this station's `custom_tle_file` unless the 
 `grcc` on each imported flowgraph when it is installed. It warns about paths in a flowgraph that point into the other computer's home folder
 (a decoder script, say) so you can fix them.
 
+## backup_state.py - back up what GitHub does not have
+
+```
+python3 backup_state.py                              # back up now (into ~/groundtrack-backups)
+python3 backup_state.py --schedule                   # ...and automatically every day (systemd user timer, ~03:30)
+python3 backup_state.py --check                      # newest backup, last run, whether the schedule is on
+python3 backup_state.py --list                       # backups here; --list FILE.zip shows one's contents
+python3 backup_state.py --restore                    # what restoring the newest backup would do (changes nothing)
+python3 backup_state.py --restore --yes              # do it; replaced files are kept as <name>.bak-<time>
+python3 backup_state.py --scp user@host:dir/ --remember   # also copy each new backup to a machine of yours
+```
+Saves `radios.yaml`, `computer.local.yaml`, `sdr.local.yaml`, each station's `satellites.yaml`, `schedule.yaml`, `pass_ack.json`,
+`pass_log.jsonl` and every `.grc` flowgraph, and `tle/`. It does not save the program files (GitHub has them), compiled
+flowgraphs (rebuilt from the `.grc`) or IQ recordings. A backup identical to the newest one is skipped, and the newest 14
+(`--keep`) are kept. The backup holds your station coordinates: it is readable by you only, `*.zip` is ignored by git, and it
+must never go to GitHub - copy it only to machines you own (`--scp` uses `~/.ssh/id_ed25519_groundtrack` when it exists;
+the destination is saved in `backup.local.yaml`, which is not committed).
+
+**After a disk failure:** reinstall, `git clone` the repository, copy a backup file into `~/groundtrack-backups`, then
+`python3 backup_state.py --restore` (look), `--restore --yes` (do it), `./regen_all.sh` to rebuild the compiled flowgraphs and
+`python3 preflight.py`. Restoring onto a different computer leaves `sdr.local.yaml` and `computer.local.yaml` alone, since they
+describe the other computer's radios; run `python3 update_computer.py` to set those for this one.
+
 ## clean_iq.py - clear out old IQ recordings safely
 
 ```

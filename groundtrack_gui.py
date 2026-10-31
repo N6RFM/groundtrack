@@ -362,6 +362,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.export_satellites).pack(side="left", padx=(0, 6))
         ttk.Button(row1c, text="Import satellites from file... (new window)",
                    command=self.import_satellites).pack(side="left", padx=(0, 6))
+        ttk.Button(row1c, text="Back up this computer's settings",
+                   command=self.backup_settings).pack(side="left", padx=(0, 6))
 
         row3 = ttk.LabelFrame(self.content, text="TLE data")
         row3.pack(fill="x", padx=8, pady=4)
@@ -913,6 +915,10 @@ class GroundtrackGUI(tk.Tk):
         row.grid(row=4, column=0, columnspan=2, pady=10)
         ttk.Button(row, text="Build", command=go).pack(side="left", padx=4)
         ttk.Button(row, text="Cancel", command=win.destroy).pack(side="left")
+
+    def backup_settings(self):
+        """backup_state.py: saves satellites, flowgraphs, SDR/station settings (everything GitHub lacks) to ~/groundtrack-backups."""
+        self.run_cmd([sys.executable, station.script_path("backup_state.py")])
 
     def export_satellites(self):
         """share_satellite.py export for the selected satellites: one .gtsat file to carry to another station/computer."""

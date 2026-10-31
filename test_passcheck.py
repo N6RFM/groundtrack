@@ -415,5 +415,48 @@ except shs.ShareError:
     _ok = True
 expect("share: a non-bundle file is refused with a plain message", _ok, True)
 
+# --- backup_state.py: save, skip unchanged, restore, other-computer files ---
+import backup_state as bk
+import socket as _socket
+_R = tempfile.mkdtemp()
+os.makedirs(os.path.join(_R, "helix", "flowgraphs")); os.makedirs(os.path.join(_R, "tle"))
+for _rel, _txt in (("radios.yaml", "stations:\n  helix:\n    dir: helix\n"), ("sdr.local.yaml", "airspy: a\n"),
+                   ("computer.local.yaml", "stations: [helix]\n"), ("helix/satellites.yaml", "satellites: []\n"),
+                   ("helix/flowgraphs/x.grc", "grc1"), ("helix/flowgraphs/x.py", "compiled"), ("helix/big.iq", "iq"),
+                   ("tle/custom.txt", "tle"), ("tle/.gitkeep", "")):
+    open(os.path.join(_R, _rel), "w").write(_txt)
+_names = bk.collect_files(_R)
+expect("backup: saves settings, flowgraph .grc and tle; not compiled .py, IQ or .gitkeep",
+       _names, ["computer.local.yaml", "helix/flowgraphs/x.grc", "helix/satellites.yaml", "radios.yaml", "sdr.local.yaml", "tle/custom.txt"])
+_D = os.path.join(_R, "bk")
+_p1, _w1 = bk.make_backup(_R, _D, 3, say=lambda *_: None)
+expect("backup: first backup is written, owner-only", (_p1 is not None, oct(os.stat(_p1).st_mode & 0o777)), (True, "0o600"))
+_p2, _w2 = bk.make_backup(_R, _D, 3, say=lambda *_: None)
+expect("backup: an identical second run is skipped", _p2, None)
+open(os.path.join(_R, "helix/satellites.yaml"), "w").write("satellites: [a]\n")
+time.sleep(1.1)
+_p3, _ = bk.make_backup(_R, _D, 3, say=lambda *_: None)
+expect("backup: a change makes a new backup", (_p3 is not None, len(bk.archives(_D))), (True, 2))
+os.remove(os.path.join(_R, "helix/flowgraphs/x.grc")); open(os.path.join(_R, "helix/satellites.yaml"), "w").write("broken")
+_m, _other, _plan = bk.plan_restore(_R, _p3, False)
+expect("backup: restore plan finds the lost flowgraph and the edited file",
+       sorted((r, a) for r, a in _plan if a != "same"), [("helix/flowgraphs/x.grc", "new"), ("helix/satellites.yaml", "changed")])
+bk.restore(_R, _p3, False, False, say=lambda *_: None)
+expect("backup: restore without --yes changes nothing", os.path.exists(os.path.join(_R, "helix/flowgraphs/x.grc")), False)
+bk.restore(_R, _p3, True, False, say=lambda *_: None)
+expect("backup: restore --yes brings files back and keeps a .bak of the replaced one",
+       (open(os.path.join(_R, "helix/flowgraphs/x.grc")).read(), any(".bak-" in n for n in os.listdir(os.path.join(_R, "helix")))), ("grc1", True))
+_z = os.path.join(_R, "evil.zip")
+import zipfile as _zf
+with _zf.ZipFile(_z, "w") as _w:
+    _w.writestr(bk.MANIFEST, json.dumps({"format": 1, "host": "other", "created": "x", "digest": "d", "files": ["../escape.txt", "sdr.local.yaml", "radios.yaml"]}))
+    _w.writestr("../escape.txt", "x"); _w.writestr("sdr.local.yaml", "airspy: OTHER\n"); _w.writestr("radios.yaml", "stations:\n  helix:\n    dir: helix\n")
+_m, _other, _plan = bk.plan_restore(_R, _z, False)
+expect("backup: path escapes and the other computer's sdr.local.yaml are skipped",
+       (_other, dict(_plan)["../escape.txt"], dict(_plan)["sdr.local.yaml"], dict(_plan)["radios.yaml"]), (True, "skipped", "skipped", "same"))
+for _i in range(4):
+    time.sleep(1.1); open(os.path.join(_R, "tle/custom.txt"), "w").write(f"t{_i}"); bk.make_backup(_R, _D, 3, say=lambda *_: None)
+expect("backup: only the newest --keep are kept", len(bk.archives(_D)), 3)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

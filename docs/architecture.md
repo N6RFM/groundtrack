@@ -174,6 +174,7 @@ groundtrack/
 ├── status.py                # one-screen report per computer: next pass, recent recordings, problems (read-only)
 ├── share_satellite.py       # export/import satellites (entry + .grc + custom TLE) as one .gtsat file between stations/computers
 ├── clean_iq.py              # clears old IQ files, never one still being recorded (dry run unless --yes)
+├── backup_state.py          # backs up / restores everything GitHub does not have (satellites, .grc, SDR + station settings)
 ├── dashboard.py             # the same report as a local web page, refreshing every 30 s (127.0.0.1 only, read-only)
 ├── setup_dashboard_tunnel.py # always-on dashboard + SSH tunnel to your own server; --check diagnoses it (docs/remote-dashboard.md)
 ├── passinfo.py              # words for where a pass goes: direction (ascending/descending) and rise > peak > set compass points
