@@ -159,7 +159,10 @@ def make_backup(root, folder, keep, force=False, say=say):
     if old and not force:
         m = read_manifest(old[0])
         if m and m.get("digest") == dg:
-            return None, f"unchanged since {os.path.basename(old[0])}"
+            age = (time.time() - os.path.getmtime(old[0])) / 3600
+            when = f"{age:.0f} hours ago" if age >= 1 else "less than an hour ago"
+            return None, (f"nothing has changed since the last backup ({when}), so no new file was made. "
+                          f"Newest: {old[0]}")
     os.makedirs(folder, mode=0o700, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     path = os.path.join(folder, f"{PREFIX}{stamp}.zip")
@@ -419,7 +422,7 @@ def main():
         record_last(root, False, f"{type(e).__name__}: {e}")
         raise
     if path is None:
-        quiet(f"Nothing new to back up ({why}).")
+        quiet(f"Nothing new to back up: {why}")
         path = (archives(folder) or [None])[0]
         copied = True  # nothing new to send...
         try:  # ...unless the last attempt to copy it elsewhere failed: try again

@@ -905,7 +905,9 @@ class GroundtrackGUI(tk.Tk):
 
     def backup_settings(self):
         """backup_state.py: saves satellites, flowgraphs, SDR/station settings (everything GitHub lacks) to ~/groundtrack-backups."""
-        self.run_cmd([sys.executable, station.script_path("backup_state.py")])
+        rc, out = self.run_cmd([sys.executable, station.script_path("backup_state.py")])
+        text = out.strip() or "No output - something is wrong; see the output pane."
+        (messagebox.showinfo if rc == 0 else messagebox.showwarning)("Back up settings", text[-900:])
 
     def export_satellites(self):
         """share_satellite.py export for the selected satellites: one .gtsat file to carry to another station/computer."""
