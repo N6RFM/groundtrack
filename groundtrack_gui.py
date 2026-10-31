@@ -356,6 +356,8 @@ class GroundtrackGUI(tk.Tk):
                    command=self.delete_selected).pack(side="left", padx=(0, 6))
         row1c = ttk.Frame(row1)
         row1c.pack(fill="x", pady=(2, 2))
+        ttk.Button(row1c, text="Build missing .grc for selected...",
+                   command=self.build_grc_selected).pack(side="left", padx=(0, 6))
         ttk.Button(row1c, text="Export selected to file...",
                    command=self.export_satellites).pack(side="left", padx=(0, 6))
         ttk.Button(row1c, text="Import satellites from file... (new window)",
@@ -843,6 +845,75 @@ class GroundtrackGUI(tk.Tk):
         file that is open, written to in the last 15 minutes, or younger than 24 hours."""
         self.spawn_in_terminal([sys.executable, station.script_path("clean_iq.py"), "--ask"])
 
+    def build_grc_selected(self):
+        """Builds the flowgraph of a satellite that was added without one (the 'Also build its .grc' box was not
+        ticked): new_record_only_satellite.py with the entry's own name/NORAD/frequency, so nothing is retyped and
+        nothing is deleted. Recording-only satellites only - a relay satellite needs a decoder flowgraph built in GRC."""
+        name = self.selected_name()
+        if not name:
+            messagebox.showinfo("Build missing .grc", "Select a satellite in the table first.")
+            return
+        sat = next((s for s in load_satellites() if s["name"] == name), None)
+        if not sat:
+            return
+        if "producer_port" in sat or "consumer_port" in sat:
+            messagebox.showinfo(
+                "Relay satellite",
+                f"{name} is a decode-and-relay satellite. A recording-only template does not fit it: build its "
+                f"flowgraph in GNU Radio Companion (copy an existing decoder flowgraph), then compile it.")
+            return
+        grc_path = f"flowgraphs/{slug_for(sat)}.grc"
+        if os.path.exists(grc_path):
+            messagebox.showinfo(
+                "Flowgraph already exists",
+                f"{grc_path} already exists, so there is nothing to build.\n\nTo recompile it use 'Regenerate .grc "
+                f"for selected'; to change it, open it in GNU Radio Companion.")
+            return
+        import new_record_only_satellite as nros
+        templates = nros.list_templates()
+        if not templates:
+            messagebox.showerror("No template", nros.no_template_message())
+            return
+        try:
+            pick = nros.nearest_template(float(sat["freq_hz"]), templates)
+        except (ValueError, KeyError, TypeError, nros.Refusal):
+            pick = None
+        win = tk.Toplevel(self)
+        win.title(f"Build .grc for {name}")
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+        ttk.Label(win, text=f"{name}   NORAD {sat.get('norad')}   {sat.get('freq_hz')} Hz",
+                  font=("", 9, "bold")).grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 2), sticky="w")
+        ttk.Label(win, text="Builds a recording-only flowgraph from a template, compiles it, and enables the satellite\n"
+                            "if a TLE exists. satellites.yaml is not changed otherwise.", foreground="#666").grid(
+            row=1, column=0, columnspan=2, padx=10, pady=(0, 6), sticky="w")
+        ttk.Label(win, text="Template .grc:").grid(row=2, column=0, sticky="e", padx=(10, 4), pady=4)
+        box = ttk.Combobox(win, width=40, values=templates)
+        box.set(pick[0] if pick else templates[0])
+        box.grid(row=2, column=1, padx=(0, 10), pady=4, sticky="w")
+        status = ttk.Label(win, text="", foreground="#a00", wraplength=420)
+        status.grid(row=3, column=0, columnspan=2, padx=10)
+
+        def go():
+            args = [sys.executable, station.script_path("new_record_only_satellite.py"), "--name", name,
+                    "--norad", str(sat["norad"]), "--freq", str(int(sat["freq_hz"])),
+                    "--min-elev", str(sat.get("min_elev_deg", 15)), "--template", box.get().strip(), "--yes"]
+            status.config(text="Building...", foreground="#000")
+            win.update_idletasks()
+            rc, out = self.run_cmd(args)
+            if rc == 0:
+                self.refresh()
+                win.destroy()
+            else:
+                last = out.strip().splitlines()[-1] if out.strip() else "failed - see the output pane"
+                status.config(text=f"Failed: {last}", foreground="#a00")
+
+        row = ttk.Frame(win)
+        row.grid(row=4, column=0, columnspan=2, pady=10)
+        ttk.Button(row, text="Build", command=go).pack(side="left", padx=4)
+        ttk.Button(row, text="Cancel", command=win.destroy).pack(side="left")
+
     def export_satellites(self):
         """share_satellite.py export for the selected satellites: one .gtsat file to carry to another station/computer."""
         names = [self.tree.item(i, "values")[0] for i in self.tree.selection()]
@@ -1143,6 +1214,8 @@ class GroundtrackGUI(tk.Tk):
             fields["template"].config(state="normal" if ut else "disabled")
 
         toggle_fields()  # correct initial disabled/enabled state for every field above
+        ttk.Label(win, text="Skipped the .grc? Later: select the satellite, then 'Build missing .grc for selected...'",
+                  foreground="#666", font=("", 8)).grid(row=10, column=0, columnspan=2, padx=10, sticky="w")
 
         status_label = ttk.Label(win, text="", foreground="#a00", wraplength=340)
         status_label.grid(row=11, column=0, columnspan=2, padx=10, pady=(4, 0))
