@@ -898,6 +898,34 @@ Apart from `--clear`, it only reads files and never changes anything, so it is s
 problem and 0 otherwise. Which stations count as "on this computer" comes from `computer.local.yaml` (see
 `update_computer.py`); with none saved it reports all of them. Each computer reports only itself - run it on both.
 
+## share_satellite.py - move satellites between stations or computers
+
+```
+python3 share_satellite.py export                                         # no names: lists this station's satellites
+python3 share_satellite.py export GBSAT UTNH-Sat --out helix_set.gtsat    # on the source station
+python3 share_satellite.py list helix_set.gtsat                           # look inside (changes nothing)
+python3 share_satellite.py import helix_set.gtsat                         # on the destination station
+python3 share_satellite.py import helix_set.gtsat --replace               # overwrite ones that already exist
+```
+(GUI: **Export selected to file...** and **Import satellites from file...** in Satellite management.)
+
+A bundle is one small `.gtsat` file (a zip) with each satellite's `satellites.yaml` entry, its `.grc` flowgraph and its custom TLE, if any.
+Carry it any way you like - RustDesk file transfer, `scp`, USB, email; GitHub is not involved. It holds no coordinates, host names,
+IQ folders or SDR serial numbers.
+
+**Different radios on each computer.** Two Airspy Minis never share a serial number, and their soapy settings can differ. On export the serial is
+stripped from the flowgraph's SDR block. On import the block is set from the destination station's own `sdr.local.yaml` (the same file
+`set_sdr.py` writes and `preflight.py` checks), so the destination's serial and soapy string are used. If that file has no entry for the driver, the
+flowgraph opens the first radio of that type and you are told to run `set_sdr.py`. Gains, sample rate and filter settings in the flowgraph travel as
+they are - they are part of how the satellite is received.
+
+**Safety.** New satellites arrive **disabled**; review them, run `preflight.py`, then enable. Nothing is overwritten silently: a satellite or
+flowgraph that already exists is skipped unless you answer "replace" at the prompt or give `--replace`, and the old files are kept as `.bak-<time>`
+copies (a replaced satellite keeps its own enabled/priority). Relay ports that clash with this station's are renumbered in both the entry and the
+flowgraph. A custom TLE is added to this station's `custom_tle_file` unless the same NORAD is already there (yours is kept). The importer runs
+`grcc` on each imported flowgraph when it is installed. It warns about paths in a flowgraph that point into the other computer's home folder
+(a decoder script, say) so you can fix them.
+
 ## clean_iq.py - clear out old IQ recordings safely
 
 ```
