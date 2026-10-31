@@ -122,6 +122,10 @@ for _aos, _los, _mx, _ha, _hl, _d in plan_passes.find_passes(_iss, _obs, _ts.utc
     _wrong += not all(0 <= _d[k] <= 360 for k in ("aos_az", "max_az", "los_az"))
 expect("pass details: found passes", _n > 0, True)
 expect("pass details: direction matches the latitude change, azimuths in range", _wrong, 0)
+_lo = [x[2] for x in plan_passes.find_passes(_iss, _obs, _ts.utc(2024, 1, 1), _ts.utc(2024, 1, 4), 10)]
+_hi = [x[2] for x in plan_passes.find_passes(_iss, _obs, _ts.utc(2024, 1, 1), _ts.utc(2024, 1, 4), 30)]
+expect("min elevation: a higher floor keeps only the high passes (and drops some)",
+       (len(_hi) < len(_lo), all(m >= 29.9 for m in _hi), _hi != []), (True, True, True))
 
 # --- status.py ---
 import status

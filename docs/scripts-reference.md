@@ -18,7 +18,10 @@ them to `schedule.yaml` with an `approved:` flag per pass:
 ```
 python3 plan_passes.py --hours 24                # list + approve all by default
 python3 plan_passes.py --hours 48 --interactive   # y/n prompt per pass
+python3 plan_passes.py --hours 24 --min-elev 30   # only passes that climb to at least 30 degrees
 ```
+`--min-elev` raises the minimum for this run only, for every satellite; it never goes below a satellite's own `min_elev_deg`
+and changes nothing in `satellites.yaml`. (GUI: the **Plan** dialogs ask for it; leave it blank for each satellite's own.)
 Or hand-edit `schedule.yaml` afterward, setting `approved: false` on
 anything you don't want recorded. Nothing is ever recorded on a pass that
 isn't in this approved list.

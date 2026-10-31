@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import os
+import sys
 import yaml
 import lanes
 from datetime import datetime, timezone
@@ -232,6 +233,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=24.0,
                      help="lookahead window in hours (default 24)")
+    ap.add_argument("--min-elev", type=float, default=None, metavar="DEG",
+                     help="only passes that climb at least this high, for every satellite (never lower than a satellite's "
+                          "own min_elev_deg, which still applies). Nothing in satellites.yaml changes")
     ap.add_argument("--interactive", action="store_true",
                      help="prompt y/n for each pass instead of approving all")
     ap.add_argument("--ask-overlaps", action="store_true",
@@ -241,6 +245,8 @@ def main():
                      help="interactively append a new satellite to satellites.yaml and exit")
     args = ap.parse_args()
 
+    if args.min_elev is not None and not 0 <= args.min_elev < 90:
+        sys.exit("--min-elev must be between 0 and 90 degrees")
     cfg = load_config()
 
     if args.add_satellite:
@@ -260,12 +266,16 @@ def main():
     t0 = ts.now()
     t1 = ts.tt_jd(t0.tt + args.hours / 24.0)
 
+    def floor(own):
+        """--min-elev raises a satellite's own minimum for this planning run; it never lowers it."""
+        return own if args.min_elev is None else max(float(own), args.min_elev)
+
     all_passes = []
     for norad, sat_cfg in sat_cfgs.items():
         sat = tles.get(norad)
         if sat is None:
             continue
-        for aos, los, max_el, h_aos, h_los, details in find_passes(sat, observer, t0, t1, sat_cfg["min_elev_deg"]):
+        for aos, los, max_el, h_aos, h_los, details in find_passes(sat, observer, t0, t1, floor(sat_cfg["min_elev_deg"])):
             all_passes.append({
                 "name": sat_cfg["name"],
                 "norad": int(norad),
@@ -286,7 +296,8 @@ def main():
     all_passes.sort(key=lambda p: p["aos"])
 
     print(f"\n{len(all_passes)} pass(es) in the next {args.hours:.0f}h "
-          f"above each satellite's min_elev_deg:\n")
+          f"above each satellite's min_elev_deg"
+          + (f" (and at least {args.min_elev:g} deg for this run)" if args.min_elev is not None else "") + ":\n")
     print(f"       {'AOS (threshold)':<22}{'LOS (threshold)':<22}{'':<14}"
           f"{'max el':<10}{'AOS (0deg)':<22}{'LOS (0deg)':<22}{'local AOS':<14}{'track: rises > peaks > sets'}")
     for i, p in enumerate(all_passes):

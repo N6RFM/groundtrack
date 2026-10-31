@@ -189,8 +189,8 @@ later, if that becomes worth doing.
 | Back up settings | `backup_state.py`: saves satellites, flowgraphs and SDR/station settings (everything GitHub does not have) into `~/groundtrack-backups`; a backup identical to the last one is skipped. Restore is a terminal command (see Scripts reference) |
 | Show schedule | `show_queue.py` |
 | Clear pass warnings | after a yes/no confirmation, `status.py --clear` for the current station: marks the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and `status.py` stop reporting them (the pass log is untouched) |
-| Plan: auto-approve | prompts for hours-ahead, then `plan_passes.py --hours N` |
-| Plan: interactive... | same prompt, then `plan_passes.py --hours N --interactive` in its own terminal: asks y/n for every pass, then about each overlap |
+| Plan: auto-approve | asks for hours ahead and an optional minimum elevation (blank = each satellite's own; a number keeps only passes that climb at least that high), then `plan_passes.py --hours N [--min-elev DEG]` |
+| Plan: interactive... | same dialog, then `plan_passes.py --hours N [--min-elev DEG] --interactive` in its own terminal: asks y/n for every pass, then about each overlap |
 | Pair overlapping... | `pair_passes.py` in its own terminal: pair two overlapping passes on different receivers and choose whose TLE steers the beam (see [Stations](docs/stations.md#recording-two-satellites-at-once)) |
 | Toggle IQ for pass... | `toggle_pass_record_iq.py` in its own terminal - needs real stdin for its interactive pass selection, same reasoning as everywhere else that prompts |
 | Show pass log | `show_pass_log.py` |

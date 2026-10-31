@@ -953,12 +953,68 @@ class GroundtrackGUI(tk.Tk):
     def show_pass_log(self):
         self.run_cmd([sys.executable, station.script_path("show_pass_log.py")])
 
+    def ask_plan_options(self, title):
+        """Small modal form: hours ahead and an optional minimum elevation. -> (hours, min_elev or None) or None."""
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.resizable(False, False)
+        win.transient(self)
+        result = {}
+        hours_var = tk.StringVar(value="24")
+        elev_var = tk.StringVar(value="")
+        ttk.Label(win, text="Hours ahead to predict:").grid(row=0, column=0, sticky="w", padx=10, pady=(10, 4))
+        hours_entry = ttk.Entry(win, textvariable=hours_var, width=8)
+        hours_entry.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(10, 4))
+        ttk.Label(win, text="Minimum elevation (degrees):").grid(row=1, column=0, sticky="w", padx=10, pady=4)
+        ttk.Entry(win, textvariable=elev_var, width=8).grid(row=1, column=1, sticky="w", padx=(0, 10), pady=4)
+        ttk.Label(win, foreground="#555", justify="left",
+                  text="Leave elevation blank to use each satellite's own minimum. A number here keeps\n"
+                       "only passes that climb at least that high (never lower than the satellite's own).\n"
+                       "Nothing in satellites.yaml is changed.").grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        msg = ttk.Label(win, foreground="#a00")
+        msg.grid(row=3, column=0, columnspan=2, sticky="w", padx=10)
+
+        def ok(_event=None):
+            try:
+                h = float(hours_var.get())
+                if h <= 0:
+                    raise ValueError
+            except ValueError:
+                msg.config(text="Hours must be a number above 0.")
+                return
+            e = elev_var.get().strip()
+            el = None
+            if e:
+                try:
+                    el = float(e)
+                    if not 0 <= el < 90:
+                        raise ValueError
+                except ValueError:
+                    msg.config(text="Elevation must be a number from 0 to 89.")
+                    return
+            result["v"] = (int(h) if h == int(h) else h, el)
+            win.destroy()
+
+        row = ttk.Frame(win)
+        row.grid(row=4, column=0, columnspan=2, pady=10)
+        ttk.Button(row, text="Plan", command=ok).pack(side="left", padx=4)
+        ttk.Button(row, text="Cancel", command=win.destroy).pack(side="left", padx=4)
+        win.bind("<Return>", ok)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        hours_entry.focus_set()
+        win.grab_set()
+        win.wait_window()
+        return result.get("v")
+
     def plan_passes_auto(self):
-        hours = simpledialog.askinteger(
-            "Plan passes", "Hours ahead to predict:", initialvalue=24, minvalue=1)
-        if not hours:
+        opts = self.ask_plan_options("Plan passes")
+        if not opts:
             return
-        self.run_cmd([sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours)])
+        hours, min_el = opts
+        cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours)]
+        if min_el is not None:
+            cmd += ["--min-elev", str(min_el)]
+        self.run_cmd(cmd)
 
     def pair_passes(self):
         """Record two satellites at once: pair overlapping passes that are on different receivers,
@@ -968,12 +1024,13 @@ class GroundtrackGUI(tk.Tk):
     def plan_passes_interactive(self):
         """--interactive prompts y/n per pass on stdin - same reasoning as run_passes.py, this needs a real
         terminal, not a captured subprocess the GUI can't feed keystrokes into."""
-        hours = simpledialog.askinteger(
-            "Plan passes (interactive)", "Hours ahead to predict:",
-            initialvalue=24, minvalue=1)
-        if not hours:
+        opts = self.ask_plan_options("Plan passes (interactive)")
+        if not opts:
             return
+        hours, min_el = opts
         cmd = [sys.executable, station.script_path("plan_passes.py"), "--hours", str(hours), "--interactive"]
+        if min_el is not None:
+            cmd += ["--min-elev", str(min_el)]
         if self.spawn_in_terminal(cmd):
             self.log(self.output.get("1.0", tk.END) +
                      "\nApprove/reject passes there, then use 'Show schedule' "
