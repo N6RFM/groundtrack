@@ -233,7 +233,7 @@ fixing (not just reporting) anything it finds, before its own other
 checks - a stray left by a manual `grcc` run outside any tool here gets
 caught the next time *anything* runs `preflight.py`, not only via
 `doctor.py --fix`. `new_record_only_satellite.py` and the GUI's
-"Regenerate .grc for selected" do the same immediately after their own
+"Regenerate .grc" do the same immediately after their own
 `grcc` calls, as a safety net: both pass `-o`, which should keep everything
 in `flowgraphs/`, but if any generated file (an embedded block's module, say)
 lands in the current directory anyway it's moved to where the flowgraph imports
@@ -907,7 +907,7 @@ python3 share_satellite.py list helix_set.gtsat                           # look
 python3 share_satellite.py import helix_set.gtsat                         # on the destination station
 python3 share_satellite.py import helix_set.gtsat --replace               # overwrite ones that already exist
 ```
-(GUI: **Export selected to file...** and **Import satellites from file...** in Satellite management.)
+(GUI: **Export to file...** and **Import from file...** in Satellite management.)
 
 A bundle is one small `.gtsat` file (a zip) with each satellite's `satellites.yaml` entry, its `.grc` flowgraph and its custom TLE, if any.
 Carry it any way you like - RustDesk file transfer, `scp`, USB, email; GitHub is not involved. It holds no coordinates, host names,

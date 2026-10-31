@@ -43,20 +43,22 @@ this appears and nothing changes.
 
 ## Satellite management
 
-Left to right, the buttons run roughly in workflow order - view, create,
-modify, toggle state, build, then the one destructive action set apart
-by a divider:
+The buttons sit in three labeled rows: **Satellites** (Refresh, Add, Edit, View YAML, Enable, Disable and, last, Delete),
+**Flowgraphs** (Build missing .grc, Regenerate, Vet, Vet --fix, Suggest extra_outputs) and **Share and back up**
+(Export, Import, Back up settings). Buttons that work on rows act on the satellites selected in the table above:
 
 | Button | What it actually runs |
 |---|---|
 | Refresh | (read-only - re-parses `satellites.yaml` and re-checks each satellite's files) |
 | Add satellite... | `add_satellite.py --name ... --norad ... --freq ...` (plus `--record-only` if checked, plus `--producer-port`/`--consumer-port` if you've overridden the suggested defaults) - or, if Recording-only and "Also build its .grc from a template" are both checked, `new_record_only_satellite.py --name ... --norad ... --freq ... --template ... --yes` instead (plus `--record-iq-toggle` if checked), which builds the .grc, adds the entry, and compiles it in one step (the template box is a picker: the template whose own frequency is nearest to the downlink you typed is chosen for you, 2 m versus 70 cm, and a choice of your own sticks) |
 | Edit selected | `edit_satellite.py NAME` with whichever fields you changed - see below |
-| Enable / Disable selected | `toggle_satellite.py --enable/--disable NAME` |
-| Regenerate .grc for selected | `grcc flowgraphs/<name>.grc` |
-| Vet selected .grc | `vet_grc.py flowgraphs/<name>.grc` - read-only, shown in the output pane |
-| Vet --fix selected .grc | `vet_grc.py --fix flowgraphs/<name>.grc` - confirms first (this one writes to the `.grc`), then shows the diff in the output pane |
+| Enable / Disable | `toggle_satellite.py --enable/--disable NAME` |
+| Regenerate .grc | `grcc flowgraphs/<name>.grc` |
+| Vet .grc | `vet_grc.py flowgraphs/<name>.grc` - read-only, shown in the output pane |
+| Vet --fix .grc | `vet_grc.py --fix flowgraphs/<name>.grc` - confirms first (this one writes to the `.grc`), then shows the diff in the output pane |
 | Delete selected | `delete_satellite.py NAME --yes` |
+| View YAML | shows the selected satellite's `satellites.yaml` entry (read-only) |
+| Suggest extra_outputs | `suggest_extra_outputs.py` for the selected satellite, in its own window |
 
 Both **Add satellite...** and **Edit selected** open a real form, not a
 chain of popups - every field visible at once, and critically, **a
@@ -181,10 +183,10 @@ later, if that becomes worth doing.
 | Run doctor.py --fix | actually removes/moves stray compiled files it finds, rather than just printing the commands |
 | Open dashboard | opens the local dashboard (`http://127.0.0.1:8750`) in your browser; if it is not running, asks whether to start `dashboard.py` in its own window first |
 | Clean old IQ files (new window) | `clean_iq.py --ask` in its own terminal: lists the old `.iq` files that would go, asks y/N, then moves them to the Trash. Never touches a file being recorded (open, written to in the last 15 minutes, or younger than 24 hours) |
-| Build missing .grc for selected... | for a satellite added **without** its flowgraph (the "Also build its .grc" box was not ticked): asks only which template to use (the nearest-frequency one is pre-selected), then runs `new_record_only_satellite.py --name ... --norad ... --freq ... --min-elev ... --template ... --yes` with the satellite's own values - nothing to retype, nothing to delete. Refused with an explanation for a relay satellite (build its flowgraph in GRC) or when the `.grc` already exists |
-| Export selected to file... | asks where to save, then `share_satellite.py export NAME... --out FILE.gtsat` for the selected satellites (several can be selected): one file with their entries, flowgraphs and custom TLEs, to carry to another station or computer |
-| Import satellites from file... (new window) | asks for a `.gtsat` file, then `share_satellite.py import FILE` in its own terminal (it asks before replacing anything). New satellites arrive **disabled**, with this station's own SDR settings; click Refresh, review, then Enable selected |
-| Back up this computer's settings | `backup_state.py`: saves satellites, flowgraphs and SDR/station settings (everything GitHub does not have) into `~/groundtrack-backups`; a backup identical to the last one is skipped. Restore is a terminal command (see Scripts reference) |
+| Build missing .grc... | for a satellite added **without** its flowgraph (the "Also build its .grc" box was not ticked): asks only which template to use (the nearest-frequency one is pre-selected), then runs `new_record_only_satellite.py --name ... --norad ... --freq ... --min-elev ... --template ... --yes` with the satellite's own values - nothing to retype, nothing to delete. Refused with an explanation for a relay satellite (build its flowgraph in GRC) or when the `.grc` already exists |
+| Export to file... | asks where to save, then `share_satellite.py export NAME... --out FILE.gtsat` for the selected satellites (several can be selected): one file with their entries, flowgraphs and custom TLEs, to carry to another station or computer |
+| Import from file... | asks for a `.gtsat` file, then `share_satellite.py import FILE` in its own terminal (it asks before replacing anything). New satellites arrive **disabled**, with this station's own SDR settings; click Refresh, review, then Enable selected |
+| Back up settings | `backup_state.py`: saves satellites, flowgraphs and SDR/station settings (everything GitHub does not have) into `~/groundtrack-backups`; a backup identical to the last one is skipped. Restore is a terminal command (see Scripts reference) |
 | Show schedule | `show_queue.py` |
 | Clear pass warnings | after a yes/no confirmation, `status.py --clear` for the current station: marks the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and `status.py` stop reporting them (the pass log is untouched) |
 | Plan passes (auto-approve) | prompts for hours-ahead, then `plan_passes.py --hours N` |

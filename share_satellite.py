@@ -359,7 +359,7 @@ def main():
         done = [n for n, r in res if r != "skipped"]
         print(f"\n{len(done)} of {len(res)} satellite(s) added or replaced." + (" They are DISABLED." if any(r == 'imported' for _, r in res) else ""))
         if done:
-            print("Next: python3 preflight.py   then   python3 toggle_satellite.py --enable \"NAME\"   (GUI: Enable selected)")
+            print("Next: python3 preflight.py   then   python3 toggle_satellite.py --enable \"NAME\"   (GUI: Enable)")
     except ShareError as err:
         sys.exit(str(err))
 

@@ -356,7 +356,7 @@ The destination's own SDR serial and soapy settings are used, and the satellite 
 
 ## Added a satellite without its flowgraph?
 
-You do not have to delete and re-add it. Select it and click **Build missing .grc for selected...** in the GUI (choose a template, usually the
+You do not have to delete and re-add it. Select it and click **Build missing .grc...** in the GUI (choose a template, usually the
 pre-selected one), or from a terminal run `new_record_only_satellite.py` with the same `--name`, `--norad` and `--freq` the satellite already has:
 it builds only the flowgraph, compiles it and leaves the existing entry as it is. This is for recording-only satellites; a decode-and-relay satellite's
 flowgraph is built in GRC.

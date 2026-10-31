@@ -324,46 +324,35 @@ class GroundtrackGUI(tk.Tk):
         self.tree.pack(side="left", fill="both", expand=True)
 
     def _build_actions(self):
-        row1 = ttk.LabelFrame(self.content, text="Satellite management")
+        row1 = ttk.LabelFrame(self.content, text="Satellite management  (buttons ending in ... or marked 'selected' act on the rows selected above)")
         row1.pack(fill="x", padx=8, pady=(4, 4))
-
-        row1a = ttk.Frame(row1)
-        row1a.pack(fill="x", pady=(2, 2))
-        ttk.Button(row1a, text="Refresh", command=self.refresh).pack(side="left", padx=(0, 6))
-        ttk.Button(row1a, text="Add satellite...",
-                   command=self.add_satellite_dialog).pack(side="left", padx=(0, 6))
-        ttk.Button(row1a, text="Edit selected",
-                   command=self.edit_satellite_dialog).pack(side="left", padx=(0, 6))
-        ttk.Button(row1a, text="View YAML for selected",
-                   command=self.view_yaml_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(row1a, text="Enable selected",
-                   command=lambda: self.toggle(True)).pack(side="left", padx=(0, 6))
-        ttk.Button(row1a, text="Disable selected",
-                   command=lambda: self.toggle(False)).pack(side="left", padx=(0, 6))
-
-        row1b = ttk.Frame(row1)
-        row1b.pack(fill="x", pady=(2, 2))
-        ttk.Button(row1b, text="Regenerate .grc for selected",
-                   command=self.regen_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(row1b, text="Vet selected .grc",
-                   command=self.vet_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(row1b, text="Vet --fix selected .grc",
-                   command=self.vet_fix_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(row1b, text="Suggest extra_outputs (new window)",
-                   command=self.suggest_extra_outputs_selected).pack(side="left", padx=(0, 6))
-        ttk.Separator(row1b, orient="vertical").pack(side="left", fill="y", padx=8)
-        ttk.Button(row1b, text="Delete selected",
-                   command=self.delete_selected).pack(side="left", padx=(0, 6))
-        row1c = ttk.Frame(row1)
-        row1c.pack(fill="x", pady=(2, 2))
-        ttk.Button(row1c, text="Build missing .grc for selected...",
-                   command=self.build_grc_selected).pack(side="left", padx=(0, 6))
-        ttk.Button(row1c, text="Export selected to file...",
-                   command=self.export_satellites).pack(side="left", padx=(0, 6))
-        ttk.Button(row1c, text="Import satellites from file... (new window)",
-                   command=self.import_satellites).pack(side="left", padx=(0, 6))
-        ttk.Button(row1c, text="Back up this computer's settings",
-                   command=self.backup_settings).pack(side="left", padx=(0, 6))
+        groups = [
+            ("Satellites", [
+                ("Refresh", self.refresh),
+                ("Add satellite...", self.add_satellite_dialog),
+                ("Edit selected", self.edit_satellite_dialog),
+                ("View YAML", self.view_yaml_selected),
+                ("Enable", lambda: self.toggle(True)),
+                ("Disable", lambda: self.toggle(False)),
+                ("Delete selected", self.delete_selected)]),
+            ("Flowgraphs", [
+                ("Build missing .grc...", self.build_grc_selected),
+                ("Regenerate .grc", self.regen_selected),
+                ("Vet .grc", self.vet_selected),
+                ("Vet --fix .grc", self.vet_fix_selected),
+                ("Suggest extra_outputs", self.suggest_extra_outputs_selected)]),
+            ("Share and back up", [
+                ("Export to file...", self.export_satellites),
+                ("Import from file...", self.import_satellites),
+                ("Back up settings", self.backup_settings)]),
+        ]
+        for r, (title, buttons) in enumerate(groups):
+            ttk.Label(row1, text=title, width=17, anchor="w",
+                      font=("TkDefaultFont", 9, "bold")).grid(row=r, column=0, sticky="w", padx=(6, 4), pady=3)
+            for c, (text, cmd) in enumerate(buttons, start=1):
+                ttk.Button(row1, text=text, command=cmd).grid(row=r, column=c, sticky="ew", padx=2, pady=3)
+        for c in range(1, 8):
+            row1.columnconfigure(c, weight=1, uniform="satbtn")
 
         row3 = ttk.LabelFrame(self.content, text="TLE data")
         row3.pack(fill="x", padx=8, pady=4)
