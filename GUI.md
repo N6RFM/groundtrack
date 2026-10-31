@@ -45,7 +45,7 @@ this appears and nothing changes.
 
 The buttons sit in three labeled rows: **Satellites** (Refresh, Add, Edit, View YAML, Enable, Disable and, last, Delete),
 **Flowgraphs** (Build missing .grc, Regenerate, Vet, Vet --fix, Suggest extra_outputs) and **Share and back up**
-(Export, Import, Back up settings). Buttons that work on rows act on the satellites selected in the table above:
+(Export, Import, Backup settings). Buttons that work on rows act on the satellites selected in the table above:
 
 | Button | What it actually runs |
 |---|---|
@@ -186,7 +186,7 @@ later, if that becomes worth doing.
 | Build missing .grc... | for a satellite added **without** its flowgraph (the "Also build its .grc" box was not ticked): asks only which template to use (the nearest-frequency one is pre-selected), then runs `new_record_only_satellite.py --name ... --norad ... --freq ... --min-elev ... --template ... --yes` with the satellite's own values - nothing to retype, nothing to delete. Refused with an explanation for a relay satellite (build its flowgraph in GRC) or when the `.grc` already exists |
 | Export to file... | asks where to save, then `share_satellite.py export NAME... --out FILE.gtsat` for the selected satellites (several can be selected): one file with their entries, flowgraphs and custom TLEs, to carry to another station or computer |
 | Import from file... | asks for a `.gtsat` file, then `share_satellite.py import FILE` in its own terminal (it asks before replacing anything). New satellites arrive **disabled**, with this station's own SDR settings; click Refresh, review, then Enable selected |
-| Back up settings | `backup_state.py`: saves satellites, flowgraphs and SDR/station settings (everything GitHub does not have) into `~/groundtrack-backups`; a backup identical to the last one is skipped. Restore is a terminal command (see Scripts reference) |
+| Backup settings... | opens a window to set how often automatic backups run (Off / Weekly / Daily / Monthly), how many to keep, which folder they go in and an optional machine to copy each one to; **Save** applies it, **Back up now** makes one immediately, **Restore...** shows what the newest backup would change and asks before restoring (replaced files kept as .bak), **Open folder** shows them. Same as `backup_state.py` |
 | Show schedule | `show_queue.py` |
 | Clear pass warnings | after a yes/no confirmation, `status.py --clear` for the current station: marks the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and `status.py` stop reporting them (the pass log is untouched) |
 | Plan: auto-approve | asks for hours ahead and an optional minimum elevation (blank = each satellite's own; a number keeps only passes that climb at least that high), then `plan_passes.py --hours N [--min-elev DEG]` |

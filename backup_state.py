@@ -129,6 +129,37 @@ def load_local(root):
         return {}
 
 
+def save_local(root, **kw):
+    """Set (or, with an empty value, remove) keys in backup.local.yaml: dir, keep, scp."""
+    cfg = load_local(root)
+    for k, v in kw.items():
+        if v in (None, "", 0):
+            cfg.pop(k, None)
+        else:
+            cfg[k] = v
+    with open(os.path.join(root, LOCAL_CONFIG), "w") as f:
+        f.write("# This computer's backup settings (not committed - see .gitignore).\n")
+        yaml.safe_dump(cfg, f, default_flow_style=False)
+    return cfg
+
+
+def schedule_state():
+    """-> 'off', 'weekly', 'daily', 'monthly', 'on' (some other time), or None when systemd is not available."""
+    if not shutil.which("systemctl"):
+        return None
+    r = subprocess.run(["systemctl", "--user", "is-active", f"{UNIT}.timer"], capture_output=True, text=True)
+    if r.stdout.strip() != "active":
+        return "off"
+    try:
+        text = open(os.path.expanduser(f"~/.config/systemd/user/{UNIT}.timer")).read()
+    except OSError:
+        return "on"
+    for name, when in WHEN.items():
+        if f"OnCalendar={when}" in text:
+            return name
+    return "on"
+
+
 def backup_dir(root, arg=None):
     return os.path.expanduser(arg or load_local(root).get("dir") or DEFAULT_DIR)
 
@@ -374,12 +405,7 @@ def main():
     root = HERE
     cfg = load_local(root)
     if args.remember:
-        for k, v in (("dir", args.dir), ("keep", args.keep), ("scp", args.scp)):
-            if v:
-                cfg[k] = v
-        with open(os.path.join(root, LOCAL_CONFIG), "w") as f:
-            f.write("# This computer's backup settings (not committed - see .gitignore).\n")
-            yaml.safe_dump(cfg, f, default_flow_style=False)
+        cfg = save_local(root, **{k: v for k, v in (("dir", args.dir), ("keep", args.keep), ("scp", args.scp)) if v})
         say(f"Remembered in {LOCAL_CONFIG}.")
     folder = backup_dir(root, args.dir)
     keep = args.keep or int(cfg.get("keep") or 5)

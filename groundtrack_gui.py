@@ -26,6 +26,7 @@ import io
 import os
 import subprocess
 import sys
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
@@ -344,15 +345,15 @@ class GroundtrackGUI(tk.Tk):
             ("Share and back up", [
                 ("Export to file...", self.export_satellites),
                 ("Import from file...", self.import_satellites),
-                ("Back up settings", self.backup_settings)]),
+                ("Backup settings...", self.backup_settings)]),
         ]
-        for r, (title, buttons) in enumerate(groups):
-            ttk.Label(row1, text=title, width=17, anchor="w",
-                      font=("TkDefaultFont", 9, "bold")).grid(row=r, column=0, sticky="w", padx=(6, 4), pady=3)
-            for c, (text, cmd) in enumerate(buttons, start=1):
-                ttk.Button(row1, text=text, command=cmd).grid(row=r, column=c, sticky="ew", padx=2, pady=3)
-        for c in range(1, 8):
-            row1.columnconfigure(c, weight=1, uniform="satbtn")
+        for title, buttons in groups:
+            line = ttk.Frame(row1)
+            line.pack(fill="x", pady=2)
+            ttk.Label(line, text=title, width=17, anchor="w",
+                      font=("TkDefaultFont", 9, "bold")).pack(side="left", padx=(6, 4))
+            for text, cmd in buttons:
+                ttk.Button(line, text=text, command=cmd).pack(side="left", padx=2)
 
         row3 = ttk.LabelFrame(self.content, text="TLE data")
         row3.pack(fill="x", padx=8, pady=4)
@@ -389,13 +390,13 @@ class GroundtrackGUI(tk.Tk):
                 ("Toggle IQ for pass...", self.toggle_pass_record_iq),
                 ("Clear pass warnings", self.clear_pass_warnings)]),
         ]
-        for r, (title, buttons) in enumerate(groups):
-            ttk.Label(row4, text=title, width=17, anchor="w",
-                      font=("TkDefaultFont", 9, "bold")).grid(row=r, column=0, sticky="w", padx=(6, 4), pady=3)
-            for c, (text, cmd) in enumerate(buttons, start=1):
-                ttk.Button(row4, text=text, command=cmd).grid(row=r, column=c, sticky="ew", padx=2, pady=3)
-        for c in range(1, 5):
-            row4.columnconfigure(c, weight=1, uniform="passbtn")
+        for title, buttons in groups:
+            line = ttk.Frame(row4)
+            line.pack(fill="x", pady=2)
+            ttk.Label(line, text=title, width=17, anchor="w",
+                      font=("TkDefaultFont", 9, "bold")).pack(side="left", padx=(6, 4))
+            for text, cmd in buttons:
+                ttk.Button(line, text=text, command=cmd).pack(side="left", padx=2)
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
@@ -904,10 +905,134 @@ class GroundtrackGUI(tk.Tk):
         ttk.Button(row, text="Cancel", command=win.destroy).pack(side="left")
 
     def backup_settings(self):
-        """backup_state.py: saves satellites, flowgraphs, SDR/station settings (everything GitHub lacks) to ~/groundtrack-backups."""
-        rc, out = self.run_cmd([sys.executable, station.script_path("backup_state.py")])
-        text = out.strip() or "No output - something is wrong; see the output pane."
-        (messagebox.showinfo if rc == 0 else messagebox.showwarning)("Back up settings", text[-900:])
+        """Backup settings window: how often, how many to keep, where, optional copy to another machine,
+        plus Back up now and Restore. Logic lives in backup_state.py."""
+        import backup_state as bk
+        root = station.SCRIPT_DIR
+        cfg = bk.load_local(root)
+        win = tk.Toplevel(self)
+        win.title("Backup settings")
+        win.resizable(False, False)
+        win.transient(self)
+        pad = {"padx": 8, "pady": 4}
+
+        when_names = ["Off", "Weekly", "Daily", "Monthly"]
+        state = bk.schedule_state()
+        when_var = tk.StringVar(value={"off": "Off", "weekly": "Weekly", "daily": "Daily",
+                                       "monthly": "Monthly"}.get(state or "off", "Weekly"))
+        keep_var = tk.StringVar(value=str(cfg.get("keep") or 5))
+        dir_var = tk.StringVar(value=str(cfg.get("dir") or bk.DEFAULT_DIR))
+        scp_var = tk.StringVar(value=str(cfg.get("scp") or ""))
+        info = tk.StringVar()
+        msg = tk.StringVar()
+
+        def refresh_info():
+            folder = bk.backup_dir(root, dir_var.get().strip() or None)
+            arcs = bk.archives(folder)
+            if arcs:
+                age = (time.time() - os.path.getmtime(arcs[0])) / 3600
+                ago = f"{age:.0f} hours ago" if age >= 1 else "less than an hour ago"
+                info.set(f"{len(arcs)} backup(s) in {folder}\nnewest: {os.path.basename(arcs[0])} ({ago})")
+            else:
+                info.set(f"No backups yet in {folder}")
+
+        ttk.Label(win, text="Automatic backup:").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Combobox(win, textvariable=when_var, values=when_names, state="readonly", width=10).grid(
+            row=0, column=1, sticky="w", **pad)
+        if state is None:
+            ttk.Label(win, text="(needs systemd - not available here)", foreground="#a00").grid(
+                row=0, column=2, sticky="w", **pad)
+        ttk.Label(win, text="Keep the newest:").grid(row=1, column=0, sticky="w", **pad)
+        kf = ttk.Frame(win)
+        kf.grid(row=1, column=1, columnspan=2, sticky="w", **pad)
+        ttk.Spinbox(kf, from_=1, to=99, textvariable=keep_var, width=5).pack(side="left")
+        ttk.Label(kf, text=" backups (older ones are deleted)").pack(side="left")
+        ttk.Label(win, text="Save backups in:").grid(row=2, column=0, sticky="w", **pad)
+        ttk.Entry(win, textvariable=dir_var, width=44).grid(row=2, column=1, sticky="w", **pad)
+
+        def browse():
+            d = filedialog.askdirectory(title="Backup folder", initialdir=os.path.expanduser(dir_var.get() or "~"))
+            if d:
+                dir_var.set(d)
+                refresh_info()
+        ttk.Button(win, text="Browse...", command=browse).grid(row=2, column=2, sticky="w", **pad)
+        ttk.Label(win, text="Also copy each one to:").grid(row=3, column=0, sticky="w", **pad)
+        ttk.Entry(win, textvariable=scp_var, width=44).grid(row=3, column=1, sticky="w", **pad)
+        ttk.Label(win, text="optional, e.g. user@your-server:groundtrack-backups/  (a machine you own)",
+                  foreground="#555").grid(row=4, column=1, columnspan=2, sticky="w", padx=8)
+        ttk.Label(win, textvariable=info, justify="left", foreground="#333").grid(
+            row=5, column=0, columnspan=3, sticky="w", padx=8, pady=(10, 2))
+        ttk.Label(win, text="Backups hold your station coordinates - keep them private; never upload to GitHub.",
+                  foreground="#555").grid(row=6, column=0, columnspan=3, sticky="w", padx=8)
+        ttk.Label(win, textvariable=msg, foreground="#064", justify="left", wraplength=520).grid(
+            row=7, column=0, columnspan=3, sticky="w", padx=8, pady=(6, 0))
+
+        def save(quiet=False):
+            try:
+                keep = int(keep_var.get())
+                if not 1 <= keep <= 99:
+                    raise ValueError
+            except ValueError:
+                msg.set("Keep must be a whole number from 1 to 99.")
+                return False
+            d = dir_var.get().strip()
+            bk.save_local(root, dir=("" if d in ("", bk.DEFAULT_DIR) else d), keep=("" if keep == 5 else keep),
+                          scp=scp_var.get().strip())
+            choice = when_var.get().lower()
+            if state is not None:
+                try:
+                    if choice == "off":
+                        if bk.schedule_state() != "off":
+                            bk.schedule(root, True)
+                    elif bk.schedule_state() != choice:
+                        bk.schedule(root, False, choice)
+                except SystemExit as e:
+                    msg.set(f"Settings saved, but the schedule could not be changed: {e}")
+                    refresh_info()
+                    return False
+            if not quiet:
+                msg.set("Saved." + ("" if choice == "off" else f" Backing up {choice}."))
+            refresh_info()
+            return True
+
+        def backup_now():
+            if not save(quiet=True):
+                return
+            rc, out = self.run_cmd([sys.executable, os.path.join(root, "backup_state.py")])
+            msg.set(out.strip()[-600:] or "No output - see the output pane.")
+            refresh_info()
+
+        def restore():
+            if not save(quiet=True):
+                return
+            exe = [sys.executable, os.path.join(root, "backup_state.py"), "--restore"]
+            rc, out = self.run_cmd(exe)
+            if rc != 0 or "Nothing to restore" in out or "no backups" in out.lower():
+                msg.set(out.strip()[-600:] or "Nothing to restore.")
+                return
+            if messagebox.askyesno("Restore from the newest backup?",
+                                   out.strip()[-1400:] + "\n\nRestore these files now? Replaced files are kept as .bak copies.",
+                                   parent=win):
+                rc, out = self.run_cmd(exe + ["--yes"])
+                msg.set(out.strip()[-600:])
+                self.refresh()
+
+        def open_folder():
+            folder = bk.backup_dir(root, dir_var.get().strip() or None)
+            os.makedirs(folder, exist_ok=True)
+            try:
+                subprocess.Popen(["xdg-open", folder])
+            except OSError:
+                msg.set(f"Backups are in {folder}")
+
+        row = ttk.Frame(win)
+        row.grid(row=8, column=0, columnspan=3, pady=10)
+        ttk.Button(row, text="Save", command=save).pack(side="left", padx=4)
+        ttk.Button(row, text="Back up now", command=backup_now).pack(side="left", padx=4)
+        ttk.Button(row, text="Restore...", command=restore).pack(side="left", padx=4)
+        ttk.Button(row, text="Open folder", command=open_folder).pack(side="left", padx=4)
+        ttk.Button(row, text="Close", command=win.destroy).pack(side="left", padx=4)
+        refresh_info()
 
     def export_satellites(self):
         """share_satellite.py export for the selected satellites: one .gtsat file to carry to another station/computer."""

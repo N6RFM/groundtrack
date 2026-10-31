@@ -931,6 +931,8 @@ flowgraph. A custom TLE is added to this station's `custom_tle_file` unless the 
 
 ## backup_state.py - back up what GitHub does not have
 
+Everything below can be set in the GUI: **Backup settings...** (how often, how many to keep, folder, optional copy to another machine, Back up now, Restore).
+
 ```
 python3 backup_state.py                              # back up now (into ~/groundtrack-backups)
 python3 backup_state.py --schedule                   # ...and automatically every Sunday (systemd user timer, ~03:30); --schedule daily / monthly

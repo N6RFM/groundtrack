@@ -461,6 +461,10 @@ expect("backup: path escapes and the other computer's sdr.local.yaml are skipped
 for _i in range(4):
     time.sleep(1.1); open(os.path.join(_R, "tle/custom.txt"), "w").write(f"t{_i}"); bk.make_backup(_R, _D, 3, say=lambda *_: None)
 expect("backup: only the newest --keep are kept", len(bk.archives(_D)), 3)
+bk.save_local(_R, keep=7, scp="u@h:d/")
+expect("backup: settings are saved to backup.local.yaml", (bk.load_local(_R).get("keep"), bk.load_local(_R).get("scp")), (7, "u@h:d/"))
+bk.save_local(_R, scp="", keep=0)
+expect("backup: an empty value removes a setting", bk.load_local(_R), {})
 
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)
