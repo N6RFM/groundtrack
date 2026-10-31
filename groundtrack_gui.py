@@ -376,28 +376,26 @@ class GroundtrackGUI(tk.Tk):
         ttk.Button(row2b, text="Clean old IQ files (new window)",
                    command=self.clean_iq_files).pack(side="left", padx=(0, 6))
 
-        row4 = ttk.LabelFrame(self.content, text="Pass scheduler")
+        row4 = ttk.LabelFrame(self.content, text="Pass scheduler  (buttons ending in ... open their own window)")
         row4.pack(fill="x", padx=8, pady=4)
-        # Four buttons on the first line, and the two that aren't about planning on a second line against the
-        # right edge, so none is ever pushed out of view however narrow the window.
-        row4a = ttk.Frame(row4)
-        row4a.pack(fill="x")
-        ttk.Button(row4a, text="Show schedule",
-                   command=self.show_schedule).pack(side="left", padx=(0, 6))
-        ttk.Button(row4a, text="Plan passes (auto-approve)",
-                   command=self.plan_passes_auto).pack(side="left", padx=(0, 6))
-        ttk.Button(row4a, text="Plan passes (interactive, new window)",
-                   command=self.plan_passes_interactive).pack(side="left", padx=(0, 6))
-        ttk.Button(row4a, text="Pair overlapping passes (new window)",
-                   command=self.pair_passes).pack(side="left", padx=(0, 6))
-        row4b = ttk.Frame(row4)
-        row4b.pack(fill="x", pady=(4, 0))
-        ttk.Button(row4b, text="Show pass log",
-                   command=self.show_pass_log).pack(side="right", padx=(6, 0))
-        ttk.Button(row4b, text="Toggle IQ for pass (new window)",
-                   command=self.toggle_pass_record_iq).pack(side="right", padx=(0, 6))
-        ttk.Button(row4b, text="Clear pass warnings",
-                   command=self.clear_pass_warnings).pack(side="right", padx=(0, 6))
+        groups = [
+            ("Planning", [
+                ("Show schedule", self.show_schedule),
+                ("Plan: auto-approve", self.plan_passes_auto),
+                ("Plan: interactive...", self.plan_passes_interactive),
+                ("Pair overlapping...", self.pair_passes)]),
+            ("Review and fix", [
+                ("Show pass log", self.show_pass_log),
+                ("Toggle IQ for pass...", self.toggle_pass_record_iq),
+                ("Clear pass warnings", self.clear_pass_warnings)]),
+        ]
+        for r, (title, buttons) in enumerate(groups):
+            ttk.Label(row4, text=title, width=17, anchor="w",
+                      font=("TkDefaultFont", 9, "bold")).grid(row=r, column=0, sticky="w", padx=(6, 4), pady=3)
+            for c, (text, cmd) in enumerate(buttons, start=1):
+                ttk.Button(row4, text=text, command=cmd).grid(row=r, column=c, sticky="ew", padx=2, pady=3)
+        for c in range(1, 5):
+            row4.columnconfigure(c, weight=1, uniform="passbtn")
 
         row5 = ttk.LabelFrame(self.content, text="Relay / Bridge")
         row5.pack(fill="x", padx=8, pady=4)
