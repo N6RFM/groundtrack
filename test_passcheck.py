@@ -350,5 +350,70 @@ expect("clear: still listed, marked cleared", _c2["recent"][0]["mark"].startswit
 expect("clear: clearing twice does nothing", status.clear_warnings(_ad, 24, _na), [])
 expect("clear: the pass log is untouched", sum(1 for _ in open(os.path.join(_ad, "pass_log.jsonl"))), 3)
 
+# --- share_satellite.py: bundles between stations with different SDR serials ---
+import share_satellite as shs, zipfile as _zf
+_GRC = """blocks:
+- name: src
+  id: osmosdr_source
+  parameters:
+    args: driver=airspy,soapy=0,serial=AAAA1111
+    freq: '437500000'
+- name: sock
+  id: network_socket_pdu
+  parameters:
+    port: '9101'
+"""
+def _station(serial, extra_sats=()):
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "flowgraphs"))
+    with open(os.path.join(d, "satellites.yaml"), "w") as f:
+        _yaml.safe_dump({"custom_tle_file": "custom.txt", "satellites": list(extra_sats)}, f, sort_keys=False)
+    with open(os.path.join(d, "sdr.local.yaml"), "w") as f:
+        f.write(f"airspy: driver=airspy,soapy=1,serial={serial}\n")
+    return d
+_A = _station("AAAA1111", [{"name": "GB-SAT", "norad": 100933, "freq_hz": 437500000, "script": "flowgraphs/gbsat.py",
+                            "min_elev_deg": 15, "producer_port": 9101, "consumer_port": 8101, "enabled": True, "priority": 5}])
+open(os.path.join(_A, "flowgraphs", "gbsat.grc"), "w").write(_GRC + "- name: p\n  parameters:\n    note: /home/someone/decoder.py\n")
+_l1 = "1 A0933U 26227BC  26294.33333333  .00000000  00000-0  00000-0 0  9990"
+open(os.path.join(_A, "custom.txt"), "w").write("UTNH\n" + _l1 + "\n2 A0933  97.4400 100.0000 0010000  90.0000 270.0000 15.00000000    10\n")
+_bundle = os.path.join(tempfile.mkdtemp(), "x.gtsat")
+_man = shs.export_bundle(_A, ["gb-sat"], _bundle, "helix")
+_txt = _zf.ZipFile(_bundle).read("grc/gbsat.grc").decode()
+expect("share: export strips the SDR serial", "AAAA1111" in _txt, False)
+expect("share: export drops enabled/priority/script", [k for k in ("enabled", "priority", "script") if k in _man["satellites"][0]["entry"]], [])
+expect("share: export warns about a /home path", any("/home/" in w for w in _man["warnings"]), True)
+expect("share: export carries no host or coordinate fields", "lat" not in _json.dumps(_man) and "hostname" not in _json.dumps(_man), True)
+_B = _station("BBBB2222", [{"name": "Other", "norad": 1, "freq_hz": 1, "script": "flowgraphs/other.py",
+                            "producer_port": 9101, "consumer_port": 8101, "enabled": True}])
+_msgs = []
+_res = shs.import_bundle(_B, _bundle, lambda w, n: "skip", compile_grc=False, say=_msgs.append)
+expect("share: imported", _res, [("GB-SAT", "imported")])
+_cb = _yaml.safe_load(open(os.path.join(_B, "satellites.yaml")))
+_new = [s for s in _cb["satellites"] if s["name"] == "GB-SAT"][0]
+expect("share: arrives disabled with its own script path", (_new["enabled"], _new["script"]), (False, "flowgraphs/gbsat.py"))
+_gtxt = open(os.path.join(_B, "flowgraphs", "gbsat.grc")).read()
+expect("share: this station's serial and soapy setting are used", "serial=BBBB2222" in _gtxt and "soapy=1" in _gtxt, True)
+expect("share: the other computer's serial is not present", "AAAA1111" in _gtxt, False)
+expect("share: clashing relay ports renumbered in entry and flowgraph", (_new["producer_port"], "'9102'" in _gtxt), (9102, True))
+expect("share: custom TLE added to this station", shs.parse_tles(os.path.join(_B, "custom.txt")).get(100933, [""])[0], "UTNH")
+_res2 = shs.import_bundle(_B, _bundle, lambda w, n: "skip", compile_grc=False, say=_msgs.append)
+expect("share: a second import skips, never overwrites", _res2, [("GB-SAT", "skipped")])
+_C = _station("CCCC3333")  # station with no sdr entry for airspy
+os.remove(os.path.join(_C, "sdr.local.yaml"))
+_m3 = []
+shs.import_bundle(_C, _bundle, lambda w, n: "skip", compile_grc=False, say=_m3.append)
+expect("share: no local SDR entry -> told to run set_sdr.py", any("set_sdr.py" in m for m in _m3), True)
+_res3 = shs.import_bundle(_B, _bundle, lambda w, n: "replace", compile_grc=False, say=_msgs.append)
+_cb2 = _yaml.safe_load(open(os.path.join(_B, "satellites.yaml")))
+_rep = [s for s in _cb2["satellites"] if s["name"] == "GB-SAT"][0]
+expect("share: replace works and keeps the local disabled state", (_res3, _rep["enabled"]), ([("GB-SAT", "replaced")], False))
+expect("share: replace leaves a .bak copy", any(".bak-" in n for n in os.listdir(os.path.join(_B, "flowgraphs"))), True)
+try:
+    shs.read_bundle(os.path.join(_B, "satellites.yaml"))
+    _ok = False
+except shs.ShareError:
+    _ok = True
+expect("share: a non-bundle file is refused with a plain message", _ok, True)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

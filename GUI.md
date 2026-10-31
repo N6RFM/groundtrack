@@ -181,6 +181,8 @@ later, if that becomes worth doing.
 | Run doctor.py --fix | actually removes/moves stray compiled files it finds, rather than just printing the commands |
 | Open dashboard | opens the local dashboard (`http://127.0.0.1:8750`) in your browser; if it is not running, asks whether to start `dashboard.py` in its own window first |
 | Clean old IQ files (new window) | `clean_iq.py --ask` in its own terminal: lists the old `.iq` files that would go, asks y/N, then moves them to the Trash. Never touches a file being recorded (open, written to in the last 15 minutes, or younger than 24 hours) |
+| Export selected to file... | asks where to save, then `share_satellite.py export NAME... --out FILE.gtsat` for the selected satellites (several can be selected): one file with their entries, flowgraphs and custom TLEs, to carry to another station or computer |
+| Import satellites from file... (new window) | asks for a `.gtsat` file, then `share_satellite.py import FILE` in its own terminal (it asks before replacing anything). New satellites arrive **disabled**, with this station's own SDR settings; click Refresh, review, then Enable selected |
 | Show schedule | `show_queue.py` |
 | Clear pass warnings | after a yes/no confirmation, `status.py --clear` for the current station: marks the failed or IQ-missing passes of the last 24 hours as seen, so the dashboard and `status.py` stop reporting them (the pass log is untouched) |
 | Plan passes (auto-approve) | prompts for hours-ahead, then `plan_passes.py --hours N` |

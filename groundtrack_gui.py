@@ -354,6 +354,12 @@ class GroundtrackGUI(tk.Tk):
         ttk.Separator(row1b, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Button(row1b, text="Delete selected",
                    command=self.delete_selected).pack(side="left", padx=(0, 6))
+        row1c = ttk.Frame(row1)
+        row1c.pack(fill="x", pady=(2, 2))
+        ttk.Button(row1c, text="Export selected to file...",
+                   command=self.export_satellites).pack(side="left", padx=(0, 6))
+        ttk.Button(row1c, text="Import satellites from file... (new window)",
+                   command=self.import_satellites).pack(side="left", padx=(0, 6))
 
         row3 = ttk.LabelFrame(self.content, text="TLE data")
         row3.pack(fill="x", padx=8, pady=4)
@@ -836,6 +842,29 @@ class GroundtrackGUI(tk.Tk):
         """clean_iq.py --ask in its own terminal: it lists what would go and asks y/N. Never touches a
         file that is open, written to in the last 15 minutes, or younger than 24 hours."""
         self.spawn_in_terminal([sys.executable, station.script_path("clean_iq.py"), "--ask"])
+
+    def export_satellites(self):
+        """share_satellite.py export for the selected satellites: one .gtsat file to carry to another station/computer."""
+        names = [self.tree.item(i, "values")[0] for i in self.tree.selection()]
+        if not names:
+            messagebox.showinfo("Export satellites", "Select one or more satellites in the table first.")
+            return
+        path = filedialog.asksaveasfilename(
+            title="Save satellite bundle", defaultextension=".gtsat",
+            initialfile=(names[0].lower().replace(" ", "") if len(names) == 1 else "satellites") + ".gtsat",
+            filetypes=[("Satellite bundle", "*.gtsat"), ("All files", "*")])
+        if not path:
+            return
+        self.run_cmd([sys.executable, station.script_path("share_satellite.py"), "export", *names, "--out", path])
+
+    def import_satellites(self):
+        """share_satellite.py import in its own terminal (it asks before replacing anything). New satellites arrive disabled."""
+        path = filedialog.askopenfilename(
+            title="Open satellite bundle", filetypes=[("Satellite bundle", "*.gtsat"), ("All files", "*")])
+        if not path:
+            return
+        self.spawn_in_terminal([sys.executable, station.script_path("share_satellite.py"), "import", path])
+        self.refresh()
 
     def run_update_tle(self):
         self.run_cmd([sys.executable, station.script_path("update_tle.py")])

@@ -348,3 +348,8 @@ between checks isn't unusual.
 For a satellite with no decoder yet, no `producer_port`/`consumer_port`
 is needed at all - see "Adding a satellite" below.
 
+## Copying satellites to another station or computer
+
+To reuse a satellite you already built on another Helix (or any station), export it and import it there instead of rebuilding it:
+`python3 share_satellite.py export NAME --out file.gtsat` then `python3 share_satellite.py import file.gtsat` (GUI: Export selected / Import satellites).
+The destination's own SDR serial and soapy settings are used, and the satellite arrives disabled. See [Scripts reference](scripts-reference.md#share_satellitepy---move-satellites-between-stations-or-computers).
