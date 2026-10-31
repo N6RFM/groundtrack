@@ -10,7 +10,8 @@ Back up everything about THIS computer's setup that is not in GitHub, and restor
     python3 backup_state.py --restore FILE.zip --yes
     python3 backup_state.py --scp user@host:dir/    # also copy each new backup to another machine (your own server, a NAS)
     python3 backup_state.py --scp user@host:dir/ --remember   # ...and remember that destination (backup.local.yaml)
-    python3 backup_state.py --schedule              # back up automatically every day (systemd user timer)
+    python3 backup_state.py --schedule              # back up automatically every Sunday (systemd user timer)
+    python3 backup_state.py --schedule daily        # ...or every day (also: monthly)
     python3 backup_state.py --unschedule
     python3 backup_state.py --check                 # when was the last backup, and is the schedule on?
 
@@ -25,7 +26,7 @@ PRIVACY: satellites.yaml holds your ground-station coordinates, so a backup does
 by you only, "*.zip" is already ignored by git, and it must never be uploaded to GitHub. Copy it only to machines you own.
 
 A backup identical to the previous one is skipped, so a daily schedule does not pile up files. The newest
---keep (default 14) are kept and older ones removed - only files this script made, nothing else in the folder.
+--keep (default 5) are kept and older ones removed - only files this script made, nothing else in the folder.
 Restoring on a different computer leaves sdr.local.yaml and computer.local.yaml alone (they describe the OTHER
 computer's radios and stations) unless you add --include-computer-files.
 """
@@ -271,7 +272,10 @@ def restore(root, archive, yes, include_computer_files, say=say):
     return 0
 
 
-def units(root, scp):
+WHEN = {"daily": "*-*-* 03:30:00", "weekly": "Sun *-*-* 03:30:00", "monthly": "*-*-01 03:30:00"}
+
+
+def units(root, scp, every="weekly"):
     exe = f"{sys.executable} {os.path.join(root, 'backup_state.py')} --quiet"
     svc = f"""[Unit]
 Description=groundtrack settings backup
@@ -282,10 +286,10 @@ WorkingDirectory={root}
 ExecStart={exe}
 """
     timer = f"""[Unit]
-Description=groundtrack settings backup, daily
+Description=groundtrack settings backup, {every}
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+OnCalendar={WHEN[every]}
 RandomizedDelaySec=900
 Persistent=true
 
@@ -295,7 +299,7 @@ WantedBy=timers.target
     return svc, timer
 
 
-def schedule(root, off):
+def schedule(root, off, every="weekly"):
     if not shutil.which("systemctl"):
         raise SystemExit("needs systemd (systemctl) on this computer")
     d = os.path.expanduser("~/.config/systemd/user")
@@ -311,9 +315,9 @@ def schedule(root, off):
             except OSError:
                 pass
         sc("daemon-reload")
-        say("Daily backup switched off (existing backups are kept).")
+        say("Scheduled backup switched off (existing backups are kept).")
         return
-    svc, timer = units(root, None)
+    svc, timer = units(root, None, every)
     os.makedirs(d, exist_ok=True)
     open(os.path.join(d, f"{UNIT}.service"), "w").write(svc)
     open(os.path.join(d, f"{UNIT}.timer"), "w").write(timer)
@@ -321,7 +325,7 @@ def schedule(root, off):
     r = sc("enable", "--now", f"{UNIT}.timer")
     if r.returncode != 0:
         raise SystemExit("could not enable the timer: " + (r.stderr or r.stdout).strip())
-    say("Daily backup is on (about 03:30; if the computer was off it runs when it next starts).")
+    say(f"Backup is on: {every} (about 03:30; if the computer was off it runs when it next starts).")
     say(f"Check:   python3 backup_state.py --check        Run it now:  systemctl --user start {UNIT}.service")
 
 
@@ -341,7 +345,7 @@ def check(root, folder):
     if shutil.which("systemctl"):
         r = subprocess.run(["systemctl", "--user", "is-active", f"{UNIT}.timer"], capture_output=True, text=True)
         on = r.stdout.strip() == "active"
-        say("Daily schedule: " + ("ON" if on else "off - turn on with: python3 backup_state.py --schedule"))
+        say("Scheduled backup: " + ("ON" if on else "off - turn on with: python3 backup_state.py --schedule"))
     dest = load_local(root).get("scp")
     say("Copy to another machine: " + (dest if dest else "not set (--scp user@host:dir/ --remember)"))
 
@@ -349,7 +353,7 @@ def check(root, folder):
 def main():
     ap = argparse.ArgumentParser(description="Back up / restore this computer's groundtrack settings.")
     ap.add_argument("--dir", help=f"where backups go (default {DEFAULT_DIR})")
-    ap.add_argument("--keep", type=int, help="how many backups to keep (default 14)")
+    ap.add_argument("--keep", type=int, help="how many backups to keep (default 5)")
     ap.add_argument("--scp", metavar="DEST", help="also copy each new backup to this scp destination (user@host:dir/)")
     ap.add_argument("--remember", action="store_true", help=f"save --dir/--keep/--scp in {LOCAL_CONFIG} (not committed)")
     ap.add_argument("--force", action="store_true", help="save even if nothing changed")
@@ -357,7 +361,8 @@ def main():
     ap.add_argument("--restore", nargs="?", const="", metavar="FILE", help="restore the newest backup (or FILE); dry run unless --yes")
     ap.add_argument("--yes", action="store_true")
     ap.add_argument("--include-computer-files", action="store_true", help="on restore, also restore sdr.local.yaml / computer.local.yaml")
-    ap.add_argument("--schedule", action="store_true", help="back up every day automatically")
+    ap.add_argument("--schedule", nargs="?", const="weekly", choices=sorted(WHEN), metavar="WHEN",
+                    help="back up automatically: weekly (default), daily or monthly")
     ap.add_argument("--unschedule", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--quiet", action="store_true", help="print only problems (for the scheduled run)")
@@ -374,11 +379,11 @@ def main():
             yaml.safe_dump(cfg, f, default_flow_style=False)
         say(f"Remembered in {LOCAL_CONFIG}.")
     folder = backup_dir(root, args.dir)
-    keep = args.keep or int(cfg.get("keep") or 14)
+    keep = args.keep or int(cfg.get("keep") or 5)
     dest = args.scp or cfg.get("scp")
 
     if args.schedule or args.unschedule:
-        schedule(root, args.unschedule)
+        schedule(root, args.unschedule, args.schedule or "weekly")
         return 0
     if args.check:
         check(root, folder)

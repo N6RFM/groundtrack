@@ -933,7 +933,7 @@ flowgraph. A custom TLE is added to this station's `custom_tle_file` unless the 
 
 ```
 python3 backup_state.py                              # back up now (into ~/groundtrack-backups)
-python3 backup_state.py --schedule                   # ...and automatically every day (systemd user timer, ~03:30)
+python3 backup_state.py --schedule                   # ...and automatically every Sunday (systemd user timer, ~03:30); --schedule daily / monthly
 python3 backup_state.py --check                      # newest backup, last run, whether the schedule is on
 python3 backup_state.py --list                       # backups here; --list FILE.zip shows one's contents
 python3 backup_state.py --restore                    # what restoring the newest backup would do (changes nothing)
@@ -942,7 +942,7 @@ python3 backup_state.py --scp user@host:dir/ --remember   # also copy each new b
 ```
 Saves `radios.yaml`, `computer.local.yaml`, `sdr.local.yaml`, each station's `satellites.yaml`, `schedule.yaml`, `pass_ack.json`,
 `pass_log.jsonl` and every `.grc` flowgraph, and `tle/`. It does not save the program files (GitHub has them), compiled
-flowgraphs (rebuilt from the `.grc`) or IQ recordings. A backup identical to the newest one is skipped, and the newest 14
+flowgraphs (rebuilt from the `.grc`) or IQ recordings. A backup identical to the newest one is skipped, and the newest 5
 (`--keep`) are kept. The backup holds your station coordinates: it is readable by you only, `*.zip` is ignored by git, and it
 must never go to GitHub - copy it only to machines you own (`--scp` uses `~/.ssh/id_ed25519_groundtrack` when it exists;
 the destination is saved in `backup.local.yaml`, which is not committed).
