@@ -68,6 +68,7 @@ split by what you're actually trying to do:
 | [Scripts Reference](docs/scripts-reference.md) | What every script does, including `doctor.py` in depth |
 | [Testing](docs/testing.md) | The full end-to-end test recipe, sending test frames, verifying Doppler/rotor without a real pass |
 | [Remote Dashboard](docs/remote-dashboard.md) | `dashboard.py` (live web page per computer), viewing the other computer's through your own server, and `--check` when it breaks |
+| [Backup and restore](docs/backup.md) | `backup_state.py` / the GUI's **Backup settings...**: saving everything GitHub does not have, how often, and getting it back after a disk failure |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and known caveats |
 | [Environment](docs/environment.md) | What's actually confirmed working, and how to check your own versions live |
 | [GUI.md](GUI.md) | The optional `groundtrack_gui.py` interface over these same CLI tools |

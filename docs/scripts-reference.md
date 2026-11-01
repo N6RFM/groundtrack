@@ -949,6 +949,8 @@ flowgraphs (rebuilt from the `.grc`) or IQ recordings. A backup identical to the
 must never go to GitHub - copy it only to machines you own (`--scp` uses `~/.ssh/id_ed25519_groundtrack` when it exists;
 the destination is saved in `backup.local.yaml`, which is not committed).
 
+(Full guide: [Backup and restore](backup.md).)
+
 **After a disk failure:** reinstall, `git clone` the repository, copy a backup file into `~/groundtrack-backups`, then
 `python3 backup_state.py --restore` (look), `--restore --yes` (do it), `./regen_all.sh` to rebuild the compiled flowgraphs and
 `python3 preflight.py`. Restoring onto a different computer leaves `sdr.local.yaml` and `computer.local.yaml` alone, since they

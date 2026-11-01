@@ -245,6 +245,10 @@ The message says what and how to fix it. It doesn't stop the pass (the decoder s
 The NORAD number in `satellites.yaml` probably has a typo. Find the satellite at https://db.satnogs.org and fix it with
 `python3 edit_satellite.py NAME --norad N`. A satellite too new for SatNOGS can stay as it is, with its TLE in `tle/custom.txt`.
 
+### I lost satellites.yaml or my flowgraphs (disk failure, wrong delete)
+
+Restore from your last backup: see [Backup and restore](backup.md). `python3 backup_state.py --restore` shows what it would bring back before it changes anything.
+
 ## Known caveats
 
 - **GRC doesn't reload a `.grc` that changed on disk**: `wire_record_iq.py`,
