@@ -4,6 +4,8 @@
 
 ## How the pieces fit together
 
+> Pictures of all of this: [Diagrams](diagrams.md).
+
 Every satellite runs a GNU Radio flowgraph - that part's universal.
 Everything after it is optional and varies per satellite; no single
 downstream tool is required for all of them:

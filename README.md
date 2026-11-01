@@ -68,6 +68,7 @@ split by what you're actually trying to do:
 | [Scripts Reference](docs/scripts-reference.md) | What every script does, including `doctor.py` in depth |
 | [Testing](docs/testing.md) | The full end-to-end test recipe, sending test frames, verifying Doppler/rotor without a real pass |
 | [Remote Dashboard](docs/remote-dashboard.md) | `dashboard.py` (live web page per computer), viewing the other computer's through your own server, and `--check` when it breaks |
+| [Diagrams](docs/diagrams.md) | Three pictures: the schedule from orbital data to a checked recording, where the signal goes for each kind of satellite, and the dashboard tunnel |
 | [Backup and restore](docs/backup.md) | `backup_state.py` / the GUI's **Backup settings...**: saving everything GitHub does not have, how often, and getting it back after a disk failure |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and known caveats |
 | [Environment](docs/environment.md) | What's actually confirmed working, and how to check your own versions live |
