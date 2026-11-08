@@ -10,6 +10,7 @@
 > recently, and anything wrong. See [Scripts reference](scripts-reference.md#statuspy---one-screen-for-whats-next-what-recorded-is-anything-wrong).
 > To copy satellites you built on another station or computer: `python3 share_satellite.py export` / `import` (see [Scripts reference](scripts-reference.md#share_satellitepy---move-satellites-between-stations-or-computers)).
 > To clear old IQ files without ever catching one being recorded: `python3 clean_iq.py` (dry run), then `--yes`.
+> In the GUI, click a column heading in the satellite table to sort by it (click again to reverse, a third time for the file's own order).
 > To protect your satellites, flowgraphs and settings (none of which are in GitHub): GUI **Backup settings...**, or `python3 backup_state.py --schedule` once, then check with `python3 backup_state.py --check`.
 > For a page that stays open and updates itself: `python3 dashboard.py`, then open http://127.0.0.1:8750.
 

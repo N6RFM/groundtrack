@@ -78,7 +78,7 @@ split by what you're actually trying to do:
 
 `groundtrack_gui.py` gives you a table of every satellite plus buttons
 for the actions documented above - add/edit/enable/disable/delete, run
-checks, refresh TLEs, plan and execute passes. It's entirely optional:
+checks, refresh TLEs, plan and execute passes. Click a column heading to sort the table (alphabetical or numerical; click again to reverse, a third time for file order). It's entirely optional:
 every action is a real subprocess call to the exact same scripts and
 flags documented here, so the CLI tools work identically whether or not
 you ever open the GUI. See [GUI.md](GUI.md) for the full picture,
