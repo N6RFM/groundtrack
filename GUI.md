@@ -41,6 +41,8 @@ refused up front rather than in a terminal that opens and immediately fails.
 Every button below acts on the active station. With no `radios.yaml` none of
 this appears and nothing changes.
 
+**Sorting the table:** click a column heading to sort by it - Satellite alphabetically (GEOSCAN-2 before GEOSCAN-10), NORAD and Freq numerically, Enabled, Mode, and Gaps found by how many gaps. Click again to reverse (the arrow shows the direction), and a third time to return to the order in `satellites.yaml`. The choice is kept when the table refreshes; the order in the file is never changed.
+
 ## Satellite management
 
 The buttons sit in three labeled rows: **Satellites** (Refresh, Add, Edit, View YAML, Enable, Disable and, last, Delete),

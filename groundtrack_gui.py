@@ -24,6 +24,7 @@ Run from the repo root, same as every other script here:
 import contextlib
 import io
 import os
+import re
 import subprocess
 import sys
 import time
@@ -313,8 +314,11 @@ class GroundtrackGUI(tk.Tk):
         }
         widths = {"name": 110, "norad": 70, "freq": 100, "enabled": 70,
                   "mode": 110, "gaps": 350}
+        self.col_headings = headings
+        self.sort_col = None          # None = the order the satellites are in the file
+        self.sort_desc = False
         for col in columns:
-            self.tree.heading(col, text=headings[col])
+            self.tree.heading(col, text=headings[col], command=lambda c=col: self.sort_by(c))
             self.tree.column(col, width=widths[col], anchor="w")
         self.tree.tag_configure("hasgaps", background="#ffe4e4")
         self.tree.tag_configure("disabled", foreground="#888888")
@@ -323,6 +327,50 @@ class GroundtrackGUI(tk.Tk):
         self.tree.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self.tree.pack(side="left", fill="both", expand=True)
+
+    @staticmethod
+    def _sort_key(col, value):
+        """Key for ordering one table cell: numbers numerically, names in natural order (GEOSCAN-2 before GEOSCAN-10)."""
+        text = str(value)
+        if col in ("norad", "freq"):
+            try:
+                return (0, int(float(text)), "")
+            except ValueError:
+                return (1, 0, text.lower())          # '?' and other non-numbers go last
+        if col == "gaps":
+            n = 0 if text == "none" else text.count(";") + 1
+            return (0, n, text.lower())
+        parts = re.split(r"(\d+)", text.lower())
+        return (0, 0, [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in parts])
+
+    def sort_by(self, col):
+        """Click a column heading: first click sorts ascending, second descending, third back to file order."""
+        if self.sort_col == col:
+            if not self.sort_desc:
+                self.sort_desc = True
+            else:
+                self.sort_col, self.sort_desc = None, False
+        else:
+            self.sort_col, self.sort_desc = col, False
+        self._apply_sort()
+
+    def _apply_sort(self):
+        """Order the rows as chosen and show the arrow on the sorted heading. Selection is kept."""
+        ids = list(self.tree.get_children())
+        if self.sort_col is None:
+            order = {sat.get("name", "?"): i for i, sat in enumerate(load_satellites())}
+            ids.sort(key=lambda i: order.get(i, len(order)))
+        else:
+            idx = self.tree["columns"].index(self.sort_col)
+            ids.sort(key=lambda i: (self._sort_key(self.sort_col, self.tree.item(i, "values")[idx]),
+                                    self._sort_key("name", i)), reverse=self.sort_desc)
+        for pos, iid in enumerate(ids):
+            self.tree.move(iid, "", pos)
+        for c, title in self.col_headings.items():
+            arrow = ""
+            if c == self.sort_col:
+                arrow = "  \u25bc" if self.sort_desc else "  \u25b2"
+            self.tree.heading(c, text=title + arrow)
 
     def _build_actions(self):
         row1 = ttk.LabelFrame(self.content, text="Satellite management  (buttons ending in ... or marked 'selected' act on the rows selected above)")
@@ -553,6 +601,7 @@ class GroundtrackGUI(tk.Tk):
                 name, sat.get("norad", "?"), sat.get("freq_hz", "?"),
                 "yes" if enabled else "no", mode, gaps_text,
             ), tags=tags)
+        self._apply_sort()
 
     def selected_name(self):
         sel = self.tree.selection()
