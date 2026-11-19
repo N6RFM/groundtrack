@@ -15,6 +15,11 @@ notify: false       # set true for desktop notifications at AOS/LOS (needs notif
 # (no -t needed - rotctld defaults to port 4533, matching rot_port below)
 rot_host: 127.0.0.1
 rot_port: 4533
+# Optional - spare the motors by moving the rotor less often (GUI: Rotor settings..., or set_rotor.py):
+# rot_threshold_deg: 5      # move only after the satellite has drifted this many degrees (default 5)
+# rot_threshold_az_deg: 8   # ...azimuth on its own
+# rot_threshold_el_deg: 4   # ...elevation on its own
+# rot_min_interval_s: 5     # never send a new command sooner than this many seconds after the last (default 0 = no limit)
 
 satellites:
   - name: GEOSCAN-1

@@ -125,7 +125,7 @@ Comparing against the rotor's real, live position breaks that
 compounding, since the rotor's own physical progress toward the previous
 target is accounted for rather than ignored.
 
-### Two settings, two different purposes
+### Settings: how far, how often, and how fast it can go
 
 - **`rot_threshold_deg`** (`satellites.yaml` top level, default `5.0` if
   unset) - how much the satellite has to drift before a new command is
@@ -133,6 +133,25 @@ target is accounted for rather than ignored.
   smaller corrections; larger means fewer, bigger jumps. This is a
   *tracking behavior* tuning knob - it doesn't change how fast the rotor
   can physically move, only how often it's told to.
+- **`rot_threshold_az_deg`** and **`rot_threshold_el_deg`** (optional) - the
+  same step, but for azimuth and elevation separately; each overrides
+  `rot_threshold_deg` for its own axis. Useful when one axis is harder on
+  the motor, or your beam is wider in one direction. Each can be up to 45
+  degrees: beyond that the lead-ahead search (which assumes the satellite
+  keeps moving away from where it is now) stops being reliable.
+- **`rot_min_interval_s`** (optional, default `0` = no limit) - a ceiling on
+  how often: a new command is never sent sooner than this many seconds after
+  the last tracking command. It does not *cause* commands - a command is sent
+  only when the satellite has also drifted the step above - so the two
+  combine ("at least 5 degrees AND at least 5 seconds") rather than
+  compete. Waiting longer costs a little pointing accuracy, since the
+  satellite drifts a bit further before the rotor catches up; with a narrow
+  beam keep it short, with a wide beam a longer wait is a cheap way to spare
+  the motors. In a typical low-earth-orbit pass a 5 degree step already
+  produces a command about every 20 to 30 seconds, so a minimum under about
+  15 seconds changes little; it matters when you choose a small step.
+  Pre-positioning toward the next pass is a single move and is not held back
+  by it.
 - **`rot_max_deg_per_sec`** (`satellites.yaml` top level, no default -
   the feature is simply off if unset) - your rotor's actual, empirically
   measured maximum slew rate. This isn't consumed by `run_passes.py`'s
@@ -143,16 +162,35 @@ target is accounted for rather than ignored.
   limit surfaced as advance information rather than something you
   discover mid-pass.
 
-Both are set the same way, at the top level of `satellites.yaml`
-alongside `rot_host`/`rot_port` - not per-satellite, since both describe
-the physical rotor itself, not any one satellite:
+They are set at the top level of `satellites.yaml` alongside
+`rot_host`/`rot_port` - not per-satellite, since they describe the physical
+rotor itself, not any one satellite:
 ```yaml
 rot_host: 127.0.0.1
 rot_port: 4533
-rot_threshold_deg: 3.0      # optional - defaults to 5.0 if omitted
+rot_threshold_deg: 5.0      # optional - defaults to 5.0 if omitted
+rot_threshold_az_deg: 8.0   # optional - azimuth only (overrides rot_threshold_deg)
+rot_threshold_el_deg: 4.0   # optional - elevation only
+rot_min_interval_s: 5       # optional - at most one command every 5 s (0 = no limit)
 rot_max_deg_per_sec: 4.5    # optional - the peak-rate warning is simply
                             # off in plan_passes.py if this is omitted
 ```
+
+You don't have to edit the file by hand. Three ways:
+
+- **GUI:** the **Rotor settings...** button next to Start run_passes.py
+  (greyed out on a station with no rotor).
+- **Terminal:** `python3 set_rotor.py --step-deg 5 --min-interval 5`
+  (`--az-deg`, `--el-deg` for separate steps; `--show` prints what is in
+  effect). Only the `rot_*` lines are touched; your other lines and comments
+  stay as they are.
+- **One run only:** `python3 run_passes.py --rot-threshold-deg 5
+  --rot-min-interval 5` overrides the file for that run without saving
+  anything.
+
+A running `run_passes.py` keeps the values it started with; the next start
+uses the new ones. It prints the values in effect when it starts, for
+example `Rotor moves only after 5 deg of drift, and at most once every 5 s.`
 
 ### Measuring your rotor's real capability
 

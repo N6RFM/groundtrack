@@ -54,6 +54,7 @@ STATION_EXEMPT = {
     "lanes.py": "a library: works on whatever passes and config it is handed",
     "update_computer.py": "runs from the project root and visits each station folder itself",
     "sdr_local.py": "a library: reads sdr.local.yaml from the current (already chosen) station folder",
+    "rotor_settings.py": "a library: edits the satellites.yaml it is handed (set_rotor.py and the GUI choose the station)",
     "dashboard.py": "read-only web page: asks status.py for every station on this computer",
     "backup_state.py": "runs from the project root and visits every station folder itself",
     "setup_dashboard_tunnel.py": "installs services for the folder it is run from; no station state",

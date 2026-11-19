@@ -279,7 +279,9 @@ Restore from your last backup: see [Backup and restore](backup.md). `python3 bac
   predicted future point, not the satellite's instantaneous position -
   see [Tracking Control](tracking-control.md) for the full explanation. There is
   no time-based forced send at all anymore; a long quiet stretch during a
-  slow-moving part of a pass is correct, not a sign anything's stuck.
+  slow-moving part of a pass is correct, not a sign anything's stuck. To make
+  the rotor move less often, raise the step or set a minimum time between
+  commands: GUI **Rotor settings...** or `python3 set_rotor.py --show`.
   Comparisons use the rotor's own live, polled position
   (`Rotctld.get_pos()`), not the last-commanded value - measure your
   rotor's actual capability with `measure_rotor_speed.py` before assuming

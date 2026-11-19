@@ -199,7 +199,13 @@ later, if that becomes worth doing.
 | Start relay.py / Start tcp_bridge.py (new window) | `relay.py --verbose` / `tcp_bridge.py --verbose`, each in its own terminal |
 | Start run_passes.py (new window) | prompts for the status line update interval (default 5s), then `run_passes.py --verbose --status-interval N`, plus `--no-preposition` and `--record-iq no` if their checkboxes are unchecked, in its own terminal |
 
-Two checkboxes sit next to that button. **Pre-position rotor for next
+Next to it, **Rotor settings...** opens a window for how far and how often the rotor moves while tracking: an azimuth step and an
+elevation step in degrees, and a minimum number of seconds between commands (0 = no limit). A command is sent only when the
+satellite has drifted at least the step AND the minimum time has passed, so larger values mean fewer, bigger moves and less wear on the motors.
+Save writes only the `rot_*` lines of the station's `satellites.yaml` (the same as `set_rotor.py`); it applies the next time
+run_passes.py starts. The button is greyed out on a station with no rotor.
+
+Two checkboxes sit next to the Start button. **Pre-position rotor for next
 pass** (checked by default) moves the rotor toward wherever the next
 approved pass will rise as soon as the current one ends, instead of
 leaving it wherever the pass happened to finish. On a station with no rotor

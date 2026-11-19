@@ -138,7 +138,9 @@
    `plan_passes.py` then warns you before approving any pass whose peak
    angular rate would exceed what your rotor can actually keep up with.
    `rot_threshold_deg` (also top-level, default `5.0` if unset) tunes how
-   often the rotor gets a new command during tracking. See [Tracking
+   often the rotor gets a new command during tracking; `rot_min_interval_s`
+   and per-axis steps limit it further to spare the motors (GUI: **Rotor
+   settings...**, or `python3 set_rotor.py`). See [Tracking
    Control](tracking-control.md) for the full explanation of both
    settings and how they were arrived at - including a real, hard-learned
    lesson about the measurement tool's own `--tolerance` setting that's

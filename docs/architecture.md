@@ -171,6 +171,8 @@ groundtrack/
 ├── tle_number.py            # catalog number from a TLE line, incl. Alpha-5 (A0470 = 100470) for numbers >= 100000; OMM->TLE conversion; relabel_tle for SatNOGS temporary IDs
 ├── sdr_local.py             # this computer's SDR device strings (sdr.local.yaml, untracked) - used by new_record_only_satellite.py and preflight.py
 ├── set_sdr.py               # create/show that file: --from a working flowgraph, --set, --show
+├── rotor_settings.py        # how far / how often the rotor moves (rot_threshold_*_deg, rot_min_interval_s): rules and comment-preserving edits
+├── set_rotor.py             # show/set those from the terminal (the GUI's Rotor settings... window does the same)
 ├── passcheck.py             # checks around each pass: pre-pass (compiled record, IQ folder, disk, TLE age) and post-pass IQ verify
 ├── schedule_sync.py         # keeps schedule.yaml in step after a satellite is edited, toggled or deleted
 ├── status.py                # one-screen report per computer: next pass, recent recordings, problems (read-only)

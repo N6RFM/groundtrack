@@ -464,6 +464,8 @@ class GroundtrackGUI(tk.Tk):
         self.record_iq_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(row6, text="Record IQ",
                          variable=self.record_iq_var).pack(side="left", padx=(8, 0))
+        self.rotor_settings_btn = ttk.Button(row6, text="Rotor settings...", command=self.rotor_settings_dialog)
+        self.rotor_settings_btn.pack(side="left", padx=(14, 0))
 
     def _build_output(self):
         header = ttk.Frame(self.content)
@@ -565,9 +567,79 @@ class GroundtrackGUI(tk.Tk):
             return
         if self._has_rotor():
             self.preposition_check.configure(state="normal", text=self.PREPOSITION_TEXT)
+            self.rotor_settings_btn.configure(state="normal")
         else:
             self.preposition_check.configure(
                 state="disabled", text=f"{self.PREPOSITION_TEXT} (no rotor on this station)")
+            self.rotor_settings_btn.configure(state="disabled")
+
+    def rotor_settings_dialog(self):
+        """How far and how often the rotor moves while tracking. Saved into this station's satellites.yaml
+        (only the rot_* lines change; everything else stays as it is). rotor_settings.py holds the rules."""
+        import rotor_settings as rs
+        try:
+            cfg = yaml.safe_load(open(CONFIG_PATH)) or {}
+        except (OSError, yaml.YAMLError) as e:
+            messagebox.showerror("Rotor settings", f"Can't read {CONFIG_PATH}: {e}")
+            return
+        cur = rs.effective(cfg)
+        win = tk.Toplevel(self)
+        win.title("Rotor settings" + (f" [{self.current_station}]" if self.current_station else ""))
+        win.resizable(False, False)
+        win.transient(self)
+        pad = {"padx": 8, "pady": 4}
+        az_var = tk.StringVar(value=f"{cur['az']:g}")
+        el_var = tk.StringVar(value=f"{cur['el']:g}")
+        iv_var = tk.StringVar(value=f"{cur['interval']:g}")
+        msg = tk.StringVar()
+
+        ttk.Label(win, justify="left", wraplength=470,
+                  text="While tracking, the rotor is sent a new position only when BOTH are true: the satellite has "
+                       "drifted at least the step below from where the rotor is pointing, and at least the minimum "
+                       "time has passed since the last command. Bigger steps and longer times mean fewer, "
+                       "larger moves (less wear on the motors) and a little more pointing error between them."
+                  ).grid(row=0, column=0, columnspan=3, sticky="w", padx=8, pady=(10, 6))
+        ttk.Label(win, text="Azimuth step (degrees):").grid(row=1, column=0, sticky="w", **pad)
+        ttk.Entry(win, textvariable=az_var, width=8).grid(row=1, column=1, sticky="w", **pad)
+        ttk.Label(win, text="Elevation step (degrees):").grid(row=2, column=0, sticky="w", **pad)
+        ttk.Entry(win, textvariable=el_var, width=8).grid(row=2, column=1, sticky="w", **pad)
+        ttk.Label(win, text=f"above 0, up to {rs.MAX_STEP_DEG:g}; default {rs.DEFAULT_THRESHOLD_DEG:g}", foreground="#555").grid(
+            row=1, column=2, rowspan=2, sticky="w", padx=8)
+        ttk.Label(win, text="At most one command every (seconds):").grid(row=3, column=0, sticky="w", **pad)
+        ttk.Entry(win, textvariable=iv_var, width=8).grid(row=3, column=1, sticky="w", **pad)
+        ttk.Label(win, text="0 = no time limit", foreground="#555").grid(row=3, column=2, sticky="w", padx=8)
+        ttk.Label(win, textvariable=msg, foreground="#a00", wraplength=470, justify="left").grid(
+            row=4, column=0, columnspan=3, sticky="w", padx=8)
+
+        def save():
+            try:
+                az, el, iv = float(az_var.get()), float(el_var.get()), float(iv_var.get())
+            except ValueError:
+                msg.set("Enter numbers in all three boxes.")
+                return
+            bad = rs.problem(az, el, iv)
+            if bad:
+                msg.set(bad)
+                return
+            try:
+                rs.set_keys(CONFIG_PATH, rs.changes_for(az, el, iv))
+            except (OSError, ValueError, yaml.YAMLError) as e:
+                msg.set(str(e))
+                return
+            running = station.run_passes_pid(self.current_station) if self.current_station else None
+            note = ("\n\nrun_passes.py is running for this station and keeps its old values until you restart it."
+                    if running else "\n\nTakes effect the next time run_passes.py starts.")
+            self.log(f"Rotor settings saved: az {az:g} deg, el {el:g} deg, "
+                     + (f"at most every {iv:g} s." if iv > 0 else "no time limit."))
+            messagebox.showinfo("Rotor settings", "Saved." + note, parent=win)
+            win.destroy()
+
+        row = ttk.Frame(win)
+        row.grid(row=5, column=0, columnspan=3, pady=10)
+        ttk.Button(row, text="Save", command=save).pack(side="left", padx=4)
+        ttk.Button(row, text="Cancel", command=win.destroy).pack(side="left", padx=4)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        win.grab_set()
 
     def refresh(self):
         self._update_station_bar()

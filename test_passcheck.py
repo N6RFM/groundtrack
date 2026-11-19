@@ -466,5 +466,91 @@ expect("backup: settings are saved to backup.local.yaml", (bk.load_local(_R).get
 bk.save_local(_R, scp="", keep=0)
 expect("backup: an empty value removes a setting", bk.load_local(_R), {})
 
+# --- rotor tracking limits: per-axis step, minimum time between commands, settings file edits ---
+import run_passes
+import rotor_settings as rs
+
+
+class _FakeRot:
+    """Stands in for Rotctld: instantly at wherever it was last told to go."""
+    def __init__(self):
+        self.last, self.last_track_t, self.sent = None, None, []
+
+    def get_pos(self):
+        return self.last
+
+    def point(self, az, el):
+        self.last = (az, el)
+        self.sent.append((az, el))
+
+
+def _fly(**limits):
+    """One ISS pass, one tick a second; -> (commands sent, seconds at which they were sent)."""
+    _p = next(iter(plan_passes.find_passes(_iss, _obs, _ts.utc(2024, 1, 2), _ts.utc(2024, 1, 3), 10)))
+    _a, _l = _p[0].utc_datetime(), _p[1].utc_datetime()
+    _rot, _when, _sec = _FakeRot(), [], 0
+    _now = _a
+    while _now < _l:
+        _el, _az = run_passes.elevation_deg(_iss, _obs, _ts.from_datetime(_now))
+        _before = len(_rot.sent)
+        run_passes.maybe_update_rotor(_rot, _iss, _obs, _ts, _now, _az, _el, _l, now_mono=1000.0 + _sec, **limits)
+        if len(_rot.sent) > _before:
+            _when.append(_sec)
+        _now += timedelta(seconds=1)
+        _sec += 1
+    return _rot.sent, _when
+
+
+_base, _bw = _fly(threshold_deg=5.0)
+_slow, _sw = _fly(threshold_deg=5.0, min_interval_s=90.0)
+expect("rotor: tracking a whole pass sends commands at all", len(_base) > 3, True)
+expect("rotor: a 90 s minimum never lets two commands closer than 90 s",
+       all(b - a >= 90 for a, b in zip(_sw, _sw[1:])), True)
+expect("rotor: a minimum time means fewer commands, never more", len(_slow) < len(_base), True)
+_bigaz, _ = _fly(threshold_deg=5.0, threshold_az_deg=15.0, threshold_el_deg=5.0)
+expect("rotor: a bigger azimuth step alone means fewer commands", len(_bigaz) < len(_base), True)
+_bigel, _ = _fly(threshold_deg=5.0, threshold_az_deg=5.0, threshold_el_deg=15.0)
+expect("rotor: a bigger elevation step alone means fewer commands", len(_bigel) <= len(_base), True)
+_big, _ = _fly(threshold_deg=20.0)
+expect("rotor: a bigger step sends fewer commands", len(_big) < len(_base), True)
+_fr = _FakeRot()
+_fr.last_track_t = 1000.0
+run_passes.maybe_update_rotor(_fr, _iss, _obs, _ts, datetime(2024, 1, 2, 12, tzinfo=timezone.utc), 10.0, 20.0,
+                              datetime(2024, 1, 2, 12, 10, tzinfo=timezone.utc), min_interval_s=5.0, now_mono=1002.0)
+expect("rotor: inside the minimum time nothing is sent, even with no known position", _fr.sent, [])
+
+expect("rotor settings: defaults are 5 degrees, no time limit", rs.effective({}), {"az": 5.0, "el": 5.0, "interval": 0.0})
+expect("rotor settings: per-axis keys beat rot_threshold_deg",
+       rs.effective({"rot_threshold_deg": 3, "rot_threshold_az_deg": 8, "rot_min_interval_s": 5}),
+       {"az": 8.0, "el": 3.0, "interval": 5.0})
+expect("rotor settings: a command-line value beats the file for both axes",
+       rs.effective({"rot_threshold_az_deg": 8, "rot_min_interval_s": 5}, 2.0, 0.0), {"az": 2.0, "el": 2.0, "interval": 0.0})
+expect("rotor settings: nonsense in the file falls back to the default",
+       rs.effective({"rot_threshold_deg": "abc", "rot_min_interval_s": -4}), {"az": 5.0, "el": 5.0, "interval": 0.0})
+expect("rotor settings: bad values are refused",
+       (rs.problem(0, 5, 5) is not None, rs.problem(5, 60, 5) is not None, rs.problem(5, 5, -1) is not None, rs.problem(45, 45, 5)),
+       (True, True, True, None))
+_rd = tempfile.mkdtemp()
+_rf = os.path.join(_rd, "satellites.yaml")
+_orig = ("# my station\nground_station:\n  lat: 1\n\nrot_host: 127.0.0.1\nrot_port: 4533\n"
+         "rot_threshold_deg: 3.0   # my favourite\n\nsatellites:\n  - name: A\n    norad: 1\n")
+open(_rf, "w").write(_orig)
+rs.set_keys(_rf, {"rot_threshold_deg": 6, "rot_min_interval_s": 5})
+_t = open(_rf).read()
+expect("rotor settings: an existing key changes in place and keeps its comment", "rot_threshold_deg: 6   # my favourite" in _t, True)
+expect("rotor settings: a new key goes in front of satellites:, other lines untouched",
+       _t.replace("rot_threshold_deg: 6   # my favourite", "rot_threshold_deg: 3.0   # my favourite").replace("rot_min_interval_s: 5\n", "")
+       == _orig, True)
+expect("rotor settings: the file still loads with the new values",
+       (_y.safe_load(_t)["rot_min_interval_s"], _y.safe_load(_t)["satellites"][0]["name"]), (5, "A"))
+rs.set_keys(_rf, rs.changes_for(8.0, 4.0, 0.0))
+_c = _y.safe_load(open(_rf))
+expect("rotor settings: different axis steps write per-axis keys and drop the time limit",
+       (_c["rot_threshold_az_deg"], _c["rot_threshold_el_deg"], "rot_min_interval_s" in _c), (8, 4, False))
+rs.set_keys(_rf, rs.changes_for(5.0, 5.0, 10.0))
+_c = _y.safe_load(open(_rf))
+expect("rotor settings: equal steps collapse back to one key",
+       (_c["rot_threshold_deg"], "rot_threshold_az_deg" in _c, "rot_threshold_el_deg" in _c, _c["rot_min_interval_s"]), (5, False, False, 10))
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

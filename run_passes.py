@@ -360,6 +360,7 @@ class Rotctld:
         self.host, self.port = host, port
         self.sock = None
         self.last = None  # (az, el) last commanded, so callers can compare drift
+        self.last_track_t = None  # time.monotonic() of the last TRACKING command (set by maybe_update_rotor; pre-positioning does not count)
 
     def _connect(self):
         self.sock = socket.create_connection((self.host, self.port), timeout=3)
@@ -401,7 +402,7 @@ class Rotctld:
 
 
 def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
-                            threshold_deg, los_dt):
+                            threshold_deg, los_dt, threshold_az_deg=None, threshold_el_deg=None):
     """Ported from gtk-rot-ctrl.c (N6RFM/Gpredict_K4KDR_N6RFM), a proven,
     working implementation - binary-searches for the FURTHEST future time
     (up to los_dt) where the satellite's position still sits within
@@ -423,6 +424,8 @@ def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
     Bounded by los_dt (search never looks past the end of the current
     pass) or a 20-minute fallback window, matching the original's own
     choice when no pass end time is known."""
+    az_limit = threshold_deg if threshold_az_deg is None else threshold_az_deg   # each axis may have its own step
+    el_limit = threshold_deg if threshold_el_deg is None else threshold_el_deg
     max_lookahead_s = (los_dt - now_dt).total_seconds() if los_dt else 1200.0
     max_lookahead_s = max(max_lookahead_s, 1.0)
     time_delta_s = max_lookahead_s
@@ -437,7 +440,7 @@ def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
         el_deg, az_deg = elevation_deg(sat, observer, t_future)
         daz = abs(az_deg - cur_az)
         delv = abs(el_deg - cur_el)
-        exceeds = el_deg < 0 or daz > threshold_deg or delv > threshold_deg
+        exceeds = el_deg < 0 or daz > az_limit or delv > el_limit
         if exceeds:
             time_delta_s -= step_s
         else:
@@ -447,7 +450,8 @@ def find_lead_ahead_target(sat, observer, ts, now_dt, cur_az, cur_el,
 
 
 def maybe_update_rotor(rot, sat, observer, ts, now_dt, cur_az, cur_el,
-                        los_dt, threshold_deg=5.0):
+                        los_dt, threshold_deg=5.0, threshold_az_deg=None, threshold_el_deg=None,
+                        min_interval_s=0.0, now_mono=None):
     """The actual decision gpredict's threshold check makes: has the
     satellite drifted more than threshold_deg from the rotor's OWN LIVE
     reported position - not wherever it was last commanded to go? If not,
@@ -462,21 +466,34 @@ def maybe_update_rotor(rot, sat, observer, ts, now_dt, cur_az, cur_el,
     compounds the lead-ahead offset on every trigger - roughly doubling
     the real, physical step size the rotor actually takes between
     commands. Falls back to rot.last only if the live query fails (or
-    there's no previous command yet), rather than skipping the update."""
+    there's no previous command yet), rather than skipping the update.
+
+    Two limits keep the motors from being worked harder than needed: the drift must exceed the step for its axis
+    (threshold_az_deg / threshold_el_deg, each defaulting to threshold_deg), AND at least min_interval_s seconds
+    must have passed since the last tracking command (0 = no time limit). Both have to hold for a command to be sent;
+    the time limit is a ceiling on how often, never a reason to send. Waiting longer only means the satellite has
+    drifted a little further by the time the lead-ahead target is worked out, which it already accounts for."""
     if rot is None:
         return
+    az_limit = threshold_deg if threshold_az_deg is None else threshold_az_deg
+    el_limit = threshold_deg if threshold_el_deg is None else threshold_el_deg
+    now_mono = time.monotonic() if now_mono is None else now_mono
+    last_t = getattr(rot, "last_track_t", None)
+    if min_interval_s > 0 and last_t is not None and now_mono - last_t < min_interval_s:
+        return          # too soon after the last command - and no need to even ask the rotor where it is
     reference = rot.get_pos() or rot.last
     if reference is not None:
         daz = abs(cur_az - reference[0])
         delv = abs(cur_el - reference[1])
-        if daz <= threshold_deg and delv <= threshold_deg:
+        if daz <= az_limit and delv <= el_limit:
             return
         target_az, target_el = find_lead_ahead_target(
             sat, observer, ts, now_dt, cur_az, cur_el,
-            threshold_deg, los_dt)
+            threshold_deg, los_dt, az_limit, el_limit)
     else:
         target_az, target_el = cur_az, cur_el  # first command - just go there
     rot.point(target_az, target_el)
+    rot.last_track_t = now_mono
 
 
 
@@ -521,6 +538,13 @@ def main():
                           "every second regardless; the rotor only moves when it's "
                           "actually drifted enough (lead-ahead targeting, not a fixed "
                           "cadence). Only the printed line is throttled by this flag")
+    ap.add_argument("--rot-threshold-deg", type=float, default=None, metavar="DEG",
+                     help="rotor: only move once the satellite has drifted this many degrees, both axes, for this run "
+                          "(overrides satellites.yaml's rot_threshold_deg / rot_threshold_az_deg / rot_threshold_el_deg; "
+                          "set them permanently with set_rotor.py or the GUI's Rotor settings)")
+    ap.add_argument("--rot-min-interval", type=float, default=None, metavar="SECONDS",
+                     help="rotor: never send a new command sooner than this after the last one, for this run "
+                          "(overrides rot_min_interval_s; 0 = no limit)")
     ap.add_argument("--no-preposition", action="store_true",
                      help="don't pre-position the rotor toward the next approved pass "
                           "when the current one ends - leave it wherever the pass "
@@ -589,9 +613,19 @@ def main():
             print(f"Paired: {sat_cfgs[lead['norad']]['name']} {lead['aos']} steers the beam, and "
                   f"{sat_cfgs[p['norad']]['name']} {p['aos']} records alongside it on its own receiver.")
     rot = None
+    import rotor_settings
+    for flag, v, ok in (("--rot-threshold-deg", args.rot_threshold_deg, lambda x: 0 < x <= 45),
+                        ("--rot-min-interval", args.rot_min_interval, lambda x: 0 <= x <= 3600)):
+        if v is not None and not ok(v):
+            sys.exit(f"{flag} {v:g} is out of range")
+    rot_limits = rotor_settings.effective(cfg, args.rot_threshold_deg, args.rot_min_interval)
     if "rot_host" in cfg and "rot_port" in cfg:
         rot = Rotctld(cfg["rot_host"], cfg["rot_port"])
         print(f"Antenna control enabled: rotctld at {cfg['rot_host']}:{cfg['rot_port']}")
+        steps = (f"{rot_limits['az']:g} deg" if rot_limits["az"] == rot_limits["el"]
+                 else f"az {rot_limits['az']:g} deg / el {rot_limits['el']:g} deg")
+        print(f"Rotor moves only after {steps} of drift"
+              + (f", and at most once every {rot_limits['interval']:g} s" if rot_limits["interval"] > 0 else "") + ".")
     else:
         print("No rot_host/rot_port in satellites.yaml - antenna will not be steered.")
     ts = load.timescale()
@@ -706,7 +740,10 @@ def main():
                         if p is steer:
                             maybe_update_rotor(rot, sat, observer, ts, now,
                                                 az_deg, el_deg, p["los_dt"],
-                                                threshold_deg=cfg.get("rot_threshold_deg", 5.0))
+                                                threshold_deg=rot_limits["az"],
+                                                threshold_az_deg=rot_limits["az"],
+                                                threshold_el_deg=rot_limits["el"],
+                                                min_interval_s=rot_limits["interval"])
                         if args.verbose:
                             remaining = format_countdown(p["los_dt"] - now)
                             role = ("" if len(running) < 2 else

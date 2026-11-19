@@ -45,8 +45,10 @@ live elevation drops below `min_elev_deg` first - a safety net for TLE
 drift since planning). Run with `--verbose` to print every update:
 ```
 python3 run_passes.py --verbose
+python3 run_passes.py --verbose --rot-threshold-deg 5 --rot-min-interval 5   # this run only: rotor moves after 5 degrees, at most every 5 s
 ```
-Refuses to start a second instance against the same folder (a
+How far and how often the rotor moves is set per station with `set_rotor.py` (below) or the GUI's **Rotor
+settings...**; the two flags override it for one run. Refuses to start a second instance against the same folder (a
 `run_passes.lock` file, checked against the running PID - a stale lock
 left over from a crash is detected and cleared automatically). Set
 `notify: true` in `satellites.yaml` for desktop notifications via
@@ -55,6 +57,17 @@ e.g. on a headless box) - fires at AOS (once per pass, not again on a
 retry) and LOS, and on every failed launch attempt: a flowgraph exiting
 early (the message says which attempt of 3, and when it's giving up) or
 an error caught during tracking - not just on success.
+
+**`set_rotor.py`** - how far and how often the antenna rotor moves while tracking, so it is not worked harder than needed:
+```
+python3 set_rotor.py --show                          # what is in effect
+python3 set_rotor.py --step-deg 5 --min-interval 5   # move only after 5 degrees of drift AND at most every 5 seconds
+python3 set_rotor.py --az-deg 8 --el-deg 4           # different steps per axis
+python3 set_rotor.py --min-interval 0                # no time limit (the default)
+```
+Writes `rot_threshold_deg` / `rot_threshold_az_deg` / `rot_threshold_el_deg` / `rot_min_interval_s` at the top of the
+station's `satellites.yaml` and changes nothing else in the file. Steps are above 0 and at most 45 degrees. Takes effect when
+`run_passes.py` next starts. Explained in [Tracking control](tracking-control.md).
 
 **`relay.py`** - persistent process, independent of any pass, that lets
 your downstream KISS decoder hold one stable connection across every
