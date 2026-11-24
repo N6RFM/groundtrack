@@ -228,6 +228,8 @@ either one in `satellites.yaml` and relabels the TLE to match, so `preflight.py`
 finds it - no hand edit needed (see [scripts-reference.md](scripts-reference.md)).
 A number of 100000 or more is fine too (the TLE spells it Alpha-5, `A0470` = 100470);
 keep the plain number in `satellites.yaml`.
+If a temporary ID later stops appearing in SatNOGS (the satellite got its real number), `update_tle.py` finds it
+by name in Celestrak's active list instead and relabels it, printing what it matched.
 
 When you add a satellite the number is checked against SatNOGS' database: if SatNOGS lists that number under a
 different name, or has no such number, you get a warning (a mistyped digit is the usual cause - see

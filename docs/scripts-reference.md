@@ -145,6 +145,7 @@ SatNOGS didn't have:
 ```
 python3 update_tle.py
 python3 update_tle.py --check-only    # report coverage/age, don't download
+python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.tle   # name search in a file you downloaded
 ```
 Every request identifies itself with `User-Agent: groundtrack/0.1
 (+https://github.com/N6RFM/groundtrack)` (the `USER_AGENT` constant in the
@@ -868,7 +869,27 @@ It edits `radios.yaml` as plain text (comments survive; the old file is kept as
 `radios.yaml.bak`), refuses while the station's `run_passes.py` is running, and undoes
 itself if any step fails.
 
-### SatNOGS temporary IDs (98xxx)
+### SatNOGS temporary IDs (98xxx): the name search
+
+When a satellite with a temporary ID (98000 and up) is found in neither SatNOGS nor Celestrak *by number* - which happens
+once the satellite has been given its real catalog number and SatNOGS no longer lists it under the temporary one -
+`update_tle.py` searches Celestrak's "active" list **by name** (downloaded automatically, or the file you give with
+`--extra-tle`) and relabels what it finds to the ID in `satellites.yaml`, the same as for the SatNOGS case below. Each match
+is printed with the real catalog number, international designator and age, so you can check it:
+
+```
+Searching by name for satellites with a temporary ID ...
+  Bro-23: matched by name to 'BRO-23' (catalog 100885, 26227C, epoch 1.5 days old) - relabelled to 98234
+```
+
+It is deliberately strict, so it cannot attach another satellite's TLE: only temporary-ID satellites; an exact name match
+(ignoring case, spaces, punctuation and a bracketed note such as `(AO-130)`), or - as a looser second try - one trailing letter
+after a digit (`MOI-1` finds `MOI-1A`) when that is the only candidate and numbered 100000 or more; data older than 14 days is
+refused; two entries with the same name are never guessed between (the output says so). Anything still not found is reported
+as before, and can be given in `custom_tle_file`. To get the list yourself (for example if this computer can't reach Celestrak),
+download Celestrak's "active" TLE list in a browser and pass the file with `--extra-tle`.
+
+### SatNOGS temporary IDs (98xxx): relabelling
 
 SatNOGS gives a brand-new satellite a temporary catalog ID (for example Luca is
 98449) while its TLE carries the real NORAD number (67287). `update_tle.py`

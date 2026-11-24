@@ -202,7 +202,7 @@ groundtrack/
 ├── new_record_only_satellite.py  # .grc-from-template + add_satellite.py + grcc, one step
 ├── edit_satellite.py        # edits an existing satellite's fields (and extra_outputs)
 ├── toggle_satellite.py      # enable/disable a satellite without deleting its config
-├── update_tle.py            # refreshes tle_file - SatNOGS primary, Celestrak fallback
+├── update_tle.py            # refreshes tle_file - SatNOGS primary, Celestrak fallback, then a by-name search for temporary-ID satellites
 │                             #   (custom_tle_file, if set, is read but never written to)
 ├── ci_check.py              # portable checks - what CI runs on every push
 ├── regen_all.sh             # grcc every .grc, then run preflight.py

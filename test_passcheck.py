@@ -552,5 +552,55 @@ _c = _y.safe_load(open(_rf))
 expect("rotor settings: equal steps collapse back to one key",
        (_c["rot_threshold_deg"], "rot_threshold_az_deg" in _c, "rot_threshold_el_deg" in _c, _c["rot_min_interval_s"]), (5, False, False, 10))
 
+# --- update_tle.py: finding a new satellite's TLE by name (real Celestrak lines, 2026-11-23 epoch) ---
+import update_tle
+from tle_number import catalog_number as _catn
+_FX = """BRO-23
+1 A0885U 26227C   26327.46523268  .00003591  00000-0  18576-3 0  9994
+2 A0885  97.4376  35.9750 0003221 145.5294 214.6149 15.16872970  7994
+MOI-1A
+1 A1107U 26227CV  26327.65158574  .00004727  00000-0  24129-3 0  9990
+2 A1107  97.4373  36.1820 0004422  31.3154 328.8342 15.17183306  8028
+OSSIE D
+1 A0933U 26227BC  26327.82878267  .00001517  00000-0  78693-4 0  9993
+2 A0933  97.4406  36.4288 0002218  28.6710 331.4645 15.17654532  8053
+LUCA (RS90S)
+1 67287U 25313AR  26326.89876309  .00005923  00000-0  22615-3 0  9991
+2 67287  97.3803  39.9408 0009733 147.8943 212.2891 15.26981379 50172
+LUCAS (JDRS-1)
+1 47202U 20089A   26328.06404145 -.00000215  00000-0  00000-0 0  9998
+2 47202   0.0385  82.1680 0003297 169.8213 284.8842  1.00273406 22024
+BY70-4
+1 A0469U 26195E   26327.24418931  .00002220  00000-0  13923-3 0  9991
+2 A0469  97.5289  39.5219 0011284 329.6957  30.3619 15.10309802 13608"""
+_now = datetime(2026, 11, 24, 12, tzinfo=timezone.utc)
+_blocks = update_tle.parse_tle_blocks(_FX)
+expect("name search: reads every 3-line entry", len(_blocks), 6)
+_m, _n = update_tle.match_by_name([("Bro-23", 98234), ("OSSIE-D", 98221), ("BY704", 98247), ("MOI-1", 98188)], _blocks, _now)
+expect("name search: finds them despite case, spaces and hyphens, and relabels to the configured ID",
+       sorted((k, _catn(v[1]), _catn(v[2])) for k, v in _m.items()),
+       [("BY704", 98247, 98247), ("Bro-23", 98234, 98234), ("MOI-1", 98188, 98188), ("OSSIE-D", 98221, 98221)])
+expect("name search: relabelled lines keep valid checksums",
+       all(l[-1] == _cs(l[:-1]) for v in _m.values() for l in (v[1], v[2])), True)
+_m, _n = update_tle.match_by_name([("LUCA", 98449)], _blocks, _now)
+expect("name search: an exact name match is taken whatever its number (Luca 98449 is catalog 67287)",
+       (list(_m), _catn(_m["LUCA"][1])), (["LUCA"], 98449))
+_m, _n = update_tle.match_by_name([("LUCAS", 98450), ("LUC", 98451)], _blocks, _now)
+expect("name search: LUCAS matches only LUCAS, and LUC (no digit before a trailing letter) matches nothing",
+       (list(_m), "LUC" in _m), (["LUCAS"], False))
+_m, _n = update_tle.match_by_name([("MOI-1", 98188)], update_tle.parse_tle_blocks(
+    "MOI-1A\n1 67287U 25313AR  26327.89876309  .00001111  00000+0  11111-3 0  9991\n2 67287  97.4000  10.0000 0001000  90.0000 270.0000 15.00000000 00019"), _now)
+expect("name search: the looser trailing-letter match needs a new (100000+) number", _m, {})
+_m, _n = update_tle.match_by_name([("Bro-23", 23456)], _blocks, _now)
+expect("name search: a satellite with an ordinary ID is left to the by-number lookup", _m, {})
+_m, _n = update_tle.match_by_name([("Bro-23", 98234)], _blocks, datetime(2026, 12, 20, tzinfo=timezone.utc))
+expect("name search: data more than 14 days old is refused, with a note", (_m, len(_n)), ({}, 1))
+_dup = _FX + "\n" + _FX.split("\n")[0] + "\n" + _FX.split("\n")[1] + "\n" + _FX.split("\n")[2]
+_m, _n = update_tle.match_by_name([("Bro-23", 98234)], update_tle.parse_tle_blocks(_dup), _now)
+expect("name search: two entries with the same name are not guessed between", (_m, len(_n)), ({}, 1))
+expect("name search: names compare without case, punctuation or a bracketed note",
+       (update_tle.name_key("JAMX01 (JING'AN DREAM STAR)"), update_tle.name_key("JAMX-01"), update_tle.name_key("0 OSSIE D")),
+       ("JAMX01", "JAMX01", "OSSIED"))
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

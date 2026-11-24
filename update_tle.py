@@ -30,6 +30,23 @@ Usage:
     python3 update_tle.py --check-only
         # just report current file's age and satellite coverage, don't download
 
+    python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.tle
+        # use a TLE file you downloaded yourself (for example Celestrak's "active" list)
+        # instead of fetching one, for the name-based fallback described below
+
+Name-based fallback: a brand-new satellite sits in SatNOGS under a temporary 98xxx ID, but its
+TLE (when there is one) later appears elsewhere under its real number (100000 and up). When a
+satellite with a temporary ID is found in neither SatNOGS nor Celestrak by number, this looks
+for it BY NAME in Celestrak's "active" list (downloaded, or the --extra-tle file) and relabels
+what it finds to the ID in satellites.yaml, exactly as is done for SatNOGS entries. It is
+deliberately narrow, so it cannot attach the wrong satellite's TLE: only satellites whose
+configured ID is a temporary one (98000 and up), only an exact name match (ignoring case,
+spaces, punctuation and a bracketed note such as "(AO-130)"), plus - as a looser second try -
+one trailing letter after a digit (MOI-1 -> MOI-1A) when that is the only candidate and its
+number is 100000 or more, and only data less than 14 days old. Two entries with the same name
+are never guessed between. Each match is printed with the real catalog number, international
+designator and age so you can check it.
+
 With radios.yaml (multi-station mode), this covers every station's satellites
 in one run and ignores --radio: the stations share a single TLE file, so
 refreshing it from only one station's list would drop the others.
@@ -38,11 +55,13 @@ refreshing it from only one station's list would drop the others.
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
 import time
 import urllib.request
+from datetime import datetime, timezone
 import yaml
 
 from tle_number import catalog_number, omm_to_tle, relabel_tle
@@ -53,6 +72,11 @@ CELESTRAK_CATNR_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}
 # Catalog numbers of 100000 and up don't fit a classic TLE, so Celestrak publishes them only as
 # OMM (json/xml/csv); this is converted to an Alpha-5 TLE (100470 -> "A0470") by tle_number.py.
 CELESTRAK_CATNR_JSON_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=json"
+
+CELESTRAK_ACTIVE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
+TEMP_ID_MIN = 98000            # SatNOGS's temporary IDs for satellites not yet in the official catalog
+NEW_NUMBER_MIN = 100000        # the numbers new satellites get now (Alpha-5 "A0000" and up); loose name matches need one
+MAX_EPOCH_AGE_DAYS = 14        # older data is not worth planning passes with
 
 # Identify ourselves honestly on every request. Python's default
 # "Python-urllib/3.x" agent is commonly blocked by servers (SatNOGS
@@ -141,6 +165,87 @@ def fetch_celestrak_one(norad):
     return result
 
 
+def name_key(name):
+    """Name compared loosely: no case, spaces or punctuation, and no bracketed note - so
+    "JAMX01 (JING'AN DREAM STAR)" and "JAMX-01" are the same name."""
+    name = re.sub(r"\(.*?\)", " ", name or "")
+    name = re.sub(r"^0\s+", "", name.strip())
+    return re.sub(r"[^A-Z0-9]", "", name.upper())
+
+
+def parse_tle_blocks(text):
+    """[(name, line1, line2)] from three-line TLE text. Anything that isn't a name + 1/2 pair is skipped."""
+    lines = [l.rstrip() for l in text.splitlines() if l.strip()]
+    out = []
+    for i in range(len(lines) - 2):
+        if lines[i + 1].startswith("1 ") and lines[i + 2].startswith("2 ") and not lines[i].startswith(("1 ", "2 ")):
+            out.append((lines[i].strip(), lines[i + 1], lines[i + 2]))
+    return out
+
+
+def epoch_age_days(tle1, now):
+    """Age of a TLE's epoch in days, or None if the epoch field can't be read."""
+    try:
+        yy, day = int(tle1[18:20]), float(tle1[20:32])
+        year = 2000 + yy if yy < 57 else 1900 + yy
+        epoch = datetime(year, 1, 1, tzinfo=timezone.utc).timestamp() + (day - 1) * 86400
+        return (now.timestamp() - epoch) / 86400
+    except (ValueError, IndexError):
+        return None
+
+
+def match_by_name(missing, blocks, now):
+    """Find, by name, the TLEs of satellites that have no entry under their configured number.
+
+    missing: [(name, norad)]; blocks: parse_tle_blocks() output. -> ({name: (tle0, tle1, tle2, how)}, [messages]).
+    Only satellites with a temporary ID (TEMP_ID_MIN and up) are considered; an exact name match is taken
+    whatever number the entry carries (Luca's temporary 98449 really is catalog 67287), the looser
+    trailing-letter match only for entries numbered NEW_NUMBER_MIN or more. See the module docstring."""
+    candidates = []
+    for tle0, tle1, tle2 in blocks:
+        real = catalog_number(tle1)
+        if real is not None:
+            candidates.append((name_key(tle0), tle0, tle1, tle2, real))
+    found, notes = {}, []
+    for name, norad in missing:
+        if norad is None or norad < TEMP_ID_MIN:
+            continue
+        key = name_key(name)
+        exact = [c for c in candidates if c[0] == key]
+        approx = []
+        if not exact and key and key[-1].isdigit():
+            approx = [c for c in candidates if len(c[0]) == len(key) + 1 and c[0].startswith(key) and c[0][-1].isalpha()
+                      and c[4] >= NEW_NUMBER_MIN]
+        hits, how = (exact, "name") if exact else (approx, "name, plus a trailing letter")
+        if len(hits) > 1:
+            notes.append(f"  {name}: {len(hits)} entries share that name ({', '.join(h[1] for h in hits)}) - not guessing")
+            continue
+        if not hits:
+            continue
+        _, tle0, tle1, tle2, real = hits[0]
+        age = epoch_age_days(tle1, now)
+        if age is None or age > MAX_EPOCH_AGE_DAYS or age < -1:
+            notes.append(f"  {name}: found as '{tle0}' ({real}) but its epoch is "
+                         + ("unreadable" if age is None else f"{age:.0f} days old") + " - not used")
+            continue
+        r1, r2 = relabel_tle(tle1, tle2, norad)
+        found[name] = (tle0, r1, r2,
+                       f"matched by {how} to '{tle0}' (catalog {real}, {tle1[9:17].strip()}, epoch {age:.1f} days old)"
+                       f" - relabelled to {norad}")
+    return found, notes
+
+
+def fetch_celestrak_active():
+    """Celestrak's whole 'active' list as text, or '' on failure."""
+    print(f"  Fetching Celestrak's active list for a name search ({CELESTRAK_ACTIVE_URL}) ...")
+    try:
+        with _open(CELESTRAK_ACTIVE_URL, 60) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"    failed: {e}")
+        return ""
+
+
 def main():
     # Unlike every other script, this one deliberately does NOT pick a
     # station: stations share one TLE file, and this rebuilds that whole file
@@ -154,6 +259,10 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check-only", action="store_true",
                      help="just report current file's age and satellite coverage, don't download")
+    ap.add_argument("--extra-tle", metavar="FILE",
+                     help="a TLE file you downloaded (for example Celestrak's 'active' list) to search by name for "
+                          "satellites with a temporary ID that SatNOGS and Celestrak don't have by number; "
+                          "used instead of downloading that list")
     args = ap.parse_args()
 
     cfg = station.merged_tle_config() if multi else load_cfg()
@@ -232,7 +341,28 @@ def main():
         else:
             still_missing.append(name)
 
-    total_found = len(found_via_satnogs) + len(found_via_celestrak)
+    found_via_name = []
+    pending = [(sat.get("name", "?"), sat.get("norad")) for sat in satellites
+               if sat.get("name") in still_missing and sat.get("norad") is not None]
+    if any(n >= TEMP_ID_MIN for _, n in pending):
+        print("\nSearching by name for satellites with a temporary ID ...")
+        if args.extra_tle:
+            try:
+                text = open(os.path.expanduser(args.extra_tle), errors="replace").read()
+            except OSError as e:
+                sys.exit(f"can't read --extra-tle {args.extra_tle}: {e}")
+        else:
+            text = fetch_celestrak_active()
+        matches, notes = match_by_name(pending, parse_tle_blocks(text), datetime.now(timezone.utc))
+        for line in notes:
+            print(line)
+        for name, (tle0, tle1, tle2, how) in matches.items():
+            print(f"  {name}: {how}")
+            lines_out.extend((tle0, tle1, tle2))
+            found_via_name.append(name)
+        still_missing = [n for n in still_missing if n not in matches]
+
+    total_found = len(found_via_satnogs) + len(found_via_celestrak) + len(found_via_name)
     if total_found == 0:
         sys.exit(f"No usable TLE data for any configured satellite from either source - "
                   f"refusing to overwrite {tle_path}. The existing file is untouched.")
@@ -251,7 +381,7 @@ def main():
 
     print(f"\nWrote {tle_path} ({total_found} satellite(s) total).")
     print(f"  {len(found_via_satnogs)} via SatNOGS, {len(found_via_celestrak)} via "
-          f"Celestrak fallback.")
+          f"Celestrak fallback" + (f", {len(found_via_name)} by name search." if found_via_name else "."))
     if custom_tle_path and os.path.exists(custom_tle_path):
         from tle_util import custom_problems
         for msg in custom_problems(custom_tle_path, [(s.get("name", "?"), s["norad"]) for s in satellites
