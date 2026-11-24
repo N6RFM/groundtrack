@@ -602,5 +602,27 @@ expect("name search: names compare without case, punctuation or a bracketed note
        (update_tle.name_key("JAMX01 (JING'AN DREAM STAR)"), update_tle.name_key("JAMX-01"), update_tle.name_key("0 OSSIE D")),
        ("JAMX01", "JAMX01", "OSSIED"))
 
+import tempfile as _tf, time as _t
+import update_tle as _ut
+_cd = _tf.mkdtemp(); _cp = os.path.join(_cd, "c.cache"); _calls = []
+class _Resp:
+    def __init__(s, t): s.t = t
+    def __enter__(s): return s
+    def __exit__(s, *a): return False
+    def read(s): return s.t.encode()
+_real_open = _ut._open
+_ut._open = lambda url, to: (_calls.append(url), _Resp("0 X\n1 a\n2 b\n"))[1]
+_a = _ut.fetch_celestrak_active(_cp); _b = _ut.fetch_celestrak_active(_cp)
+expect("active list: a second run within 12 h reuses the saved copy (one download only)", (_a == _b, len(_calls)), (True, 1))
+_ut.fetch_celestrak_active(_cp, now_s=_t.time() + 13*3600)
+expect("active list: an older copy is downloaded again", len(_calls), 2)
+def _boom(url, to): raise OSError("429")
+_ut._open = _boom
+expect("active list: a failed download falls back to the older copy",
+       _ut.fetch_celestrak_active(_cp, now_s=_t.time() + 30*3600), "0 X\n1 a\n2 b\n")
+expect("active list: failure with no copy gives an empty string",
+       _ut.fetch_celestrak_active(os.path.join(_cd, "none")), "")
+_ut._open = _real_open
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

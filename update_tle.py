@@ -37,7 +37,8 @@ Usage:
 Name-based fallback: a brand-new satellite sits in SatNOGS under a temporary 98xxx ID, but its
 TLE (when there is one) later appears elsewhere under its real number (100000 and up). When a
 satellite with a temporary ID is found in neither SatNOGS nor Celestrak by number, this looks
-for it BY NAME in Celestrak's "active" list (downloaded, or the --extra-tle file) and relabels
+for it BY NAME in Celestrak's "active" list (downloaded - at most once per 12 hours, because
+Celestrak limits downloads - or the --extra-tle file) and relabels
 what it finds to the ID in satellites.yaml, exactly as is done for SatNOGS entries. It is
 deliberately narrow, so it cannot attach the wrong satellite's TLE: only satellites whose
 configured ID is a temporary one (98000 and up), only an exact name match (ignoring case,
@@ -235,15 +236,43 @@ def match_by_name(missing, blocks, now):
     return found, notes
 
 
-def fetch_celestrak_active():
-    """Celestrak's whole 'active' list as text, or '' on failure."""
+ACTIVE_CACHE_MAX_AGE_H = 12   # Celestrak limits downloads per day, so reuse the list this long
+
+
+def fetch_celestrak_active(cache_path=None, now_s=None):
+    """Celestrak's whole 'active' list as text, or '' on failure.
+
+    The list is kept in cache_path and reused for ACTIVE_CACHE_MAX_AGE_H hours, because Celestrak
+    limits how often it will serve the same list. If a fresh download fails, an older copy is used
+    (name matching still refuses TLEs older than 14 days)."""
+    now_s = time.time() if now_s is None else now_s
+    cached = ""
+    age_h = None
+    if cache_path and os.path.exists(cache_path):
+        try:
+            cached = open(cache_path, errors="replace").read()
+            age_h = (now_s - os.path.getmtime(cache_path)) / 3600.0
+        except OSError:
+            cached = ""
+    if cached and age_h is not None and 0 <= age_h < ACTIVE_CACHE_MAX_AGE_H:
+        print(f"  Using the Celestrak active list saved {age_h:.1f} h ago (not downloading again).")
+        return cached
     print(f"  Fetching Celestrak's active list for a name search ({CELESTRAK_ACTIVE_URL}) ...")
     try:
         with _open(CELESTRAK_ACTIVE_URL, 60) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            text = resp.read().decode("utf-8", errors="replace")
     except Exception as e:
         print(f"    failed: {e}")
-        return ""
+        if cached:
+            print(f"    using the copy saved {age_h:.1f} h ago instead.")
+        return cached
+    if cache_path and text.strip():
+        try:
+            with open(cache_path, "w") as f:
+                f.write(text)
+        except OSError:
+            pass
+    return text
 
 
 def main():
@@ -333,6 +362,12 @@ def main():
             lines_out.extend((tle0, tle1, tle2))
             found_via_satnogs.append(name)
             continue
+        if isinstance(norad, int) and norad >= TEMP_ID_MIN:
+            # Celestrak never lists SatNOGS temporary IDs, so asking would only waste requests
+            # (it limits them per day). The name search below handles these.
+            print(f"  {name} (norad {norad}) not in SatNOGS - temporary ID, left to the name search")
+            still_missing.append(name)
+            continue
         print(f"  {name} (norad {norad}) not in SatNOGS - trying Celestrak fallback ...")
         result = fetch_celestrak_one(norad)
         if result:
@@ -352,7 +387,8 @@ def main():
             except OSError as e:
                 sys.exit(f"can't read --extra-tle {args.extra_tle}: {e}")
         else:
-            text = fetch_celestrak_active()
+            text = fetch_celestrak_active(os.path.join(
+                os.path.dirname(os.path.abspath(tle_path)) or ".", ".celestrak_active.cache"))
         matches, notes = match_by_name(pending, parse_tle_blocks(text), datetime.now(timezone.utc))
         for line in notes:
             print(line)

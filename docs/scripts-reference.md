@@ -889,6 +889,11 @@ refused; two entries with the same name are never guessed between (the output sa
 as before, and can be given in `custom_tle_file`. To get the list yourself (for example if this computer can't reach Celestrak),
 download Celestrak's "active" TLE list in a browser and pass the file with `--extra-tle`.
 
+Celestrak limits how many downloads it allows per day, so `update_tle.py` asks it as little as possible: temporary-ID
+satellites are not looked up one by one (Celestrak never has them under those numbers), and the active list is saved in
+`tle/.celestrak_active.cache` and reused for 12 hours. If a fresh download is refused, the saved copy is used instead
+(matches still have to be under 14 days old).
+
 ### SatNOGS temporary IDs (98xxx): relabelling
 
 SatNOGS gives a brand-new satellite a temporary catalog ID (for example Luca is
