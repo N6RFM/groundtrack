@@ -43,13 +43,16 @@ SatNOGS lists a new satellite under a temporary ID (often 98xxx) while its TLE c
 number. `python3 update_tle.py` now relabels the TLE to the number in `satellites.yaml`, so run it
 and preflight again; either number works in `satellites.yaml`. See [scripts-reference.md](scripts-reference.md),
 "SatNOGS temporary IDs". If neither is in SatNOGS or Celestrak by number, `update_tle.py` also searches Celestrak's
-active list by name (it prints each match). If it still warns that satellites were not found, download Celestrak's
-"active" TLE list yourself and run `python3 update_tle.py --extra-tle FILE`, or put a TLE in `custom_tle_file`.
+active list by name (it prints each match). If it still warns that satellites were not found, save Celestrak's "active"
+list yourself (the JSON form, `https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json`) and run
+`python3 update_tle.py --extra-tle FILE`, or put a TLE in `custom_tle_file`. Celestrak sometimes answers `503` or limits
+downloads per day; wait and retry, and don't keep re-running it, because each run asks again unless the list was saved
+within the last 12 hours.
 
 **`update_tle.py` says `N configured satellite(s) not found in either source`**
 Planning for those satellites fails until a TLE exists, and the run replaced `tle/amateur.txt` with only what it found
 (a satellite that couldn't be refreshed is not kept from the previous file). First try the name search above
-(`python3 update_tle.py` already does it; `--extra-tle FILE` uses a list you downloaded). Satellites that are in neither source at all need a
+(`python3 update_tle.py` already does it; `--extra-tle FILE` uses a list you saved - the JSON form). Satellites that are in neither source at all need a
 TLE in `custom_tle_file`, or a wait until SatNOGS or Celestrak has one. Your weekly backup (`backup_state.py`) holds the
 previous `tle/amateur.txt` if you need older data in the meantime.
 

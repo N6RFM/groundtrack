@@ -629,6 +629,13 @@ _pb = _ut.parse_tle_blocks(_a)
 expect("active list: a 100000+ object is read and keeps its real number", (len(_pb), _ut.catalog_number(_pb[0][1])), (1, 100469))
 expect("active list: failure with no copy gives an empty string",
        _ut.fetch_celestrak_active(os.path.join(_cd, "none")), "")
+_t3, _b3 = _ut.omm_json_to_tle_text(json.dumps([_OMM, {"bad": 1}]))
+expect("--extra-tle: a Celestrak JSON list is converted (bad records are counted)", (len(_ut.parse_tle_blocks(_t3)), _b3), (1, 1))
+try:
+    _ut.omm_json_to_tle_text('{"a": 1}'); _raised = False
+except ValueError:
+    _raised = True
+expect("--extra-tle: JSON that isn't a list is refused", _raised, True)
 _ut._open = _real_open
 
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")

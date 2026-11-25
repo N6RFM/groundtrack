@@ -30,9 +30,12 @@ Usage:
     python3 update_tle.py --check-only
         # just report current file's age and satellite coverage, don't download
 
-    python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.tle
-        # use a TLE file you downloaded yourself (for example Celestrak's "active" list)
-        # instead of fetching one, for the name-based fallback described below
+    python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.json
+        # use a Celestrak "active" list you downloaded yourself instead of fetching one, for the
+        # name-based fallback described below. Give the JSON form
+        # (https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json): Celestrak's plain
+        # TLE form cannot hold catalog numbers of 100000 and up, so it leaves out the newest
+        # satellites. A TLE file made by another tool that does include them also works.
 
 Name-based fallback: a brand-new satellite sits in SatNOGS under a temporary 98xxx ID, but its
 TLE (when there is one) later appears elsewhere under its real number (100000 and up). When a
@@ -238,6 +241,21 @@ def match_by_name(missing, blocks, now):
     return found, notes
 
 
+def omm_json_to_tle_text(raw):
+    """Three-line TLE text from a Celestrak OMM/JSON list (a JSON array of records), plus the number of
+    records that couldn't be converted. Raises ValueError if the text isn't such a list."""
+    records = json.loads(raw)
+    if not isinstance(records, list):
+        raise ValueError("not a list of records")
+    out, bad = [], 0
+    for rec in records:
+        try:
+            out.extend(omm_to_tle(rec))
+        except (KeyError, ValueError, TypeError):
+            bad += 1
+    return ("\n".join(out) + "\n" if out else ""), bad
+
+
 ACTIVE_CACHE_MAX_AGE_H = 12   # Celestrak limits downloads per day, so reuse the list this long
 
 
@@ -262,17 +280,10 @@ def fetch_celestrak_active(cache_path=None, now_s=None):
     print(f"  Fetching Celestrak's active list for a name search ({CELESTRAK_ACTIVE_URL}) ...")
     try:
         with _open(CELESTRAK_ACTIVE_URL, 60) as resp:
-            records = json.loads(resp.read().decode("utf-8", errors="replace"))
-        out, bad = [], 0
-        for rec in records:
-            try:
-                out.extend(omm_to_tle(rec))
-            except (KeyError, ValueError, TypeError):
-                bad += 1
-        text = "\n".join(out) + "\n" if out else ""
+            text, bad = omm_json_to_tle_text(resp.read().decode("utf-8", errors="replace"))
         if not text:
             raise ValueError("no usable records in the response")
-        print(f"    {len(out) // 3} satellite(s) read" + (f", {bad} skipped" if bad else ""))
+        print(f"    {text.count(chr(10)) // 3} satellite(s) read" + (f", {bad} skipped" if bad else ""))
     except Exception as e:
         print(f"    failed: {e}")
         if cached:
@@ -301,7 +312,7 @@ def main():
     ap.add_argument("--check-only", action="store_true",
                      help="just report current file's age and satellite coverage, don't download")
     ap.add_argument("--extra-tle", metavar="FILE",
-                     help="a TLE file you downloaded (for example Celestrak's 'active' list) to search by name for "
+                     help="a Celestrak 'active' list you downloaded (JSON form preferred; a TLE file also works) to search by name for "
                           "satellites with a temporary ID that SatNOGS and Celestrak don't have by number; "
                           "used instead of downloading that list")
     args = ap.parse_args()
@@ -398,6 +409,13 @@ def main():
                 text = open(os.path.expanduser(args.extra_tle), errors="replace").read()
             except OSError as e:
                 sys.exit(f"can't read --extra-tle {args.extra_tle}: {e}")
+            if text.lstrip().startswith("["):          # Celestrak's JSON (OMM) form - convert it
+                try:
+                    text, bad = omm_json_to_tle_text(text)
+                except ValueError as e:
+                    sys.exit(f"--extra-tle {args.extra_tle} looks like JSON but isn't a Celestrak list: {e}")
+                print(f"  Read {args.extra_tle} as Celestrak JSON ({text.count(chr(10)) // 3} satellite(s)"
+                      + (f", {bad} skipped" if bad else "") + ").")
         else:
             text = fetch_celestrak_active(os.path.join(
                 os.path.dirname(os.path.abspath(tle_path)) or ".", ".celestrak_active_omm.cache"))

@@ -145,7 +145,7 @@ SatNOGS didn't have:
 ```
 python3 update_tle.py
 python3 update_tle.py --check-only    # report coverage/age, don't download
-python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.tle   # name search in a file you downloaded
+python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.json  # name search in a Celestrak list you downloaded
 ```
 Every request identifies itself with `User-Agent: groundtrack/0.1
 (+https://github.com/N6RFM/groundtrack)` (the `USER_AGENT` constant in the
@@ -886,8 +886,19 @@ It is deliberately strict, so it cannot attach another satellite's TLE: only tem
 (ignoring case, spaces, punctuation and a bracketed note such as `(AO-130)`), or - as a looser second try - one trailing letter
 after a digit (`MOI-1` finds `MOI-1A`) when that is the only candidate and numbered 100000 or more; data older than 14 days is
 refused; two entries with the same name are never guessed between (the output says so). Anything still not found is reported
-as before, and can be given in `custom_tle_file`. To get the list yourself (for example if this computer can't reach Celestrak),
-download Celestrak's "active" TLE list in a browser and pass the file with `--extra-tle`.
+as before, and can be given in `custom_tle_file`. To get the list yourself (for example if this computer can't reach Celestrak, or it
+answers `503`), open this address in a browser, save the page as a file, and pass it with `--extra-tle`:
+
+```
+https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json
+python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.json
+```
+
+Use the JSON form, not Celestrak's plain TLE list: a TLE has only five digits for the catalog number, so that list
+leaves out every object numbered 100000 and up - the newest satellites, which are the ones this search is for. A TLE
+file made by another tool that does include them is also accepted. The list is also only good for 14 days of matching,
+so download a fresh one when it ages out. `tle/amateur.txt` is rebuilt on every run from what the run found, so if
+Celestrak is unreachable the run keeps only the SatNOGS satellites; repeat it with `--extra-tle` when you have a list.
 
 Celestrak limits how many downloads it allows per day, so `update_tle.py` asks it as little as possible: temporary-ID
 satellites are not looked up one by one (Celestrak never has them under those numbers), and the active list (fetched as JSON and converted, because Celestrak's plain TLE list leaves out every object numbered 100000 and up) is saved in

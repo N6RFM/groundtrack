@@ -179,7 +179,7 @@ later, if that becomes worth doing.
 
 | Button | What it actually runs |
 |---|---|
-| Run update_tle.py | `update_tle.py` with no flags - fetches every configured satellite's TLE from SatNOGS in one bulk download (including "temporary ID" satellites too new for Celestrak's official catalog), falling back to an individual Celestrak lookup per-satellite for anything SatNOGS doesn't have |
+| Run update_tle.py | `update_tle.py` with no flags - fetches every configured satellite's TLE from SatNOGS in one bulk download (including "temporary ID" satellites too new for Celestrak's official catalog), falling back to an individual Celestrak lookup per-satellite for anything SatNOGS doesn't have, and then to a by-name search of Celestrak's "active" list for any temporary-ID satellite still missing (the list is saved for 12 hours; the output shows each match) |
 | Run preflight.py (full check) | exactly that, captured and shown in the output pane |
 | Run doctor.py | exactly that |
 | Run doctor.py --fix | actually removes/moves stray compiled files it finds, rather than just printing the commands |
