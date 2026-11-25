@@ -611,7 +611,11 @@ class _Resp:
     def __exit__(s, *a): return False
     def read(s): return s.t.encode()
 _real_open = _ut._open
-_ut._open = lambda url, to: (_calls.append(url), _Resp("0 X\n1 a\n2 b\n"))[1]
+_OMM = {"OBJECT_NAME": "BY70-4", "OBJECT_ID": "2026-195E", "NORAD_CAT_ID": 100469, "EPOCH": "2026-11-23T12:00:00.000000",
+        "MEAN_MOTION": 15.2, "ECCENTRICITY": 0.0004, "INCLINATION": 97.5, "RA_OF_ASC_NODE": 120.1, "ARG_OF_PERICENTER": 80.2,
+        "MEAN_ANOMALY": 280.3, "EPHEMERIS_TYPE": 0, "CLASSIFICATION_TYPE": "U", "ELEMENT_SET_NO": 999, "REV_AT_EPOCH": 12,
+        "BSTAR": 0.0001, "MEAN_MOTION_DOT": 0.0001, "MEAN_MOTION_DDOT": 0}
+_ut._open = lambda url, to: (_calls.append(url), _Resp(json.dumps([_OMM, {"bad": 1}])))[1]
 _a = _ut.fetch_celestrak_active(_cp); _b = _ut.fetch_celestrak_active(_cp)
 expect("active list: a second run within 12 h reuses the saved copy (one download only)", (_a == _b, len(_calls)), (True, 1))
 _ut.fetch_celestrak_active(_cp, now_s=_t.time() + 13*3600)
@@ -619,7 +623,10 @@ expect("active list: an older copy is downloaded again", len(_calls), 2)
 def _boom(url, to): raise OSError("429")
 _ut._open = _boom
 expect("active list: a failed download falls back to the older copy",
-       _ut.fetch_celestrak_active(_cp, now_s=_t.time() + 30*3600), "0 X\n1 a\n2 b\n")
+       _ut.fetch_celestrak_active(_cp, now_s=_t.time() + 30*3600), _a)
+expect("active list: it asks for JSON, because TLE-format lists omit objects numbered 100000 and up", "FORMAT=json" in _calls[0], True)
+_pb = _ut.parse_tle_blocks(_a)
+expect("active list: a 100000+ object is read and keeps its real number", (len(_pb), _ut.catalog_number(_pb[0][1])), (1, 100469))
 expect("active list: failure with no copy gives an empty string",
        _ut.fetch_celestrak_active(os.path.join(_cd, "none")), "")
 _ut._open = _real_open

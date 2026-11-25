@@ -890,8 +890,8 @@ as before, and can be given in `custom_tle_file`. To get the list yourself (for 
 download Celestrak's "active" TLE list in a browser and pass the file with `--extra-tle`.
 
 Celestrak limits how many downloads it allows per day, so `update_tle.py` asks it as little as possible: temporary-ID
-satellites are not looked up one by one (Celestrak never has them under those numbers), and the active list is saved in
-`tle/.celestrak_active.cache` and reused for 12 hours. If a fresh download is refused, the saved copy is used instead
+satellites are not looked up one by one (Celestrak never has them under those numbers), and the active list (fetched as JSON and converted, because Celestrak's plain TLE list leaves out every object numbered 100000 and up) is saved in
+`tle/.celestrak_active_omm.cache` and reused for 12 hours. If a fresh download is refused, the saved copy is used instead
 (matches still have to be under 14 days old).
 
 ### SatNOGS temporary IDs (98xxx): relabelling

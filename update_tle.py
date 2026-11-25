@@ -74,7 +74,9 @@ CELESTRAK_CATNR_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}
 # OMM (json/xml/csv); this is converted to an Alpha-5 TLE (100470 -> "A0470") by tle_number.py.
 CELESTRAK_CATNR_JSON_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR={catnr}&FORMAT=json"
 
-CELESTRAK_ACTIVE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
+# JSON (OMM), not TLE: a TLE has only five digits for the catalog number, so Celestrak's TLE list
+# leaves out every object numbered 100000 and up - which is exactly the newest satellites.
+CELESTRAK_ACTIVE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json"
 TEMP_ID_MIN = 98000            # SatNOGS's temporary IDs for satellites not yet in the official catalog
 NEW_NUMBER_MIN = 100000        # the numbers new satellites get now (Alpha-5 "A0000" and up); loose name matches need one
 MAX_EPOCH_AGE_DAYS = 14        # older data is not worth planning passes with
@@ -260,7 +262,17 @@ def fetch_celestrak_active(cache_path=None, now_s=None):
     print(f"  Fetching Celestrak's active list for a name search ({CELESTRAK_ACTIVE_URL}) ...")
     try:
         with _open(CELESTRAK_ACTIVE_URL, 60) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
+            records = json.loads(resp.read().decode("utf-8", errors="replace"))
+        out, bad = [], 0
+        for rec in records:
+            try:
+                out.extend(omm_to_tle(rec))
+            except (KeyError, ValueError, TypeError):
+                bad += 1
+        text = "\n".join(out) + "\n" if out else ""
+        if not text:
+            raise ValueError("no usable records in the response")
+        print(f"    {len(out) // 3} satellite(s) read" + (f", {bad} skipped" if bad else ""))
     except Exception as e:
         print(f"    failed: {e}")
         if cached:
@@ -388,7 +400,7 @@ def main():
                 sys.exit(f"can't read --extra-tle {args.extra_tle}: {e}")
         else:
             text = fetch_celestrak_active(os.path.join(
-                os.path.dirname(os.path.abspath(tle_path)) or ".", ".celestrak_active.cache"))
+                os.path.dirname(os.path.abspath(tle_path)) or ".", ".celestrak_active_omm.cache"))
         matches, notes = match_by_name(pending, parse_tle_blocks(text), datetime.now(timezone.utc))
         for line in notes:
             print(line)
