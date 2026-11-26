@@ -651,5 +651,18 @@ expect("executor TLEs: a refreshed file is re-read and the new satellite appears
 expect("executor TLEs: ...and is not re-read again until it changes again",
        run_passes.refresh_tles_if_changed(_tl, _cfg2, {25544}, _st), False)
 
+# --- update_tle: keep a satellite's previous TLE when it can't be refreshed ---
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+_now = _dt.now(_tz.utc)
+def _tle_at(norad, days_old):
+    return "\n".join(_ut.omm_to_tle(dict(_OMM, NORAD_CAT_ID=norad, OBJECT_NAME=f"S{norad}",
+                      EPOCH=(_now - _td(days=days_old)).replace(tzinfo=None).isoformat()))) + "\n"
+_old = _tle_at(98232, 2) + _tle_at(98205, 20) + _tle_at(98206, 5)
+_k, _n = _ut.keep_previous([("BabyBird", 98232), ("UNNE-1B", 98205), ("HADES-L", 98206), ("NEW", 98999), ("X", None)], _old, _now)
+expect("keep previous: recent TLEs are kept, with their age", (sorted(_k), round(_k["BabyBird"][3])), (["BabyBird", "HADES-L"], 2))
+expect("keep previous: one older than 14 days is dropped, with a note", (len(_n), "UNNE-1B" in _n[0]), (1, True))
+expect("keep previous: a satellite never seen before, or with no number, is simply not kept", "NEW" in _k or "X" in _k, False)
+expect("keep previous: the kept TLE still carries the configured number", _ut.catalog_number(_k["BabyBird"][1]), 98232)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

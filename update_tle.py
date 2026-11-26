@@ -37,6 +37,11 @@ Usage:
         # TLE form cannot hold catalog numbers of 100000 and up, so it leaves out the newest
         # satellites. A TLE file made by another tool that does include them also works.
 
+Keeping what worked: a satellite that can't be refreshed this time (a failed download, Celestrak
+limiting requests) keeps the TLE it had in the previous file, as long as that is no older than 14
+days. Older ones are dropped, because a stale orbit points the antenna and Doppler at the wrong
+place. The run says which satellites it kept and how old their TLEs are.
+
 Name-based fallback: a brand-new satellite sits in SatNOGS under a temporary 98xxx ID, but its
 TLE (when there is one) later appears elsewhere under its real number (100000 and up). When a
 satellite with a temporary ID is found in neither SatNOGS nor Celestrak by number, this looks
@@ -241,6 +246,32 @@ def match_by_name(missing, blocks, now):
     return found, notes
 
 
+def keep_previous(missing, old_text, now):
+    """The previous run's TLE for satellites that couldn't be refreshed this time.
+
+    missing: [(name, configured_norad)]. old_text: the TLE file as it was before this run. A TLE is
+    carried over only if it is no older than MAX_EPOCH_AGE_DAYS (the same limit the name search uses) -
+    otherwise it is left missing, because a stale orbit points antennas and Doppler at the wrong place.
+    Returns ({name: (tle0, tle1, tle2, age_days)}, [notes about ones too old])."""
+    old = {}
+    for tle0, tle1, tle2 in parse_tle_blocks(old_text):
+        n = catalog_number(tle1)
+        if n is not None:
+            old[n] = (tle0, tle1, tle2)
+    kept, notes = {}, []
+    for name, norad in missing:
+        blk = old.get(norad)
+        if blk is None:
+            continue
+        age = epoch_age_days(blk[1], now)
+        if age is None or age > MAX_EPOCH_AGE_DAYS or age < -1:
+            notes.append(f"  {name}: the previous TLE is too old to keep "
+                         f"({'unreadable epoch' if age is None else f'{age:.1f} days'}) - not used")
+            continue
+        kept[name] = (*blk, age)
+    return kept, notes
+
+
 def omm_json_to_tle_text(raw):
     """Three-line TLE text from a Celestrak OMM/JSON list (a JSON array of records), plus the number of
     records that couldn't be converted. Raises ValueError if the text isn't such a list."""
@@ -428,6 +459,27 @@ def main():
             found_via_name.append(name)
         still_missing = [n for n in still_missing if n not in matches]
 
+    kept_previous = []
+    if still_missing:
+        # Anything that couldn't be refreshed this time keeps its previous TLE for up to 14 days, instead
+        # of vanishing because a download failed or Celestrak was limiting requests.
+        try:
+            old_text = open(tle_path, errors="replace").read()
+        except OSError:
+            old_text = ""
+        by_norad = {s.get("name"): s.get("norad") for s in satellites}
+        kept, notes = keep_previous([(n, by_norad.get(n)) for n in still_missing], old_text,
+                                    datetime.now(timezone.utc))
+        if kept or notes:
+            print("\nSatellites that could not be refreshed this time:")
+        for line in notes:
+            print(line)
+        for name, (tle0, tle1, tle2, age) in kept.items():
+            print(f"  {name}: kept the previous TLE (epoch {age:.1f} days old)")
+            lines_out.extend((tle0, tle1, tle2))
+            kept_previous.append(name)
+        still_missing = [n for n in still_missing if n not in kept]
+
     total_found = len(found_via_satnogs) + len(found_via_celestrak) + len(found_via_name)
     if total_found == 0:
         sys.exit(f"No usable TLE data for any configured satellite from either source - "
@@ -445,9 +497,10 @@ def main():
         os.unlink(tmp_path)
         raise
 
-    print(f"\nWrote {tle_path} ({total_found} satellite(s) total).")
+    print(f"\nWrote {tle_path} ({total_found + len(kept_previous)} satellite(s) total).")
     print(f"  {len(found_via_satnogs)} via SatNOGS, {len(found_via_celestrak)} via "
-          f"Celestrak fallback" + (f", {len(found_via_name)} by name search." if found_via_name else "."))
+          f"Celestrak fallback" + (f", {len(found_via_name)} by name search" if found_via_name else "")
+          + (f", {len(kept_previous)} kept from the previous file (not refreshed)" if kept_previous else "") + ".")
     if custom_tle_path and os.path.exists(custom_tle_path):
         from tle_util import custom_problems
         for msg in custom_problems(custom_tle_path, [(s.get("name", "?"), s["norad"]) for s in satellites

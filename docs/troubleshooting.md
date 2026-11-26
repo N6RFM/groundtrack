@@ -57,8 +57,9 @@ norad N` and logs it as `skipped` instead of failing. On an older version, or to
 `python3 update_tle.py` and then `python3 plan_passes.py` after any TLE refresh so the queue is planned from the new orbits.
 
 **`update_tle.py` says `N configured satellite(s) not found in either source`**
-Planning for those satellites fails until a TLE exists, and the run replaced `tle/amateur.txt` with only what it found
-(a satellite that couldn't be refreshed is not kept from the previous file). First try the name search above
+Planning for those satellites fails until a TLE exists. A satellite that couldn't be refreshed keeps its previous TLE for up
+to 14 days (the output says `kept the previous TLE`), so this warning means there was no usable TLE at all, or the old one had
+aged past 14 days. First try the name search above
 (`python3 update_tle.py` already does it; `--extra-tle FILE` uses a list you saved - the JSON form). Satellites that are in neither source at all need a
 TLE in `custom_tle_file`, or a wait until SatNOGS or Celestrak has one. Your weekly backup (`backup_state.py`) holds the
 previous `tle/amateur.txt` if you need older data in the meantime.

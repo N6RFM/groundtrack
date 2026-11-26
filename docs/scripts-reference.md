@@ -899,8 +899,10 @@ python3 update_tle.py --extra-tle ~/Downloads/celestrak-active.json
 Use the JSON form, not Celestrak's plain TLE list: a TLE has only five digits for the catalog number, so that list
 leaves out every object numbered 100000 and up - the newest satellites, which are the ones this search is for. A TLE
 file made by another tool that does include them is also accepted. The list is also only good for 14 days of matching,
-so download a fresh one when it ages out. `tle/amateur.txt` is rebuilt on every run from what the run found, so if
-Celestrak is unreachable the run keeps only the SatNOGS satellites; repeat it with `--extra-tle` when you have a list.
+so download a fresh one when it ages out. If Celestrak is unreachable, a
+satellite that couldn't be refreshed keeps the TLE it had in the previous `tle/amateur.txt` (the run says `kept the previous TLE
+(epoch N days old)`) as long as that is no older than 14 days; older ones are dropped, because a stale orbit points the
+antenna and Doppler at the wrong place. Repeat the run, or use `--extra-tle`, when you have a fresh list.
 
 Celestrak limits how many downloads it allows per day, so `update_tle.py` asks it as little as possible: temporary-ID
 satellites are not looked up one by one (Celestrak never has them under those numbers), and the active list (fetched as JSON and converted, because Celestrak's plain TLE list leaves out every object numbered 100000 and up) is saved in
