@@ -102,6 +102,23 @@ def _open(url, timeout):
     return urllib.request.urlopen(req, timeout=timeout)
 
 
+def _read_all(resp, total_s):
+    """Everything from an open response as text, giving up after total_s seconds IN TOTAL.
+
+    urlopen's timeout only limits silence on the connection, so a server that keeps trickling data
+    (as a rate-limiting server may) could otherwise keep one download going for ever."""
+    deadline = time.monotonic() + total_s
+    chunks = []
+    while True:
+        chunk = resp.read(65536)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"download still going after {total_s:.0f} s - giving up")
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
 def load_cfg():
     with open(CONFIG_PATH) as f:
         return yaml.safe_load(f)
@@ -117,7 +134,7 @@ def fetch_satnogs():
     print(f"Downloading SatNOGS TLE catalog ({SATNOGS_TLE_URL}) ...")
     try:
         with _open(SATNOGS_TLE_URL, 30) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
+            raw = _read_all(resp, 90)
         entries = json.loads(raw)
     except Exception as e:
         print(f"  WARNING: SatNOGS fetch failed: {e} - falling back to "
@@ -149,7 +166,7 @@ def fetch_celestrak_one(norad):
         url = CELESTRAK_CATNR_URL.format(catnr=norad)
         try:
             with _open(url, 15) as resp:
-                data = resp.read().decode("utf-8", errors="replace")
+                data = _read_all(resp, 30)
         except Exception as e:
             print(f"    Celestrak fallback for {norad} failed: {e}")
             data = ""
@@ -162,7 +179,7 @@ def fetch_celestrak_one(norad):
     url = CELESTRAK_CATNR_JSON_URL.format(catnr=norad)
     try:
         with _open(url, 15) as resp:
-            records = json.loads(resp.read().decode("utf-8", errors="replace"))
+            records = json.loads(_read_all(resp, 30))
         record = next(r for r in records if int(r.get("NORAD_CAT_ID", -1)) == norad)
         result = omm_to_tle(record)
     except StopIteration:
@@ -311,7 +328,7 @@ def fetch_celestrak_active(cache_path=None, now_s=None):
     print(f"  Fetching Celestrak's active list for a name search ({CELESTRAK_ACTIVE_URL}) ...")
     try:
         with _open(CELESTRAK_ACTIVE_URL, 60) as resp:
-            text, bad = omm_json_to_tle_text(resp.read().decode("utf-8", errors="replace"))
+            text, bad = omm_json_to_tle_text(_read_all(resp, 90))
         if not text:
             raise ValueError("no usable records in the response")
         print(f"    {text.count(chr(10)) // 3} satellite(s) read" + (f", {bad} skipped" if bad else ""))

@@ -56,6 +56,12 @@ re-reads the TLE file at each pass start if it changed, and if a satellite still
 norad N` and logs it as `skipped` instead of failing. On an older version, or to be sure: restart `run_passes.py`, and run
 `python3 update_tle.py` and then `python3 plan_passes.py` after any TLE refresh so the queue is planned from the new orbits.
 
+**`update_tle.py` seems to hang, or sits on "Fetching Celestrak's active list" / "Downloading SatNOGS TLE catalog"**
+A server that is overloaded or limiting requests can answer very slowly. Each download now has a total time limit (90 s for the
+SatNOGS catalog and Celestrak's active list, 30 s for a single-satellite lookup), after which it gives up with `failed: ... giving up`, and
+satellites that couldn't be refreshed keep their previous TLE (up to 14 days). If it is still stuck well past that, press Ctrl-C (your TLE
+file is only replaced at the very end, so nothing is lost), and run it again later; the last line printed tells you which download it was on.
+
 **`update_tle.py` says `N configured satellite(s) not found in either source`**
 Planning for those satellites fails until a TLE exists. A satellite that couldn't be refreshed keeps its previous TLE for up
 to 14 days (the output says `kept the previous TLE`), so this warning means there was no usable TLE at all, or the old one had

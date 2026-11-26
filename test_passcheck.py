@@ -609,7 +609,9 @@ class _Resp:
     def __init__(s, t): s.t = t
     def __enter__(s): return s
     def __exit__(s, *a): return False
-    def read(s): return s.t.encode()
+    def read(s, n=-1):
+        data, s.t = s.t.encode(), ""
+        return data
 _real_open = _ut._open
 _OMM = {"OBJECT_NAME": "BY70-4", "OBJECT_ID": "2026-195E", "NORAD_CAT_ID": 100469, "EPOCH": "2026-11-23T12:00:00.000000",
         "MEAN_MOTION": 15.2, "ECCENTRICITY": 0.0004, "INCLINATION": 97.5, "RA_OF_ASC_NODE": 120.1, "ARG_OF_PERICENTER": 80.2,
@@ -663,6 +665,18 @@ expect("keep previous: recent TLEs are kept, with their age", (sorted(_k), round
 expect("keep previous: one older than 14 days is dropped, with a note", (len(_n), "UNNE-1B" in _n[0]), (1, True))
 expect("keep previous: a satellite never seen before, or with no number, is simply not kept", "NEW" in _k or "X" in _k, False)
 expect("keep previous: the kept TLE still carries the configured number", _ut.catalog_number(_k["BabyBird"][1]), 98232)
+
+# --- update_tle: a download that keeps trickling is cut off after a total time ---
+class _Trickle:
+    def read(s, n=-1):
+        time.sleep(0.02)
+        return b"x"
+try:
+    _ut._read_all(_Trickle(), 0.1); _cut = False
+except TimeoutError:
+    _cut = True
+expect("downloads: a server that keeps trickling data is cut off after the total time limit", _cut, True)
+expect("downloads: a normal response is read in full", _ut._read_all(_Resp("abc" * 50000), 5), "abc" * 50000)
 
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)
