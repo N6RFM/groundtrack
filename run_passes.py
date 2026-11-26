@@ -272,6 +272,34 @@ def load_tles(cfg, wanted_norads):
     return pick(cfg, wanted_norads)
 
 
+def _tle_stamp(cfg):
+    """(mtime of tle_file, mtime of custom_tle_file) - 0 for a file that isn't there."""
+    out = []
+    for key in ("tle_file", "custom_tle_file"):
+        try:
+            out.append(os.path.getmtime(cfg[key]) if cfg.get(key) else 0)
+        except OSError:
+            out.append(0)
+    return tuple(out)
+
+
+def refresh_tles_if_changed(tles, cfg, wanted_norads, state):
+    """Re-read the TLE files into `tles` (in place) if either changed since they were last read.
+
+    run_passes.py reads the TLEs once at start, so a TLE refresh made while it is running
+    (update_tle.py) would otherwise be ignored - and a satellite whose TLE arrived after the
+    start would have no orbit at all. Returns True if it reloaded. `state` is a dict holding the
+    last-read stamp under "stamp"."""
+    stamp = _tle_stamp(cfg)
+    if stamp == state.get("stamp"):
+        return False
+    state["stamp"] = stamp
+    fresh = load_tles(cfg, wanted_norads)
+    tles.clear()
+    tles.update(fresh)
+    return True
+
+
 def parse_iso(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
@@ -576,6 +604,7 @@ def main():
             sys.exit(f"satellites.yaml: {sc['name']}'s freq_hz ({sc['freq_hz']!r}) "
                       f"isn't a valid number - check for stray quotes around it.")
     tles = load_tles(cfg, set(sat_cfgs))
+    tle_state = {"stamp": _tle_stamp(cfg)}
 
     passes = [p for p in schedule["passes"]
               if p.get("approved") and p["norad"] in sat_cfgs]
@@ -804,6 +833,19 @@ def main():
                     if is_tty:
                         clear_line()
                     sat_cfg = sat_cfgs[p["norad"]]
+                    if refresh_tles_if_changed(tles, cfg, set(sat_cfgs), tle_state):
+                        if is_tty:
+                            clear_line()
+                        print(f"[{sat_cfg['name']}] the TLE file changed since this executor started - re-read it.")
+                    if tles.get(p["norad"]) is None:
+                        # no orbit at all: tracking/Doppler would crash, so say so and skip this pass
+                        if is_tty:
+                            clear_line()
+                        print(f"[{sat_cfg['name']}] SKIPPING this pass: no TLE for norad {p['norad']} in "
+                              f"{cfg['tle_file']} (run update_tle.py, then plan_passes.py).")
+                        finished_passes.add(key)
+                        log_pass_event("skipped", sat_cfg, p, reason="no TLE")
+                        continue
                     attempt = note_launch(key, now, launch_attempts)
                     extras = {"lane": lane_of(p)} if len(rigs) > 1 else {}
                     note = ""

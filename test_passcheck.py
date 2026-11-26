@@ -638,5 +638,18 @@ except ValueError:
 expect("--extra-tle: JSON that isn't a list is refused", _raised, True)
 _ut._open = _real_open
 
+# --- run_passes: re-read the TLE files when they change after the executor started ---
+_d2 = tempfile.mkdtemp(); _tp = os.path.join(_d2, "a.txt")
+open(_tp, "w").write("")
+_cfg2 = {"tle_file": _tp}
+_tl, _st = {}, {"stamp": run_passes._tle_stamp(_cfg2)}
+expect("executor TLEs: an unchanged file is not re-read", run_passes.refresh_tles_if_changed(_tl, _cfg2, {25544}, _st), False)
+open(_tp, "w").write("\n".join(_ut.omm_to_tle(dict(_OMM, NORAD_CAT_ID=25544))) + "\n")
+os.utime(_tp, (time.time() + 5, time.time() + 5))
+expect("executor TLEs: a refreshed file is re-read and the new satellite appears",
+       (run_passes.refresh_tles_if_changed(_tl, _cfg2, {25544}, _st), 25544 in _tl), (True, True))
+expect("executor TLEs: ...and is not re-read again until it changes again",
+       run_passes.refresh_tles_if_changed(_tl, _cfg2, {25544}, _st), False)
+
 print(f"\n{'ALL PASSED' if not failures else str(len(failures)) + ' FAILED'}")
 sys.exit(1 if failures else 0)

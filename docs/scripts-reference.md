@@ -42,7 +42,9 @@ approved pass: waits for wall-clock AOS, launches that satellite's
 flowgraph, feeds it Doppler-corrected frequency and (if configured) points
 the rotor, and stops the flowgraph at the scheduled LOS (or earlier, if
 live elevation drops below `min_elev_deg` first - a safety net for TLE
-drift since planning). Run with `--verbose` to print every update:
+drift since planning). It reads the TLE file when it starts and again at each pass start if the file changed, so an
+`update_tle.py` run while it is running is picked up; a satellite with no TLE at all is skipped with a clear message
+(logged as `skipped`, reason `no TLE`). Run with `--verbose` to print every update:
 ```
 python3 run_passes.py --verbose
 python3 run_passes.py --verbose --rot-threshold-deg 5 --rot-min-interval 5   # this run only: rotor moves after 5 degrees, at most every 5 s

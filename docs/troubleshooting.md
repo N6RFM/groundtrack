@@ -49,6 +49,13 @@ list yourself (the JSON form, `https://celestrak.org/NORAD/elements/gp.php?GROUP
 downloads per day; wait and retry, and don't keep re-running it, because each run asks again unless the list was saved
 within the last 12 hours.
 
+**A pass fails with `ERROR during pass (TypeError("unsupported operand type(s) for -: 'NoneType' and 'GeographicPosition'"))`**
+The executor had no orbit for that satellite. `run_passes.py` used to read the TLE file only once, when it started, so a
+satellite whose TLE arrived later (for example after `update_tle.py` found it by name) was missing for the whole run. It now
+re-reads the TLE file at each pass start if it changed, and if a satellite still has no TLE it prints `SKIPPING this pass: no TLE for
+norad N` and logs it as `skipped` instead of failing. On an older version, or to be sure: restart `run_passes.py`, and run
+`python3 update_tle.py` and then `python3 plan_passes.py` after any TLE refresh so the queue is planned from the new orbits.
+
 **`update_tle.py` says `N configured satellite(s) not found in either source`**
 Planning for those satellites fails until a TLE exists, and the run replaced `tle/amateur.txt` with only what it found
 (a satellite that couldn't be refreshed is not kept from the previous file). First try the name search above
